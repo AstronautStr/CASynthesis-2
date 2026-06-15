@@ -1,8 +1,34 @@
 # Current Implementation State
 
-_Last updated: 2026-06-15 (построен второй прототип gol_life_synth_laplacian.py)_
+_Last updated: 2026-06-16 (алгоритмы маппинга вынесены в casynth_core.py)_
 
 ## Implemented
+
+- **`casynth_core.py`** — общая либа алгоритмов маппинга `форма → (freqs, amps)`
+  (вынос 2026-06-16, реализация решения decisions.md «Общая библиотека»):
+  - Содержит: `extract`, `_norm`, все пять `map_*` (fft2d/walsh/random/laplacian/
+    granulo), предвычисленные структуры (FFT-радиальный порядок, Walsh `_H8`/
+    sequency, фикс. random-проекция seed=42), константы `SR`/`PATCH_SIZE`/
+    `N_PARTIALS_DEFAULT=20`. Зависимости — только numpy/scipy (без pygame) →
+    импортируется и тестируется изолированно.
+  - **Развилка числа мод устранена параметром:** сигнатура
+    `map_*(patch, f0, n=20)`; число партиалов передаётся вызывающим. Стенд шлёт
+    `K_MAX=20`, прототип — `MAX_MODES_PER_OBJ=8`. Алгоритм единый, расхождение
+    значений теперь явно на месте вызова, а не запечено в две копии.
+  - `mapping_bench.py` и `gol_life_synth_laplacian.py` импортируют из core; их
+    локальные копии `map_laplacian`/`_extract` удалены (источник дублирования
+    устранён). Канон Laplace при выносе взят из прототипа (новейшая версия);
+    в текущем снапшоте обе копии были алгоритмически идентичны (различие только
+    в n) — поведение обоих сохранено бит-в-бит.
+  - Регрессии: стенд — `_diag_vectors.py` diff пуст (amp-векторы не изменились);
+    прототип — `_render_probe.py compare` cosine=1.000000, 0.00% diff. Оба
+    приложения проходят headless-smoke.
+  - `tests/test_casynth_core.py` — 10 тестов инвариантов (Laplace: позиция/
+    поворот/отражение/трансляция; √λ не λ; низшая мода=f0; 1/i спад; контракт;
+    детерминизм random; translation-инвариантность FFT; extract). Без pytest-
+    зависимости (assert-ранвер + pytest-совместимые `test_*`).
+  - **Ожидает ревью Researcher** (алгоритмы на соответствие замыслу).
+
 - Continuous phase-coherent additive synthesis (pygame-ce + numpy)
 - GoL on toroidal field (`scipy.ndimage.convolve`, mode='wrap', 8-connectivity)
 - Connected-component segmentation (`scipy.ndimage.label`)

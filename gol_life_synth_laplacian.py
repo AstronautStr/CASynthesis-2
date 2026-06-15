@@ -55,8 +55,7 @@ try:
 except Exception:          # optional; audio is just disabled if unavailable
     sd = None
 from scipy import ndimage
-from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import laplacian as sparse_laplacian
+from casynth_core import extract, map_laplacian
 from patterns import PATTERNS
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -192,73 +191,10 @@ def step(grid):
     return ((n == 3) | ((grid == 1) & (n == 2))).astype(np.uint8)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# LAPLACIAN MAPPING  (from mapping_bench.py, copied to avoid import cycle)
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _extract(grid, size=PATCH_SIZE):
-    """Extract a size×size patch centered on the centroid of live cells."""
-    live = np.argwhere(grid > 0)
-    if len(live) == 0:
-        return np.zeros((size, size), np.uint8)
-    rc = live.mean(axis=0).round().astype(int)
-    h = size // 2
-    patch = np.zeros((size, size), np.uint8)
-    rows, cols = grid.shape
-    for dr in range(-h, h):
-        for dc in range(-h, h):
-            r, c = int(rc[0]) + dr, int(rc[1]) + dc
-            if 0 <= r < rows and 0 <= c < cols:
-                patch[dr + h, dc + h] = grid[r, c]
-    return patch
-
-
-def map_laplacian(patch, f0):
-    """Graph Laplacian eigenvalues -> inharmonic partial frequencies via sqrt(lambda).
-
-    patch : binary 2-D array (shape of a single connected object, extracted by
-            _extract).
-    f0    : carrier frequency in Hz.  The lowest non-zero mode is normalised to
-            f0; all other modes are proportionally higher.
-
-    Returns (freqs, amps) each of length MAX_MODES_PER_OBJ (zeros for unused
-    slots).
-    """
-    K = MAX_MODES_PER_OBJ
-    live = list(map(tuple, np.argwhere(patch > 0)))
-    n = len(live)
-    if n < 2:
-        return np.zeros(K), np.zeros(K)
-    pos = {p: i for i, p in enumerate(live)}
-    ri, ci_ = [], []
-    for r, c in live:
-        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1),
-                       (-1, -1), (-1, 1), (1, -1), (1, 1)]:
-            nb = (r + dr, c + dc)
-            if nb in pos:
-                ri.append(pos[(r, c)])
-                ci_.append(pos[nb])
-    if not ri:
-        return np.zeros(K), np.zeros(K)
-    A = csr_matrix((np.ones(len(ri)), (ri, ci_)), shape=(n, n))
-    L = sparse_laplacian(A).toarray().astype(float)
-    eigs = np.linalg.eigvalsh(L)
-    nonzero_sq = np.sqrt(np.maximum(eigs[eigs > 1e-6], 0.0))
-    if len(nonzero_sq) == 0:
-        return np.zeros(K), np.zeros(K)
-    scale = f0 / nonzero_sq[0]
-    mode_freqs = nonzero_sq * scale
-    guard = 0.45 * SR
-    mode_freqs = mode_freqs[mode_freqs < guard]
-    num = min(K, len(mode_freqs))
-    freqs = np.zeros(K)
-    freqs[:num] = mode_freqs[:num]
-    amps = np.zeros(K)
-    if num > 0:
-        amps[:num] = 1.0 / np.arange(1, num + 1)
-        amps[:num] /= amps[:num].max()
-    return freqs, amps
-
+# LAPLACIAN MAPPING  (extract / map_laplacian imported from casynth_core --
+# single source of truth shared with mapping_bench.py).  This prototype sounds
+# MAX_MODES_PER_OBJ partials per object; the bench uses K_MAX.  The mode count is
+# passed explicitly at the call site (see analyse) so the algorithm stays shared.
 
 # ──────────────────────────────────────────────────────────────────────────────
 # OBJECT ANALYSIS  (GOL field -> list of voice specs)
@@ -295,11 +231,11 @@ def analyse(grid, f0):
         c0, c1 = int(xs.min()), int(xs.max())
         sub = np.zeros((r1 - r0 + 1, c1 - c0 + 1), np.uint8)
         sub[ys - r0, xs - c0] = 1
-        patch = _extract(sub, size=PATCH_SIZE)
+        patch = extract(sub, PATCH_SIZE)
 
         cx = xs.mean() / max(GRID_W - 1, 1)   # stereo pan [0..1]
 
-        freqs, amps = map_laplacian(patch, f0)
+        freqs, amps = map_laplacian(patch, f0, MAX_MODES_PER_OBJ)
 
         # Colour: hue by object index (spread across spectrum), brightness by area
         hue = (idx / max(MAX_VOICES - 1, 1)) * 0.72

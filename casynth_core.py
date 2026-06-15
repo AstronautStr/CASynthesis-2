@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""
+casynth_core.py — shared shape→spectrum mapping library for CASynth.
+
+Single source of truth for the mapping contract
+
+    map_*(patch: ndarray[PATCH_SIZE, PATCH_SIZE], f0: float, n: int)
+        -> (freqs: ndarray[n], amps: ndarray[n])
+
+    - patch : binary square window of ONE object's cells (extract()).
+    - f0    : carrier frequency in Hz.
+    - n     : number of partial slots to return (the CALLER supplies its own
+              constant -- the listening bench uses K_MAX, the live Laplace
+              prototype uses MAX_MODES_PER_OBJ).  Making n an explicit parameter
+              keeps the algorithm single-sourced while letting each app pick how
+              many partials it sounds; the divergence is visible at the call site
+              instead of baked into two copies of the function.
+    - freqs : partial frequencies in Hz; harmonic mappings return
+              f0 * arange(1, n+1).  Laplacian returns inharmonic frequencies
+              derived from sqrt(eigenvalue).
+    - amps  : amplitudes in [0, 1], normalised.
+
+This module is intentionally dependency-light (numpy + scipy only, NO pygame /
+audio / UI) so it imports and unit-tests in isolation.  The audio ENGINE
+(render_chunk / render_chunk_laplacian / SlotPool) is NOT here -- it diverged by
+purpose between bench and prototype (see memory/decisions.md).
+
+Extracted 1:1 from mapping_bench.py; the Laplacian path matches the (newer,
+researcher-fixed) gol_life_synth_laplacian.py copy.  Both apps import from here.
+"""
+
+import numpy as np
+from scipy import ndimage, linalg
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import laplacian as sparse_laplacian
+
+# ── Shared constants ──────────────────────────────────────────────────────────
+SR = 44100                 # audio sample rate (used only for the anti-alias guard)
+PATCH_SIZE = 8             # shape extraction window (PATCH_SIZE×PATCH_SIZE)
+N_PARTIALS_DEFAULT = 20    # default partial count (== gol_life_synth.K_MAX)
+
+_GUARD = 0.45 * SR         # anti-alias guard frequency (Hz)
+
+
+# ── Shape extraction ──────────────────────────────────────────────────────────
+
+def extract(grid, size=PATCH_SIZE):
+    """Return a size×size patch centered on the centroid of live cells.
+
+    Bounds come from grid.shape, so this works for any input grid (the general
+    form from the prototype; the bench passes a GRID_SZ×GRID_SZ grid and gets
+    identical bounds).
+    """
+    live = np.argwhere(grid > 0)
+    if len(live) == 0:
+        return np.zeros((size, size), np.uint8)
+    rc = live.mean(axis=0).round().astype(int)
+    h = size // 2
+    patch = np.zeros((size, size), np.uint8)
+    rows, cols = grid.shape
+    for dr in range(-h, h):
+        for dc in range(-h, h):
+            r, c = int(rc[0]) + dr, int(rc[1]) + dc
+            if 0 <= r < rows and 0 <= c < cols:
+                patch[dr + h, dc + h] = grid[r, c]
+    return patch
+
+
+# ── Precomputed structures (on PATCH_SIZE) ────────────────────────────────────
+_W2 = PATCH_SIZE * PATCH_SIZE   # 64
+
+# radial sort index for FFT (skip DC at index 0)
+_ys8, _xs8 = np.mgrid[0:PATCH_SIZE, 0:PATCH_SIZE]
+_r2_8 = (_ys8 - PATCH_SIZE // 2) ** 2 + (_xs8 - PATCH_SIZE // 2) ** 2
+_fft_order = np.argsort(_r2_8.flatten())  # [0]=DC, [1..]=increasing freq
+
+# Walsh-Hadamard PATCH_SIZE matrix for 2D transform: H8 @ patch @ H8.T
+# Normalised so that H8 @ H8.T = I (orthonormal).
+_H8 = linalg.hadamard(PATCH_SIZE).astype(float) / PATCH_SIZE
+
+
+def _row_sequency(H):
+    """Compute sequency (number of sign changes) for each row of H."""
+    seq = np.zeros(H.shape[0], dtype=int)
+    for i in range(H.shape[0]):
+        row = H[i]
+        seq[i] = int(np.sum(row[:-1] * row[1:] < 0))
+    return seq
+
+
+_SEQ8 = _row_sequency(_H8)
+# 2D sequency for each (i,j) coefficient = _SEQ8[i] + _SEQ8[j]
+_ij_seq = np.array([[_SEQ8[i] + _SEQ8[j] for j in range(PATCH_SIZE)]
+                    for i in range(PATCH_SIZE)])
+# Sort 2D coefficients by combined sequency (the "radial sort" analog).
+# DC coefficient (i=0, j=0, seq=0) is first; skip it when indexing harmonics.
+_walsh_order = np.argsort(_ij_seq.flatten(), kind='stable')  # index [0]=DC
+
+# Fixed random projection matrix.  Built at N_PARTIALS_DEFAULT rows; map_random
+# slices [:n].  numpy fills row-major, so the first n rows of this draw equal a
+# fresh rng(42).standard_normal((n, _W2)) for any n <= N_PARTIALS_DEFAULT --
+# output is unchanged from the previous (K_MAX, _W2) matrix.
+_R_MAT = np.random.default_rng(42).standard_normal((N_PARTIALS_DEFAULT, _W2))
+
+
+# ── Mapping functions ─────────────────────────────────────────────────────────
+
+def _norm(v):
+    mx = v.max()
+    return v / (mx + 1e-9)
+
+
+def map_fft2d(patch, f0, n=N_PARTIALS_DEFAULT):
+    F = np.abs(np.fft.fftshift(np.fft.fft2(patch.astype(float))))
+    flat = F.flatten()[_fft_order]
+    amps = _norm(flat[1:n + 1])
+    freqs = f0 * np.arange(1, n + 1)
+    return freqs, amps
+
+
+def map_walsh(patch, f0, n=N_PARTIALS_DEFAULT):
+    """2D Walsh-Hadamard transform: C = H8 @ patch @ H8.T.
+    Coefficients are sorted by combined 2D sequency (sum of row and column
+    sequency), analogous to radial frequency ordering in FFT.
+    Low sequency (coarse spatial patterns) -> low harmonics.
+    DC coefficient (index 0) is skipped."""
+    C = _H8 @ patch.astype(float) @ _H8.T    # 2D WHT, shape (8,8)
+    flat = np.abs(C).flatten()[_walsh_order]  # sort by sequency
+    amps = _norm(flat[1:n + 1])               # skip DC at index 0
+    freqs = f0 * np.arange(1, n + 1)
+    return freqs, amps
+
+
+def map_random(patch, f0, n=N_PARTIALS_DEFAULT):
+    v = np.abs(_R_MAT[:n] @ patch.flatten().astype(float))
+    amps = _norm(v)
+    freqs = f0 * np.arange(1, n + 1)
+    return freqs, amps
+
+
+def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT):
+    """Graph Laplacian eigenvalues -> inharmonic partial frequencies via sqrt(lambda).
+    Lowest non-zero mode is normalized to f0; amplitudes follow 1/i rolloff."""
+    live = list(map(tuple, np.argwhere(patch > 0)))
+    cnt = len(live)
+    if cnt < 2:
+        return np.zeros(n), np.zeros(n)
+    pos = {p: i for i, p in enumerate(live)}
+    ri, ci_ = [], []
+    for r, c in live:
+        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1),
+                       (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+            nb = (r + dr, c + dc)
+            if nb in pos:
+                ri.append(pos[(r, c)])
+                ci_.append(pos[nb])
+    if not ri:
+        return np.zeros(n), np.zeros(n)
+    A = csr_matrix((np.ones(len(ri)), (ri, ci_)), shape=(cnt, cnt))
+    L = sparse_laplacian(A).toarray().astype(float)
+    eigs = np.linalg.eigvalsh(L)
+    # sqrt(lambda) is proportional to resonant mode frequency (membrane analogy)
+    nonzero_sq = np.sqrt(np.maximum(eigs[eigs > 1e-6], 0.0))
+    if len(nonzero_sq) == 0:
+        return np.zeros(n), np.zeros(n)
+    # Normalize: lowest mode -> f0; others proportionally higher
+    scale = f0 / nonzero_sq[0]
+    mode_freqs = nonzero_sq * scale
+    # Anti-alias guard
+    mode_freqs = mode_freqs[mode_freqs < _GUARD]
+    num = min(n, len(mode_freqs))
+    freqs = np.zeros(n)
+    freqs[:num] = mode_freqs[:num]
+    # Amplitudes: 1/i rolloff (softer for higher modes)
+    amps = np.zeros(n)
+    if num > 0:
+        amps[:num] = 1.0 / np.arange(1, num + 1)
+        amps[:num] /= amps[:num].max()
+    return freqs, amps
+
+
+def map_granulo(patch, f0, n=N_PARTIALS_DEFAULT):
+    """Granulometry: morphological opening at increasing radii measures energy at each scale.
+    Large scale (coarse structure) -> low harmonics; small scale (fine detail) -> high harmonics.
+    Reversed so that jagged shapes sound brighter."""
+    amps = np.zeros(n)
+    prev = float(patch.sum())
+    if prev == 0:
+        return f0 * np.arange(1, n + 1), amps
+    for k in range(n):
+        radius = k + 1
+        y, x = np.mgrid[-radius:radius + 1, -radius:radius + 1]
+        selem = (y * y + x * x <= radius * radius)
+        opened = ndimage.binary_opening(patch.astype(bool), structure=selem)
+        cur = float(opened.sum())
+        amps[k] = prev - cur   # energy at scale k+1
+        if cur < 1:
+            break
+        prev = cur
+    amps = _norm(amps)
+    amps = amps[::-1].copy()  # small scale (index 0) -> high harmonic; large scale -> low harmonic
+    freqs = f0 * np.arange(1, n + 1)
+    return freqs, amps

@@ -17,16 +17,18 @@ Run:
 import os
 import numpy as np
 import pygame
-from scipy import ndimage, linalg
 
 from gol_life_synth import render_chunk, step as _gol_step
 from gol_life_synth import SR, K_MAX
+from casynth_core import (PATCH_SIZE, extract,
+                          map_fft2d, map_walsh, map_random,
+                          map_laplacian, map_granulo)
 
 # ── Config ──────────────────────────────────────────────────────────────────
 GOL_HZ       = 3.0    # oscillator speed (generations/sec)
 CARRIER_MIDI = 48     # C3 = 261 Hz
 GRID_SZ      = 20     # simulation grid (avoids edge effects)
-WINDOW       = 8      # shape extraction window (8×8)
+WINDOW       = PATCH_SIZE  # shape extraction window (alias for drawing/preview code)
 FPS          = 30
 
 CELL_W, CELL_H = 180, 140  # matrix cell (pixels)
@@ -76,158 +78,8 @@ def _make_grid(cells):
         g[r0+r, c0+c] = 1
     return g
 
-def _extract(grid):
-    """Return WINDOW×WINDOW patch centered on centroid of live cells."""
-    live = np.argwhere(grid > 0)
-    if len(live) == 0:
-        return np.zeros((WINDOW, WINDOW), np.uint8)
-    rc = live.mean(axis=0).round().astype(int)
-    h = WINDOW // 2
-    patch = np.zeros((WINDOW, WINDOW), np.uint8)
-    for dr in range(-h, h):
-        for dc in range(-h, h):
-            r, c = int(rc[0])+dr, int(rc[1])+dc
-            if 0 <= r < GRID_SZ and 0 <= c < GRID_SZ:
-                patch[dr+h, dc+h] = grid[r, c]
-    return patch
-
-# ── Precomputed structures ──────────────────────────────────────────────────
-_W2 = WINDOW * WINDOW   # 64
-
-# radial sort index for FFT (skip DC at index 0)
-_ys8, _xs8 = np.mgrid[0:WINDOW, 0:WINDOW]
-_r2_8 = (_ys8 - WINDOW//2)**2 + (_xs8 - WINDOW//2)**2
-_fft_order = np.argsort(_r2_8.flatten())  # [0]=DC, [1..]=increasing freq
-
-# Walsh-Hadamard 8×8 matrix for 2D transform: H8 @ patch @ H8.T
-# Normalised so that H8 @ H8.T = I (orthonormal).
-_H8 = linalg.hadamard(WINDOW).astype(float) / WINDOW  # 8×8, normalised
-
-# Sequency ordering for 2D WHT coefficients.
-# sequency of row/col i = number of sign changes in H8[i].
-# For the 2D transform result C[i,j], combined sequency = seq[i] + seq[j].
-# We sort by combined sequency ascending (DC=0 first), then flatten to 1D.
-def _row_sequency(H):
-    """Compute sequency (number of sign changes) for each row of H."""
-    seq = np.zeros(H.shape[0], dtype=int)
-    for i in range(H.shape[0]):
-        row = H[i]
-        seq[i] = int(np.sum(row[:-1] * row[1:] < 0))
-    return seq
-
-_SEQ8 = _row_sequency(_H8)
-# 2D sequency for each (i,j) coefficient = _SEQ8[i] + _SEQ8[j]
-_ij_seq = np.array([[_SEQ8[i] + _SEQ8[j] for j in range(WINDOW)]
-                    for i in range(WINDOW)])
-# Sort 2D coefficients by combined sequency; this is the "radial sort" analog.
-# DC coefficient (i=0, j=0, seq=0) is first; skip it when indexing harmonics.
-_walsh_order = np.argsort(_ij_seq.flatten(), kind='stable')  # index [0]=DC
-
-# Fixed random projection matrix
-_R_MAT = np.random.default_rng(42).standard_normal((K_MAX, _W2))
-
-# ── Mapping functions ────────────────────────────────────────────────────────
-# Contract: map_*(patch: ndarray[8,8], f0: float) -> (freqs: ndarray[K_MAX], amps: ndarray[K_MAX])
-#   freqs in Hz; amps in [0,1] normalised
-
-def _norm(v):
-    mx = v.max()
-    return v / (mx + 1e-9)
-
-
-def map_fft2d(patch, f0):
-    F = np.abs(np.fft.fftshift(np.fft.fft2(patch.astype(float))))
-    flat = F.flatten()[_fft_order]
-    amps = _norm(flat[1:K_MAX+1])
-    freqs = f0 * np.arange(1, K_MAX+1)
-    return freqs, amps
-
-
-def map_walsh(patch, f0):
-    """2D Walsh-Hadamard transform: C = H8 @ patch @ H8.T.
-    Coefficients are sorted by combined 2D sequency (sum of row and column
-    sequency), analogous to radial frequency ordering in FFT.
-    Low sequency (coarse spatial patterns) -> low harmonics.
-    DC coefficient (index 0) is skipped."""
-    C = _H8 @ patch.astype(float) @ _H8.T    # 2D WHT, shape (8,8)
-    flat = np.abs(C).flatten()[_walsh_order]  # sort by sequency
-    amps = _norm(flat[1:K_MAX+1])             # skip DC at index 0
-    freqs = f0 * np.arange(1, K_MAX+1)
-    return freqs, amps
-
-
-def map_random(patch, f0):
-    v = np.abs(_R_MAT @ patch.flatten().astype(float))
-    amps = _norm(v)
-    freqs = f0 * np.arange(1, K_MAX+1)
-    return freqs, amps
-
-
-def map_laplacian(patch, f0):
-    """Graph Laplacian eigenvalues -> inharmonic partial frequencies via sqrt(lambda).
-    Lowest non-zero mode is normalized to f0; amplitudes follow 1/i rolloff."""
-    live = list(map(tuple, np.argwhere(patch > 0)))
-    n = len(live)
-    if n < 2:
-        return np.zeros(K_MAX), np.zeros(K_MAX)
-    pos = {p: i for i, p in enumerate(live)}
-    ri, ci_ = [], []
-    for r, c in live:
-        for dr, dc in [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(-1,1),(1,-1),(1,1)]:
-            nb = (r+dr, c+dc)
-            if nb in pos:
-                ri.append(pos[(r,c)]); ci_.append(pos[nb])
-    if not ri:
-        return np.zeros(K_MAX), np.zeros(K_MAX)
-    from scipy.sparse import csr_matrix
-    from scipy.sparse.csgraph import laplacian
-    A = csr_matrix((np.ones(len(ri)), (ri, ci_)), shape=(n, n))
-    L = laplacian(A).toarray().astype(float)
-    eigs = np.linalg.eigvalsh(L)
-    # sqrt(lambda) is proportional to resonant mode frequency (membrane analogy)
-    nonzero_sq = np.sqrt(np.maximum(eigs[eigs > 1e-6], 0.0))
-    if len(nonzero_sq) == 0:
-        return np.zeros(K_MAX), np.zeros(K_MAX)
-    # Normalize: lowest mode -> f0; others proportionally higher
-    scale = f0 / nonzero_sq[0]
-    mode_freqs = nonzero_sq * scale
-    # Anti-alias guard
-    guard = 0.45 * SR
-    mode_freqs = mode_freqs[mode_freqs < guard]
-    K = min(K_MAX, len(mode_freqs))
-    freqs = np.zeros(K_MAX)
-    freqs[:K] = mode_freqs[:K]
-    # Amplitudes: 1/i rolloff (softer for higher modes)
-    amps = np.zeros(K_MAX)
-    if K > 0:
-        amps[:K] = 1.0 / np.arange(1, K + 1)
-        amps[:K] /= amps[:K].max()
-    return freqs, amps
-
-
-def map_granulo(patch, f0):
-    """Granulometry: morphological opening at increasing radii measures energy at each scale.
-    Large scale (coarse structure) -> low harmonics; small scale (fine detail) -> high harmonics.
-    Reversed so that jagged shapes sound brighter."""
-    amps = np.zeros(K_MAX)
-    prev = float(patch.sum())
-    if prev == 0:
-        return f0 * np.arange(1, K_MAX+1), amps
-    for k in range(K_MAX):
-        radius = k + 1
-        y, x = np.mgrid[-radius:radius+1, -radius:radius+1]
-        selem = (y*y + x*x <= radius*radius)
-        opened = ndimage.binary_opening(patch.astype(bool), structure=selem)
-        cur = float(opened.sum())
-        amps[k] = prev - cur   # energy at scale k+1
-        if cur < 1:
-            break
-        prev = cur
-    amps = _norm(amps)
-    amps = amps[::-1].copy()  # small scale (index 0) -> high harmonic; large scale -> low harmonic
-    freqs = f0 * np.arange(1, K_MAX+1)
-    return freqs, amps
-
+# Mapping algorithms and extract() live in casynth_core (single source of truth,
+# imported above).  This bench passes n=K_MAX to each map_* (see _MAPPINGS calls).
 
 _MAPPINGS = [
     ("2D-FFT",  map_fft2d),
@@ -310,11 +162,11 @@ def main():
 
     # Simulation state: one 20×20 grid per oscillator
     grids   = [_make_grid(cells) for _, cells in _OSC_DEFS]
-    patches = [_extract(g) for g in grids]
+    patches = [extract(g, PATCH_SIZE) for g in grids]
     f0      = _midi_to_freq(CARRIER_MIDI)
 
     # fa[i][j] = (freqs_arr, amps_arr) for oscillator i, mapping j
-    fa = [[mfn(patches[i], f0) for _, mfn in _MAPPINGS] for i in range(N_OSC)]
+    fa = [[mfn(patches[i], f0, K_MAX) for _, mfn in _MAPPINGS] for i in range(N_OSC)]
 
     selected = (0, 0)
     paused   = False
@@ -382,8 +234,8 @@ def main():
                 acc -= interval
                 for i in range(N_OSC):
                     grids[i]   = _gol_step(grids[i])
-                    patches[i] = _extract(grids[i])
-                    fa[i]      = [mfn(patches[i], f0) for _, mfn in _MAPPINGS]
+                    patches[i] = extract(grids[i], PATCH_SIZE)
+                    fa[i]      = [mfn(patches[i], f0, K_MAX) for _, mfn in _MAPPINGS]
 
         _feed_audio()
 

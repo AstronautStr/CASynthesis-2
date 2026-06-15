@@ -16,7 +16,7 @@ def phases_of(cells, n=4):
     g = mb._make_grid(cells)
     out = []
     for _ in range(n):
-        out.append(mb._extract(g))
+        out.append(mb.extract(g, mb.PATCH_SIZE))
         g = mb._gol_step(g)
     return out
 
