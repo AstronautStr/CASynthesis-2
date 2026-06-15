@@ -15,6 +15,16 @@ _Last updated: 2026-06-15_
 - Interactive UI: draw/erase cells, play/pause [Space], step [S], random [R], clear [C], speed [↑↓]
 - Visualisation: harmonic hue (red=low → blue=high), brightness = amplitude; legend shown
 
+- Pattern library sidebar (collapsible, "Lib ▶ / ◀ Lib" button in toolbar):
+  - 29 patterns in 9 categories (separate file: `patterns.py`):
+    still lifes ×7, oscillators p2 ×4, p3 ×3 (Pulsar, Jam, Caterer),
+    p4 ×2 (Mold, Mazing), p5 ×1 (Octagon II), p8+ ×4 (Figure-8, Kok's galaxy, Tumbler, Pentadecathlon),
+    spaceships ×4, guns ×1, methuselahs ×3
+  - All patterns verified (explicit cells or simulation-confirmed RLE period)
+  - Drag & drop: grid-snapped ghost preview (SRCALPHA), OR-insert on drop
+  - Mouse-wheel scrolling in sidebar; scroll thumb indicator
+  - Sidebar toggled via `state['sidebar_open']`; window width changes with `set_mode`
+
 ## Known issues
 - Segmentation not wrap-aware: objects crossing the toroidal seam momentarily split into two voices
 - No object identity tracking across generations (no true birth / death events, no collision handling)

@@ -23,10 +23,17 @@ CONTROLS
   Piano (bottom) : click a key to set the carrier note (latched)
   Volume slider  : drag (top-right of the toolbar)
   Play / Pause ... run or freeze the automaton            [Space]
-  Step ........... one generation                         [S]
+  Step ........... one generation                         [button only]
   Random / Clear . fill / empty                           [R] / [C]
   - / + .......... slower / faster                        [Down] / [Up]
   quit ....................................... [Esc] / window close
+
+  PC keyboard piano (Ableton layout):
+    white: A  S  D  F  G  H  J  K  L
+           C  D  E  F  G  A  B  C' D'
+    black: W  E     T  Y  U     O  P
+           C# D#    F# G# A#    C# D#
+  Z / X .. keyboard octave down / up
 
 RUN
     pip install pygame-ce numpy scipy
@@ -38,13 +45,14 @@ import colorsys
 import numpy as np
 import pygame
 from scipy import ndimage
+from patterns import PATTERNS
 
 # ----------------------------------------------------------------------
 # CONFIG  -- the tunable feature->parameter table (tweak by ear)
 # ----------------------------------------------------------------------
 GRID_W, GRID_H = 52, 30
 CELL = 20
-TOOLBAR_H = 70
+TOOLBAR_H = 96
 PIANO_H = 96
 FPS = 60
 
@@ -66,8 +74,10 @@ HARM_AREA_MIN, HARM_AREA_MAX = 1, 18
 AMP_FLOOR = 0.30
 ROLLOFF = 0.70
 
-# piano range (MIDI): C3 .. C5
-NOTE_LO, NOTE_HI, NOTE_DEFAULT = 48, 72, 48
+# keyboard piano: default base and scroll limits
+NOTE_DEFAULT = 48          # C3
+KB_BASE_MIN  = 24          # C1 – lowest allowed keyboard base
+KB_BASE_MAX  = 72          # C5 – highest (piano then shows up to C7)
 
 # palette
 C_BG = (12, 14, 18)
@@ -89,6 +99,31 @@ NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 WHITE_PC = {0, 2, 4, 5, 7, 9, 11}
 BLACK_PC = {1, 3, 6, 8, 10}
 TWO_PI = 2 * np.pi
+
+# PC keyboard -> piano semitone offset (Ableton layout)
+# white: A S D F G H J K L  →  C D E F G A B C' D'
+# black: W E _ T Y U _ O P  →  C# D# _ F# G# A# _ C#' D#'
+_KB_PIANO = {
+    pygame.K_a: 0,  pygame.K_w: 1,
+    pygame.K_s: 2,  pygame.K_e: 3,
+    pygame.K_d: 4,
+    pygame.K_f: 5,  pygame.K_t: 6,
+    pygame.K_g: 7,  pygame.K_y: 8,
+    pygame.K_h: 9,  pygame.K_u: 10,
+    pygame.K_j: 11,
+    pygame.K_k: 12, pygame.K_o: 13,
+    pygame.K_l: 14, pygame.K_p: 15,
+}
+
+
+# ----------------------------------------------------------------------
+# SIDEBAR LAYOUT CONSTANTS
+# ----------------------------------------------------------------------
+SIDEBAR_W  = 192
+_SB_ITEM_H = 40
+_SB_PREV_W = 50
+_SB_PREV_H = 36
+_SB_HDR_H  = 22
 
 
 def midi_to_freq(n):
@@ -201,6 +236,45 @@ def render_chunk(phase, amp_cur, pan_cur, amp_tgt, pan_tgt, f0, channels):
 # ----------------------------------------------------------------------
 # APP
 # ----------------------------------------------------------------------
+def _make_piano(base, piano_top, W):
+    """Build white_keys / black_keys lists for 2 octaves starting at `base`."""
+    end = base + 24
+    white_notes = [m for m in range(base, end + 1) if m % 12 in WHITE_PC]
+    wkw = W / len(white_notes)
+    bkw, bkh = wkw * 0.62, int(PIANO_H * 0.62)
+    wk, wi = [], {}
+    for i, m in enumerate(white_notes):
+        x0, x1 = round(i * wkw), round((i + 1) * wkw)
+        wk.append((pygame.Rect(x0, piano_top, x1 - x0, PIANO_H), m))
+        wi[m] = i
+    bk = []
+    for m in range(base, end + 1):
+        if m % 12 in BLACK_PC and (m - 1) in wi:
+            cx = (wi[m - 1] + 1) * wkw
+            bk.append((pygame.Rect(round(cx - bkw / 2), piano_top, round(bkw), bkh), m))
+    return wk, bk
+
+
+def pattern_preview_surf(cells, pw, ph):
+    surf = pygame.Surface((pw, ph))
+    surf.fill(C_BG)
+    if not cells:
+        return surf
+    rows = [r for r, c in cells]
+    cols = [c for r, c in cells]
+    rh = max(rows) - min(rows) + 1
+    cw = max(cols) - min(cols) + 1
+    cs = max(1, min(pw // max(cw, 1), ph // max(rh, 1)))
+    ox = (pw - cs * cw) // 2
+    oy = (ph - cs * rh) // 2
+    r0, c0 = min(rows), min(cols)
+    for r, c in cells:
+        x = ox + (c - c0) * cs
+        y = oy + (r - r0) * cs
+        pygame.draw.rect(surf, C_ACCENT, (x, y, max(1, cs - 1), max(1, cs - 1)))
+    return surf
+
+
 def main():
     os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')
     pygame.init()
@@ -219,7 +293,7 @@ def main():
 
     W = GRID_W * CELL
     H = GRID_H * CELL + TOOLBAR_H + PIANO_H
-    screen = pygame.display.set_mode((W, H))
+    screen = pygame.display.set_mode((W + SIDEBAR_W, H))
     pygame.display.set_caption("Game of Life - continuous synth")
     font = pygame.font.SysFont("consolas,menlo,monospace", 16)
     small = pygame.font.SysFont("consolas,menlo,monospace", 13)
@@ -227,39 +301,52 @@ def main():
 
     grid = np.zeros((GRID_H, GRID_W), np.uint8)
     state = dict(run=False, hz=STEP_HZ, gen=0, acc=0.0, note=NOTE_DEFAULT, vol=VOL_DEFAULT,
+                 kb_base=NOTE_DEFAULT,
                  phase=np.zeros(K_MAX + 1), amp=np.zeros(K_MAX + 1), pan=np.full(K_MAX + 1, 0.5),
-                 chan=(pygame.mixer.Channel(0) if audio_ok else None), audio_err=False)
+                 chan=(pygame.mixer.Channel(0) if audio_ok else None), audio_err=False,
+                 sidebar_open=True)
     if audio_ok:
         state['chan'].set_volume(state['vol'])
 
-    # toolbar buttons
-    by = GRID_H * CELL + 14
+    # toolbar layout: row 1 = buttons, row 2 = info + vol (full width)
+    by = GRID_H * CELL + 8          # button row y
+    info_y = GRID_H * CELL + 58     # info row y
     defs = [("play", None, 96), ("step", "Step", 70), ("random", "Random", 96),
             ("clear", "Clear", 78), ("slower", "-", 40), ("faster", "+", 40)]
     buttons, bx = [], 12
     for bid, label, bw in defs:
         buttons.append(dict(id=bid, label=label, rect=pygame.Rect(bx, by, bw, 40)))
         bx += bw + 8
-    legend_x = bx + 12
-    vol_track = pygame.Rect(W - VOL_W - 24, by + 16, VOL_W, 10)
+    legend_x = 12
+    vol_track = pygame.Rect(W - VOL_W - 24, info_y + 14, VOL_W, 8)
+    _pat_btn = pygame.Rect(bx + 8, by, 96, 40)
 
-    # piano geometry
+    # pre-build sidebar items (rects in screen coords, preview surfaces)
+    _sb_items = []
+    _iy = 32
+    for _cat, _pats in PATTERNS:
+        _iy += _SB_HDR_H + 4
+        for _pname, _pcells in _pats:
+            _sb_items.append({
+                'rect': pygame.Rect(W + 4, _iy, SIDEBAR_W - 8, _SB_ITEM_H),
+                'cells': _pcells,
+                'name':  _pname,
+                'prev':  pattern_preview_surf(_pcells, _SB_PREV_W, _SB_PREV_H),
+            })
+            _iy += _SB_ITEM_H + 2
+    _sb_content_h = _iy
+    _sb_scroll = 0
+    _sb_scroll_min = min(0, H - _sb_content_h)
+
+    # piano geometry (rebuilt whenever kb_base changes)
     piano_top = GRID_H * CELL + TOOLBAR_H
-    white_notes = [m for m in range(NOTE_LO, NOTE_HI + 1) if m % 12 in WHITE_PC]
-    wkw = W / len(white_notes)
-    white_keys, white_index = [], {}
-    for i, m in enumerate(white_notes):
-        x0, x1 = round(i * wkw), round((i + 1) * wkw)
-        white_keys.append((pygame.Rect(x0, piano_top, x1 - x0, PIANO_H), m))
-        white_index[m] = i
-    black_keys, bkw, bkh = [], wkw * 0.62, int(PIANO_H * 0.62)
-    for m in range(NOTE_LO, NOTE_HI + 1):
-        if m % 12 in BLACK_PC and (m - 1) in white_index:
-            cx = (white_index[m - 1] + 1) * wkw
-            black_keys.append((pygame.Rect(round(cx - bkw / 2), piano_top, round(bkw), bkh), m))
+    white_keys, black_keys = _make_piano(state['kb_base'], piano_top, W)
 
     paint = None
     dragging_vol = False
+    drag = {'active': False, 'cells': [], 'name': '', 'snap': None}
+    _ghost = pygame.Surface((CELL - 2, CELL - 2), pygame.SRCALPHA)
+    _ghost.fill((111, 208, 224, 110))
 
     def cell_at(mx, my):
         if 0 <= my < GRID_H * CELL and 0 <= mx < GRID_W * CELL:
@@ -316,38 +403,72 @@ def main():
             if e.type == pygame.QUIT:
                 running = False
             elif e.type == pygame.KEYDOWN:
-                if e.key == pygame.K_ESCAPE: running = False
+                if e.key in _KB_PIANO:
+                    state['note'] = state['kb_base'] + _KB_PIANO[e.key]
+                elif e.key == pygame.K_z:
+                    state['kb_base'] = max(KB_BASE_MIN, state['kb_base'] - 12)
+                    white_keys, black_keys = _make_piano(state['kb_base'], piano_top, W)
+                elif e.key == pygame.K_x:
+                    state['kb_base'] = min(KB_BASE_MAX, state['kb_base'] + 12)
+                    white_keys, black_keys = _make_piano(state['kb_base'], piano_top, W)
+                elif e.key == pygame.K_ESCAPE:
+                    if drag['active']:
+                        drag.update(active=False, snap=None, cells=[], name='')
+                    else:
+                        running = False
                 elif e.key == pygame.K_SPACE: do("play")
-                elif e.key == pygame.K_s: do("step")
                 elif e.key == pygame.K_r: do("random")
                 elif e.key == pygame.K_c: do("clear")
                 elif e.key == pygame.K_UP: do("faster")
                 elif e.key == pygame.K_DOWN: do("slower")
             elif e.type == pygame.MOUSEBUTTONDOWN:
-                rc = cell_at(*e.pos)
-                if rc is not None and e.button in (1, 3):
-                    paint = 1 if e.button == 1 else 0
-                    grid[rc] = paint
-                elif e.pos[1] >= piano_top:
-                    m = hit_piano(e.pos)
-                    if m is not None:
-                        state['note'] = m
-                else:
-                    if vol_track.collidepoint(e.pos):
-                        dragging_vol = True; set_vol(e.pos[0])
+                if state['sidebar_open'] and e.pos[0] >= W and e.button == 1:
+                    for item in _sb_items:
+                        if item['rect'].move(0, _sb_scroll).collidepoint(e.pos):
+                            drag.update(active=True, cells=item['cells'],
+                                        name=item['name'], snap=None)
+                            break
+                elif not drag['active']:
+                    rc = cell_at(*e.pos)
+                    if rc is not None and e.button in (1, 3):
+                        paint = 1 if e.button == 1 else 0
+                        grid[rc] = paint
+                    elif e.pos[1] >= piano_top:
+                        m = hit_piano(e.pos)
+                        if m is not None:
+                            state['note'] = m
                     else:
-                        for b in buttons:
-                            if b['rect'].collidepoint(e.pos):
-                                do(b['id']); break
+                        if _pat_btn.collidepoint(e.pos):
+                            state['sidebar_open'] = not state['sidebar_open']
+                            nw = W + (SIDEBAR_W if state['sidebar_open'] else 0)
+                            screen = pygame.display.set_mode((nw, H))
+                        elif vol_track.collidepoint(e.pos):
+                            dragging_vol = True; set_vol(e.pos[0])
+                        else:
+                            for b in buttons:
+                                if b['rect'].collidepoint(e.pos):
+                                    do(b['id']); break
             elif e.type == pygame.MOUSEBUTTONUP:
-                paint = None; dragging_vol = False
+                if drag['active']:
+                    if drag['snap'] is not None:
+                        r0, c0 = drag['snap']
+                        for dr, dc in drag['cells']:
+                            grid[(r0 + dr) % GRID_H, (c0 + dc) % GRID_W] = 1
+                    drag.update(active=False, snap=None, cells=[], name='')
+                paint = None
+                dragging_vol = False
             elif e.type == pygame.MOUSEMOTION:
-                if paint is not None:
+                if drag['active']:
+                    drag['snap'] = cell_at(*e.pos)
+                elif paint is not None:
                     rc = cell_at(*e.pos)
                     if rc is not None:
                         grid[rc] = paint
                 elif dragging_vol:
                     set_vol(e.pos[0])
+            elif e.type == pygame.MOUSEWHEEL:
+                if state['sidebar_open'] and pygame.mouse.get_pos()[0] >= W:
+                    _sb_scroll = max(_sb_scroll_min, min(0, _sb_scroll + e.y * 20))
 
         if state['run']:
             interval = 1.0 / state['hz']
@@ -373,6 +494,13 @@ def main():
             pygame.draw.rect(screen, col, (c * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2),
                              border_radius=4)
 
+        # ---- drag ghost ----
+        if drag['active'] and drag['snap'] is not None:
+            r0, c0 = drag['snap']
+            for dr, dc in drag['cells']:
+                screen.blit(_ghost, ((c0 + dc) % GRID_W * CELL + 1,
+                                     (r0 + dr) % GRID_H * CELL + 1))
+
         # ---- toolbar ----
         pygame.draw.rect(screen, C_PANEL, (0, GRID_H * CELL, W, TOOLBAR_H))
         pygame.draw.line(screen, C_EDGE, (0, GRID_H * CELL), (W, GRID_H * CELL))
@@ -383,26 +511,37 @@ def main():
             label = b['label'] or ("Pause" if state['run'] else "Play")
             txt = font.render(label, True, C_ACCENT if b['id'] == 'play' else C_TXT)
             screen.blit(txt, txt.get_rect(center=b['rect'].center))
+        hot_p = _pat_btn.collidepoint(mouse)
+        pygame.draw.rect(screen, C_BTN_HOT if hot_p else C_BTN, _pat_btn, border_radius=6)
+        plbl = small.render("◀ Lib" if state['sidebar_open'] else "Lib ▶", True, C_ACCENT)
+        screen.blit(plbl, plbl.get_rect(center=_pat_btn.center))
 
-        lw, lh, lx, ly = 130, 14, legend_x, by + 4
+        # info row: legend (left-anchored)
+        lw, lh = 110, 10
+        lx, ly = legend_x, info_y + 5
         for i in range(lw):
             pygame.draw.line(screen, hsv((i / (lw - 1)) * 0.72, 0.95), (lx + i, ly), (lx + i, ly + lh))
-        screen.blit(small.render("big / low", True, C_DIM), (lx, ly + lh + 3))
-        hi = small.render("small / high", True, C_DIM)
-        screen.blit(hi, (lx + lw - hi.get_width(), ly + lh + 3))
+        screen.blit(small.render("low", True, C_DIM), (lx, ly + lh + 2))
+        hi = small.render("high", True, C_DIM)
+        screen.blit(hi, (lx + lw - hi.get_width(), ly + lh + 2))
 
-        sx = lx + lw + 22
+        # info row: status (after legend)
+        sx = lx + lw + 16
         st = f"{note_name(state['note'])} {f0():.0f}Hz  gen {state['gen']:>4}  {state['hz']:.0f}/s"
-        screen.blit(font.render(st, True, C_TXT), (sx, by + 2))
+        screen.blit(font.render(st, True, C_TXT), (sx, info_y + 1))
         mode = "RUNNING" if state['run'] else "PAUSED"
-        screen.blit(font.render(mode, True, C_ACCENT if state['run'] else C_DIM), (sx, by + 24))
+        mode_surf = font.render(mode, True, C_ACCENT if state['run'] else C_DIM)
+        screen.blit(mode_surf, (sx, info_y + 19))
+        kbd_surf = small.render(f"kbd:{note_name(state['kb_base'])}", True, C_DIM)
+        screen.blit(kbd_surf, (sx + mode_surf.get_width() + 10, info_y + 21))
 
-        # volume slider
-        pygame.draw.rect(screen, C_BTN, vol_track, border_radius=5)
+        # info row: volume (right-anchored)
+        screen.blit(small.render(f"vol {int(state['vol'] * 100)}%", True, C_DIM),
+                    (vol_track.left, info_y + 1))
+        pygame.draw.rect(screen, C_BTN, vol_track, border_radius=4)
         fw = int(vol_track.width * state['vol'])
-        pygame.draw.rect(screen, C_ACCENT, (vol_track.left, vol_track.top, fw, vol_track.height), border_radius=5)
-        pygame.draw.circle(screen, C_TXT, (vol_track.left + fw, vol_track.centery), 7)
-        screen.blit(small.render(f"vol {int(state['vol'] * 100)}%", True, C_DIM), (vol_track.left, by - 1))
+        pygame.draw.rect(screen, C_ACCENT, (vol_track.left, vol_track.top, fw, vol_track.height), border_radius=4)
+        pygame.draw.circle(screen, C_TXT, (vol_track.left + fw, vol_track.centery), 6)
         if not audio_ok:
             screen.blit(small.render("audio disabled", True, C_DIM), (W - 110, 6))
 
@@ -417,6 +556,46 @@ def main():
         for rect, m in black_keys:
             on = (m == state['note'])
             pygame.draw.rect(screen, C_BLACK_ON if on else C_BLACK, rect, border_radius=3)
+
+        # ---- sidebar ----
+        if state['sidebar_open']:
+            pygame.draw.rect(screen, C_PANEL, (W, 0, SIDEBAR_W, H))
+            pygame.draw.line(screen, C_EDGE, (W, 0), (W, H))
+            ttl = font.render("Patterns", True, C_TXT)
+            screen.blit(ttl, (W + (SIDEBAR_W - ttl.get_width()) // 2, 6))
+            pygame.draw.line(screen, C_EDGE, (W + 2, 28), (W + SIDEBAR_W - 2, 28))
+            screen.set_clip(pygame.Rect(W, 30, SIDEBAR_W, H - 30))
+            item_idx = 0
+            for _cat, pats in PATTERNS:
+                it0 = _sb_items[item_idx]
+                cat_y = it0['rect'].top - _SB_HDR_H - 4 + _sb_scroll
+                clbl = small.render(_cat.upper(), True, C_DIM)
+                screen.blit(clbl, (W + 6, cat_y + (_SB_HDR_H - clbl.get_height()) // 2))
+                for _ in pats:
+                    it = _sb_items[item_idx]
+                    item_idx += 1
+                    sr = it['rect'].move(0, _sb_scroll)
+                    hot_it = sr.collidepoint(mouse) and not drag['active']
+                    pygame.draw.rect(screen, C_BTN_HOT if hot_it else C_BTN,
+                                     sr, border_radius=4)
+                    screen.blit(it['prev'],
+                                (sr.left + 2, sr.top + (sr.height - _SB_PREV_H) // 2))
+                    ntxt = small.render(it['name'], True, C_TXT)
+                    screen.blit(ntxt, (sr.left + _SB_PREV_W + 6,
+                                       sr.centery - ntxt.get_height() // 2))
+            screen.set_clip(None)
+            # scroll thumb
+            if _sb_scroll_min < 0:
+                vis = H - 30
+                thumb_h = max(18, vis * vis // _sb_content_h)
+                thumb_y = 30 + int(-_sb_scroll / -_sb_scroll_min * (vis - thumb_h))
+                pygame.draw.rect(screen, C_DIM,
+                                 (W + SIDEBAR_W - 4, thumb_y, 3, thumb_h), border_radius=2)
+
+        if drag['active']:
+            mx, my = pygame.mouse.get_pos()
+            dlbl = small.render(drag['name'], True, C_ACCENT)
+            screen.blit(dlbl, (mx + 14, my - dlbl.get_height() // 2))
 
         pygame.display.flip()
 
