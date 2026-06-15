@@ -200,9 +200,25 @@ def voices_to_targets(voices):
 # ----------------------------------------------------------------------
 # CONTINUOUS SYNTH  -- phase-continuous, amplitude-glided chunks
 # ----------------------------------------------------------------------
-def render_chunk(phase, amp_cur, pan_cur, amp_tgt, pan_tgt, f0, channels):
-    """Render one gapless chunk. Mutates phase/amp_cur/pan_cur in place so the
-    next chunk continues seamlessly. Returns an int16 buffer (n x channels)."""
+def render_chunk(phase, amp_cur, pan_cur, amp_tgt, pan_tgt, freqs, channels,
+                 freq_cur=None):
+    """Render one gapless chunk. Mutates phase/amp_cur/pan_cur/freq_cur in
+    place so the next chunk continues seamlessly. Returns an int16 buffer
+    (n x channels).
+
+    freqs: array shape K_MAX+1; freqs[0] unused, freqs[1..K_MAX] are partial
+    frequencies in Hz (may be inharmonic). freqs[k] <= 0 silences slot k.
+
+    freq_cur: optional array shape K_MAX+1 tracking the previous frequency per
+    slot. When a slot's frequency changes (e.g. Laplacian returns a different
+    inharmonic mode set), the phase for that slot is reset to 0 so the new
+    frequency starts cleanly — no discontinuous phase artifact from a frequency
+    that no longer exists. Design choice: reset-on-change rather than
+    glide-frequency, because inharmonic modes are discrete resonances, not
+    a continuous pitch; gliding between unrelated modes would be meaningless.
+    Harmonic mappings (f0*k) never change slot frequencies, so reset never
+    fires for them.
+    """
     n = int(CHUNK_S * SR)
     L = np.zeros(n); R = np.zeros(n)
     idx = np.arange(n)
@@ -210,10 +226,14 @@ def render_chunk(phase, amp_cur, pan_cur, amp_tgt, pan_tgt, f0, channels):
     for k in range(1, K_MAX + 1):
         if amp_cur[k] < 1e-4 and amp_tgt[k] < 1e-4:
             continue
-        freq = k * f0
-        if freq >= guard:                         # anti-alias: silence too-high partials
+        freq = freqs[k]
+        if freq <= 0 or freq >= guard:            # anti-alias: silence invalid/too-high partials
             amp_cur[k] = 0.0
             continue
+        # Phase reset when frequency of this slot changes (inharmonic mappings).
+        if freq_cur is not None and abs(freq - freq_cur[k]) > 0.01:
+            phase[k] = 0.0
+            freq_cur[k] = freq
         inc = TWO_PI * freq / SR
         wave = np.sin(phase[k] + inc * idx)       # phase carries over -> no clicks
         a = np.linspace(amp_cur[k], amp_tgt[k], n)   # glide amplitude -> constant level
@@ -384,13 +404,14 @@ def main():
         if not audio_ok:
             return
         ch = state['chan']
+        _freqs = f0() * np.arange(K_MAX + 1)   # harmonic grid: freqs[k] = k * f0
         try:
             if not ch.get_busy():
                 ch.play(pygame.sndarray.make_sound(
-                    render_chunk(state['phase'], state['amp'], state['pan'], amp_tgt, pan_tgt, f0(), MIX_CH)))
+                    render_chunk(state['phase'], state['amp'], state['pan'], amp_tgt, pan_tgt, _freqs, MIX_CH)))
             if ch.get_queue() is None:
                 ch.queue(pygame.sndarray.make_sound(
-                    render_chunk(state['phase'], state['amp'], state['pan'], amp_tgt, pan_tgt, f0(), MIX_CH)))
+                    render_chunk(state['phase'], state['amp'], state['pan'], amp_tgt, pan_tgt, _freqs, MIX_CH)))
         except Exception as e:
             if not state['audio_err']:
                 state['audio_err'] = True

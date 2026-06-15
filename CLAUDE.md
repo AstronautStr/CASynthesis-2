@@ -28,9 +28,12 @@ To revisit any of these, surface it explicitly with rationale.
 
 ## How to run
 ```
-pip install pygame-ce numpy scipy
+pip install pygame-ce numpy scipy sounddevice
 python gol_life_synth.py
 ```
+- `gol_life_synth_laplacian.py` uses **sounddevice** (PortAudio callback stream)
+  for gapless audio decoupled from the 60 fps loop; pygame's play/queue mixer
+  starved on normal frames and clicked. `gol_life_synth.py` still uses the mixer.
 - Use **pygame-ce** — mainline `pygame` has no Python 3.14 wheel and fails to
   build (`distutils.msvccompiler` removed in 3.12+). pygame-ce is API-compatible
   (`import pygame`).

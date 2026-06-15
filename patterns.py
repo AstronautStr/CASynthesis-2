@@ -89,13 +89,15 @@ PATTERNS = [
         ("Beacon",
          [(0,0),(0,1),(1,0),(1,1),(2,2),(2,3),(3,2),(3,3)]),
 
-        # Traffic light — 4 blinkers in symmetric cross.
-        # Produces 4 separate objects — rich synth timbre.
+        # Traffic light — 4 blinkers in symmetric cross, gap=2 between each
+        # pair so they do not interfere.  Period 2, 4 components, 12 cells.
+        # Bounding box 7x7; centre of cross at (3,3).
+        # Verified: gen0==gen2, gen0!=gen1, components=4 each generation.
         ("Traffic light",
-         [(0,1),(0,2),(0,3),
+         [(0,2),(0,3),(0,4),
           (2,0),(3,0),(4,0),
-          (2,4),(3,4),(4,4),
-          (6,1),(6,2),(6,3)]),
+          (2,6),(3,6),(4,6),
+          (6,2),(6,3),(6,4)]),
     ]),
 
     # -----------------------------------------------------------------------

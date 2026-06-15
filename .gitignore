@@ -8,3 +8,12 @@ venv/
 *.egg-info/
 dist/
 build/
+
+# local Claude Code settings (personal)
+.claude/settings.local.json
+
+# diagnostic / session render artifacts (large, regenerable by the probe scripts)
+_probe_*.wav
+_probe_*.npy
+_session_*.wav
+_session_*.npz
