@@ -101,11 +101,16 @@ def replay_session(ts):
     nclip = 0
     gain_prev = L.MASTER_GAIN * float(rp[0][5])    # initial volume
     for i in range(len(rp)):
-        n_rendered, note, spread, alpha, rel_ms, vol = rp[i]
+        row = rp[i]
+        n_rendered, note, spread, alpha, rel_ms, vol = row[:6]
+        # n_partials added as a 7th column later; old logs default to the FIXED mode
+        # count recorded in the npz (d["max_modes"]), so they replay faithfully even
+        # though the current engine's MAX_MODES_PER_OBJ ceiling has since changed.
+        n_partials = int(round(row[6])) if len(row) > 6 else int(d["max_modes"])
         n_rendered = int(round(n_rendered))
         grid = grids[i]
         f0 = L.midi_to_freq(int(round(note)))
-        _, voices, _ = L.analyse(grid, f0, float(spread), float(alpha))
+        _, voices, _ = L.analyse(grid, f0, float(spread), float(alpha), n_partials)
         rc = max(1, round(rel_ms / 1000.0 / L.CHUNK_S))
         gain = L.MASTER_GAIN * float(vol)
         for _ in range(n_rendered):

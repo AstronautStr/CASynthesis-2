@@ -33,7 +33,7 @@ abruptly.  Without smoothing this causes audible clicks / "beeps".  Solution:
 CONTROLS  (identical to gol_life_synth.py)
   Mouse on field : left-drag draw, right-drag erase
   Piano (bottom) : click to set carrier note (latched)
-  Timbre knobs   : spread / alpha / release sliders (live)
+  Timbre knobs   : partials / spread / alpha / release sliders (live)
   Volume slider  : drag (top-right toolbar) -- PRE-clip, so lowering it is the
                    manual headroom control; watch the level/clip meter above it
                    (turns red "CLIP +X dB" when the sum overshoots the ceiling)
@@ -103,7 +103,13 @@ VOL_W = 120
 METER_DECAY = 0.90
 
 # Laplacian mode parameters
-MAX_MODES_PER_OBJ = 8   # Laplacian modes kept per object
+# MAX_MODES_PER_OBJ is now the CEILING (slot capacity) -- the live "partials" knob
+# (state['n_partials'], 1..MAX_MODES_PER_OBJ) picks how many are actually sounded;
+# higher modes are silenced and ring out as tails (SlotPool guards m < len(freqs)).
+# All slot-pool figures below (N_ACTIVE/N_TAIL/TOTAL_SLOTS/TAIL_RESERVE) scale with
+# this; the empirical steal/click counts in their comments were measured at the
+# original 8-mode layout and scale with the same ratios.
+MAX_MODES_PER_OBJ = 20  # max Laplacian modes per object (slot capacity / knob max)
 PATCH_SIZE = 8           # extraction window for map_laplacian
 
 # Live timbre knobs (on-screen sliders; map_laplacian args, decisions.md 2026-06-16).
@@ -111,6 +117,11 @@ PATCH_SIZE = 8           # extraction window for map_laplacian
 SPREAD_DEFAULT = 0.0     # 0 = n lowest modes (dark); 1 = decimate across spectrum (bright)
 ALPHA_DEFAULT  = 1.0     # 1/i**alpha rolloff: 0 = flat/bright, >1 = steeper/dark
 ALPHA_MIN, ALPHA_MAX = 0.0, 2.0
+# Number of partials sounded per object -- a LIVE knob (laplacian_explainer.html
+# tweak the researcher demoed; range/default match it).  Fewer = thinner/cleaner,
+# more = richer.  Integer, clamped to [N_PARTIALS_MIN, MAX_MODES_PER_OBJ].
+N_PARTIALS_DEFAULT = 12
+N_PARTIALS_MIN     = 1
 
 # Audio engine slots (slot 0 unused; slots 1..TOTAL_SLOTS used).
 #   ACTIVE slots 1..N_ACTIVE: one per voice×mode, the CURRENTLY sounding mode.
@@ -119,7 +130,7 @@ ALPHA_MIN, ALPHA_MAX = 0.0, 2.0
 #     out replaced modes (the pad tails).  See SlotPool for why a tail POOL
 #     replaced the old front/back 2-bank scheme (2 banks slammed a still-ringing
 #     tail to 0 on reuse -> boundary click with long release; DEV-2).
-N_ACTIVE = MAX_VOICES * MAX_MODES_PER_OBJ         # 192
+N_ACTIVE = MAX_VOICES * MAX_MODES_PER_OBJ         # 480 (24 voices x 20 modes)
 # Tail pool sized 2x the active set: a long release (up to RELEASE_MS_MAX) over a
 # fast-changing object stacks many overlapping tails; 192 exhausted on the user's
 # single-galaxy snapshot (109 steals -> residual clicks, loudest stolen amp 0.61).
@@ -127,8 +138,8 @@ N_ACTIVE = MAX_VOICES * MAX_MODES_PER_OBJ         # 192
 # floor) at negligible render cost (~+5% on the slot loop, slots skip when silent).
 # Dense many-object fields with max release can still exhaust it; then the QUIETEST
 # tail is stolen (graceful, smallest click).
-N_TAIL   = MAX_VOICES * MAX_MODES_PER_OBJ * 4      # 768 release-only tail slots
-TOTAL_SLOTS = N_ACTIVE + N_TAIL                   # 960
+N_TAIL   = MAX_VOICES * MAX_MODES_PER_OBJ * 4      # 1920 release-only tail slots
+TOTAL_SLOTS = N_ACTIVE + N_TAIL                   # 2400
 TAIL_MIN_AMP = 0.005     # below this an old mode is too quiet to be worth a tail
 # Graceful tail eviction: a dense field with long release wants more overlapping
 # tails than any feasible slot count (24 voices x 8 modes x ~24 tails @ 4 s ~= 4600).
@@ -146,7 +157,7 @@ FAST_EVICT_CHUNKS = max(1, round(FAST_EVICT_MS / 1000.0 / CHUNK_S))   # 1 chunk
 # full 24-voice churn overlapping bursts drain the reserve faster than a 1-chunk
 # fast-fade refills it; 2x empirically gives 0 steals on the 24-voice random-field
 # snapshot (1x left ~10k steals).  Pool 768 suffices -- bigger pools add nothing.
-TAIL_RESERVE  = MAX_VOICES * MAX_MODES_PER_OBJ * 2  # 384
+TAIL_RESERVE  = MAX_VOICES * MAX_MODES_PER_OBJ * 2  # 960
 
 # Mode-tail RELEASE duration -- a LIVE knob (decisions.md 2026-06-16 "пэды").
 # When a mode's frequency changes (topology event) or its object dies, the OLD
@@ -261,10 +272,14 @@ def hsv(h, v):
     return (int(r * 255), int(g * 255), int(b * 255))
 
 
-def analyse(grid, f0, spread=SPREAD_DEFAULT, alpha=ALPHA_DEFAULT):
+def analyse(grid, f0, spread=SPREAD_DEFAULT, alpha=ALPHA_DEFAULT,
+            n_partials=N_PARTIALS_DEFAULT):
     """Segment the field into connected objects and compute Laplacian voices.
 
-    spread / alpha are the live timbre knobs forwarded to map_laplacian.
+    spread / alpha / n_partials are the live timbre knobs forwarded to
+    map_laplacian.  n_partials (<= MAX_MODES_PER_OBJ) sets how many modes each
+    voice sounds; the returned freqs/amps are length n_partials and the engine
+    silences modes n_partials..MAX_MODES_PER_OBJ (they ring out as tails).
 
     Returns:
         labels  : labelled grid (0 = background)
@@ -293,7 +308,7 @@ def analyse(grid, f0, spread=SPREAD_DEFAULT, alpha=ALPHA_DEFAULT):
 
         cx = xs.mean() / max(GRID_W - 1, 1)   # stereo pan [0..1]
 
-        freqs, amps = map_laplacian(patch, f0, MAX_MODES_PER_OBJ, spread, alpha)
+        freqs, amps = map_laplacian(patch, f0, n_partials, spread, alpha)
 
         # Colour: hue by object index (spread across spectrum), brightness by area
         hue = (idx / max(MAX_VOICES - 1, 1)) * 0.72
@@ -645,9 +660,9 @@ def _dump_session(rec, prefix="_session"):
         gens, grids, notes = (np.zeros(0),
                               np.zeros((0, GRID_H, GRID_W), np.uint8), np.zeros(0))
     # Faithful-replay log (per rendered frame): inputs + chunk count.
-    # replay columns: [n_rendered, note, spread, alpha, release_ms, vol]
+    # replay columns: [n_rendered, note, spread, alpha, release_ms, vol, n_partials]
     replay = (np.array(rec.get('replay', []), dtype=float)
-              if rec.get('replay') else np.zeros((0, 6)))
+              if rec.get('replay') else np.zeros((0, 7)))
     replay_grids = (np.stack(rec['replay_grids']).astype(np.uint8)
                     if rec.get('replay_grids')
                     else np.zeros((0, GRID_H, GRID_W), np.uint8))
@@ -767,6 +782,7 @@ def main():
         kb_base=NOTE_DEFAULT,
         sidebar_open=True,
         spread=SPREAD_DEFAULT, alpha=ALPHA_DEFAULT, release_ms=RELEASE_MS_DEFAULT,
+        n_partials=N_PARTIALS_DEFAULT,
     )
 
     # toolbar layout (identical to gol_life_synth.py)
@@ -788,15 +804,17 @@ def main():
     # state and feed map_laplacian (spread/alpha) and the release-tail length.
     CTRL_LABEL_W, CTRL_TRACK_W = 56, 120
     _ctrl_x = _pat_btn.right + 16
+    # (id, label, lo, hi, fmt, integer):  integer knobs snap/store as int.
     _ctrl_defs = [
-        ('spread',     'spread', 0.0, 1.0,                      lambda v: f"{v:.2f}"),
-        ('alpha',      'alpha',  ALPHA_MIN, ALPHA_MAX,          lambda v: f"{v:.2f}"),
-        ('release_ms', 'rel',    RELEASE_MS_MIN, RELEASE_MS_MAX, lambda v: f"{v:.0f}ms"),
+        ('n_partials', 'part',  N_PARTIALS_MIN, MAX_MODES_PER_OBJ, lambda v: f"{int(v)}",   True),
+        ('spread',     'spread', 0.0, 1.0,                      lambda v: f"{v:.2f}",   False),
+        ('alpha',      'alpha',  ALPHA_MIN, ALPHA_MAX,          lambda v: f"{v:.2f}",   False),
+        ('release_ms', 'rel',    RELEASE_MS_MIN, RELEASE_MS_MAX, lambda v: f"{v:.0f}ms", False),
     ]
     ctrls = []
-    for _i, (_cid, _clbl, _lo, _hi, _fmt) in enumerate(_ctrl_defs):
+    for _i, (_cid, _clbl, _lo, _hi, _fmt, _int) in enumerate(_ctrl_defs):
         ctrls.append(dict(
-            id=_cid, label=_clbl, lo=_lo, hi=_hi, fmt=_fmt,
+            id=_cid, label=_clbl, lo=_lo, hi=_hi, fmt=_fmt, integer=_int,
             track=pygame.Rect(_ctrl_x + CTRL_LABEL_W, by + 2 + _i * 22,
                               CTRL_TRACK_W, 8)))
 
@@ -845,7 +863,8 @@ def main():
 
     def set_ctrl(c, mx):
         frac = float(np.clip((mx - c['track'].left) / c['track'].width, 0, 1))
-        state[c['id']] = c['lo'] + frac * (c['hi'] - c['lo'])
+        val = c['lo'] + frac * (c['hi'] - c['lo'])
+        state[c['id']] = int(round(val)) if c.get('integer') else val
 
     def do(bid):
         nonlocal grid
@@ -1006,7 +1025,8 @@ def main():
                 if rec is not None:
                     rec['steps'].append((state['gen'], grid.copy(), state['note']))
 
-        labels, voices, color = analyse(grid, f0(), state['spread'], state['alpha'])
+        labels, voices, color = analyse(grid, f0(), state['spread'], state['alpha'],
+                                        state['n_partials'])
         n_rendered, ur_delta = feed_audio(voices)
         if rec is not None:
             rec['frames'].append((round(dt * 1000.0, 2), state['gen'],
@@ -1019,7 +1039,8 @@ def main():
             if n_rendered > 0:
                 rec['replay'].append((n_rendered, int(state['note']),
                                       float(state['spread']), float(state['alpha']),
-                                      float(state['release_ms']), float(state['vol'])))
+                                      float(state['release_ms']), float(state['vol']),
+                                      int(state['n_partials'])))
                 rec['replay_grids'].append(grid.copy())
 
         # ── draw field ──────────────────────────────────────────────────────
