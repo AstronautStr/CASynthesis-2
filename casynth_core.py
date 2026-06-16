@@ -138,9 +138,44 @@ def map_random(patch, f0, n=N_PARTIALS_DEFAULT):
     return freqs, amps
 
 
-def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT):
+def _select_modes(n_modes, n, spread):
+    """Pick which of n_modes sorted modes feed the n partial slots.
+
+    spread=0.0 -> the n LOWEST modes consecutively (indices 0..n-1) -- the
+    historical behaviour.  spread=1.0 -> n modes decimated across the WHOLE
+    spectrum (linspace 0..n_modes-1), reaching the bright upper resonances.
+    Intermediate spread linearly interpolates between the two index sets.
+
+    Index 0 is ALWAYS the first selected mode, so the lowest sounding partial
+    stays normalised to f0 regardless of spread (pitch must not drift -- see
+    decisions.md 2026-06-16).  Returns a strictly increasing int index array
+    of length <= n, all entries < n_modes.
+    """
+    if n_modes <= n or spread <= 0.0:
+        return np.arange(min(n, n_modes))
+    consec = np.arange(n, dtype=float)               # spread = 0
+    spread_idx = np.linspace(0.0, n_modes - 1, n)    # spread = 1
+    raw = (1.0 - spread) * consec + spread * spread_idx
+    sel = np.round(raw).astype(int)
+    sel[0] = 0                                        # lowest stays = f0
+    for i in range(1, n):                             # force strictly increasing
+        if sel[i] <= sel[i - 1]:
+            sel[i] = sel[i - 1] + 1
+    return sel[sel < n_modes]
+
+
+def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0):
     """Graph Laplacian eigenvalues -> inharmonic partial frequencies via sqrt(lambda).
-    Lowest non-zero mode is normalized to f0; amplitudes follow 1/i rolloff."""
+    Lowest selected mode is normalized to f0; amplitudes follow 1/i**alpha rolloff.
+
+    spread : 0.0 = n lowest modes (dark); 1.0 = modes decimated across the whole
+             spectrum (bright upper resonances).  Lowest selected mode is always
+             f0 (pitch anchored to the carrier -- see decisions.md 2026-06-16).
+    alpha  : amplitude rolloff exponent 1/i**alpha.  alpha=1 -> historical 1/i;
+             alpha->0 -> flat / brighter; alpha>1 -> steeper / darker.
+
+    Defaults (spread=0, alpha=1) reproduce the original output bit-for-bit, so
+    the listening bench (which calls without these) is unchanged."""
     live = list(map(tuple, np.argwhere(patch > 0)))
     cnt = len(live)
     if cnt < 2:
@@ -168,13 +203,15 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT):
     mode_freqs = nonzero_sq * scale
     # Anti-alias guard
     mode_freqs = mode_freqs[mode_freqs < _GUARD]
-    num = min(n, len(mode_freqs))
+    # Choose which modes sound (spread spans low->whole-spectrum); index 0 stays f0
+    sel = _select_modes(len(mode_freqs), n, spread)
+    num = len(sel)
     freqs = np.zeros(n)
-    freqs[:num] = mode_freqs[:num]
-    # Amplitudes: 1/i rolloff (softer for higher modes)
+    freqs[:num] = mode_freqs[sel]
+    # Amplitudes: 1/i**alpha rolloff (softer for higher modes)
     amps = np.zeros(n)
     if num > 0:
-        amps[:num] = 1.0 / np.arange(1, num + 1)
+        amps[:num] = 1.0 / np.arange(1, num + 1) ** alpha
         amps[:num] /= amps[:num].max()
     return freqs, amps
 

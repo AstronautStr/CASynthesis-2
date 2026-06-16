@@ -38,6 +38,11 @@ def _ell_patch():
     return p
 
 
+def _dense_patch():
+    """A solid block -> many Laplacian modes (>> 8), so spread/truncation differ."""
+    return np.ones((8, 8), np.uint8)
+
+
 # ── Contract (all mappings) ───────────────────────────────────────────────────
 
 def test_contract_shapes_and_ranges():
@@ -104,6 +109,54 @@ def test_laplacian_amps_nonincreasing_rolloff():
     _, amps = c.map_laplacian(_ell_patch(), F0, 8)
     nz = amps[amps > 0]
     assert np.all(np.diff(nz) <= 1e-9), f"laplacian amps not non-increasing: {nz}"
+
+
+# ── Live knobs: spread / alpha (decisions.md 2026-06-16) ──────────────────────
+
+def test_laplacian_knob_defaults_backward_compatible():
+    """Explicit spread=0, alpha=1 == the historical (default) call -- so the
+    listening bench, which omits the knobs, is bit-for-bit unchanged."""
+    for p in (_blinker_patch(), _ell_patch(), _dense_patch()):
+        f_def, a_def = c.map_laplacian(p, F0, 8)
+        f_exp, a_exp = c.map_laplacian(p, F0, 8, spread=0.0, alpha=1.0)
+        assert np.array_equal(f_def, f_exp) and np.array_equal(a_def, a_exp), \
+            "spread=0/alpha=1 not identical to default"
+
+
+def test_laplacian_n_is_truncation_only():
+    """Lower n only truncates the tail: with spread=0 the first 8 freqs at n=8
+    equal the first 8 at n=20 (locks the 20-vs-8 decision -- same algorithm,
+    different tail length)."""
+    p = _dense_patch()
+    f8 = c.map_laplacian(p, F0, 8)[0]
+    f20 = c.map_laplacian(p, F0, 20)[0]
+    assert np.allclose(f8, f20[:8], atol=1e-9), "n changed the spectrum, not just length"
+
+
+def test_laplacian_spread_keeps_lowest_at_f0_and_reaches_higher():
+    """Spread must not move the lowest sounding mode off f0 (pitch anchor), but
+    must reach higher resonances than spread=0 on a many-moded shape."""
+    p = _dense_patch()
+    f_lo = c.map_laplacian(p, F0, 8, spread=0.0)[0]
+    f_hi = c.map_laplacian(p, F0, 8, spread=1.0)[0]
+    lo_lo = np.sort(f_lo[f_lo > 0])[0]
+    lo_hi = np.sort(f_hi[f_hi > 0])[0]
+    assert abs(lo_lo - F0) < 1e-6 and abs(lo_hi - F0) < 1e-6, "spread moved lowest mode"
+    assert f_hi.max() > f_lo.max() + 1e-6, "spread=1 did not reach higher modes"
+
+
+def test_laplacian_alpha_controls_brightness():
+    """alpha=0 -> flat amps (bright); larger alpha -> steeper rolloff (darker),
+    without changing the frequencies."""
+    p = _dense_patch()
+    f1, a_flat = c.map_laplacian(p, F0, 8, alpha=0.0)
+    f2, a_mid = c.map_laplacian(p, F0, 8, alpha=1.0)
+    f3, a_steep = c.map_laplacian(p, F0, 8, alpha=2.0)
+    assert np.allclose(f1, f2) and np.allclose(f2, f3), "alpha changed frequencies"
+    nz_flat = a_flat[a_flat > 0]
+    assert np.allclose(nz_flat, 1.0), f"alpha=0 not flat: {nz_flat}"
+    # steeper alpha -> smaller amplitude on the 2nd partial relative to the 1st
+    assert a_steep[1] < a_mid[1] < a_flat[1], "alpha rolloff not monotonic in steepness"
 
 
 # ── FFT / Random characteristics ──────────────────────────────────────────────

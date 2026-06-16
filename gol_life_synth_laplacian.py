@@ -13,25 +13,30 @@ Each connected object in the GOL field produces a VOICE whose spectrum equals
 the Laplacian eigenfrequencies of its graph (sqrt(lambda), normalised so the
 lowest mode == carrier f0).  The carrier note is set via the on-screen piano.
 
-Cross-fade on topology change
-------------------------------
+Cross-fade on topology change (active + tail slot pool)
+-------------------------------------------------------
 When GOL steps change an object's shape the set of Laplacian modes changes
 abruptly.  Without smoothing this causes audible clicks / "beeps".  Solution:
-  - Each voice×mode occupies two physical slots (front / back banks).
-  - On a frequency change: the old (front) slot fades out over FADE_CHUNKS audio
-    chunks (release); the new frequency immediately starts on the back slot from
-    amplitude 0 (attack).  Both slots render in parallel -> overlapping envelopes,
-    no amplitude gap ("struck plate" analogy: old resonance still ringing while
-    the new one rises).
-  - Phase accumulation is continuous -- no phase reset.  Starting the new slot
-    at amp_cur=0 means the phase value is inaudible at the moment of assignment.
+  - Each voice×mode has ONE active slot plus a shared pool of release-only TAIL
+    slots (see SlotPool).
+  - On a frequency change: the old mode is MOVED into a free tail slot that rings
+    down over the release-tail length (live knob, RELEASE_MS_*), continuing the
+    exact same waveform (same phase + amplitude) so there is no seam; the active
+    slot restarts on the new frequency from amplitude 0 (fast attack).  Old (tail)
+    and new (active) render in parallel -> overlapping envelopes, no gap ("struck
+    plate": old resonance still ringing while the new one rises).  Longer release
+    -> tails of many past topologies overlap into a pad.
+  - Phase accumulation is continuous -- no phase reset.
   - Mode frequencies are NOT glided -- they are discrete resonances; gliding
     would smear the inharmonic character that makes the timbre metallic.
 
 CONTROLS  (identical to gol_life_synth.py)
   Mouse on field : left-drag draw, right-drag erase
   Piano (bottom) : click to set carrier note (latched)
-  Volume slider  : drag (top-right toolbar)
+  Timbre knobs   : spread / alpha / release sliders (live)
+  Volume slider  : drag (top-right toolbar) -- PRE-clip, so lowering it is the
+                   manual headroom control; watch the level/clip meter above it
+                   (turns red "CLIP +X dB" when the sum overshoots the ceiling)
   Space ......... play / pause
   S ............. step (key not mapped -- use button)
   R / C ......... random / clear
@@ -92,24 +97,75 @@ AUDIO_LOOKAHEAD_CHUNKS = 2
 MASTER_GAIN = 0.04
 VOL_DEFAULT = 0.70
 VOL_W = 120
+# Level/clip meter: peak-hold decay per frame (visual ballistics only).  Volume
+# is PRE-clip (see render_chunk_laplacian), so lowering it is the manual headroom
+# control; the meter shows the pre-clip peak vs the 0 dBFS ceiling.
+METER_DECAY = 0.90
 
 # Laplacian mode parameters
 MAX_MODES_PER_OBJ = 8   # Laplacian modes kept per object
 PATCH_SIZE = 8           # extraction window for map_laplacian
 
-# Total partial slots in the flat audio engine arrays:
-#   slot 0 unused (legacy), slots 1..TOTAL_SLOTS used.
-#   Each voice×mode occupies TWO slots: front (currently sounding) and back
-#   (reserved for overlapping cross-fade).  Layout per voice v, mode m:
-#     front slot: 1 + v * MAX_MODES_PER_OBJ * 2 + m
-#     back  slot: 1 + v * MAX_MODES_PER_OBJ * 2 + MAX_MODES_PER_OBJ + m
-TOTAL_SLOTS = MAX_VOICES * MAX_MODES_PER_OBJ * 2  # 384
+# Live timbre knobs (on-screen sliders; map_laplacian args, decisions.md 2026-06-16).
+# Defaults reproduce the original Laplacian timbre exactly.
+SPREAD_DEFAULT = 0.0     # 0 = n lowest modes (dark); 1 = decimate across spectrum (bright)
+ALPHA_DEFAULT  = 1.0     # 1/i**alpha rolloff: 0 = flat/bright, >1 = steeper/dark
+ALPHA_MIN, ALPHA_MAX = 0.0, 2.0
 
-# Cross-fade duration: ~50 ms expressed in audio chunks.
-# At CHUNK_S=0.09 s: int(round(0.05/0.09)) = 1 chunk (~90 ms).
-# Increase CHUNK_S or use a smaller CHUNK_S to get finer resolution.
-FADE_MS = 50                                        # target fade duration in ms
-FADE_CHUNKS = max(1, round(FADE_MS / 1000.0 / CHUNK_S))  # chunks per fade phase
+# Audio engine slots (slot 0 unused; slots 1..TOTAL_SLOTS used).
+#   ACTIVE slots 1..N_ACTIVE: one per voice×mode, the CURRENTLY sounding mode.
+#     active slot for voice v, mode m: 1 + v * MAX_MODES_PER_OBJ + m
+#   TAIL slots N_ACTIVE+1..TOTAL_SLOTS: a pool of release-only slots that ring
+#     out replaced modes (the pad tails).  See SlotPool for why a tail POOL
+#     replaced the old front/back 2-bank scheme (2 banks slammed a still-ringing
+#     tail to 0 on reuse -> boundary click with long release; DEV-2).
+N_ACTIVE = MAX_VOICES * MAX_MODES_PER_OBJ         # 192
+# Tail pool sized 2x the active set: a long release (up to RELEASE_MS_MAX) over a
+# fast-changing object stacks many overlapping tails; 192 exhausted on the user's
+# single-galaxy snapshot (109 steals -> residual clicks, loudest stolen amp 0.61).
+# 384 gives 0 steals there (boundary click peak 1065 -> 94, the short-release
+# floor) at negligible render cost (~+5% on the slot loop, slots skip when silent).
+# Dense many-object fields with max release can still exhaust it; then the QUIETEST
+# tail is stolen (graceful, smallest click).
+N_TAIL   = MAX_VOICES * MAX_MODES_PER_OBJ * 4      # 768 release-only tail slots
+TOTAL_SLOTS = N_ACTIVE + N_TAIL                   # 960
+TAIL_MIN_AMP = 0.005     # below this an old mode is too quiet to be worth a tail
+# Graceful tail eviction: a dense field with long release wants more overlapping
+# tails than any feasible slot count (24 voices x 8 modes x ~24 tails @ 4 s ~= 4600).
+# So each update, BEFORE this cycle's spawns, the QUIETEST excess tails are
+# fast-faded to zero over FAST_EVICT_CHUNKS (a quick but smooth release -> no
+# click), keeping TAIL_RESERVE slots free.  TAIL_RESERVE covers the largest single
+# GOL-step spawn burst (every active mode changing at once = N_ACTIVE) so a burst
+# never has to steal a loud ringing tail (a stolen loud tail = boundary click;
+# measured on a 12-voice snapshot: 2571 steals of amp~0.57 -> clicks).  Under load
+# this shortens the pad (oldest/quietest tails dropped first) but stays click-free;
+# sparse fields still get the full long pad.
+FAST_EVICT_MS = 90
+FAST_EVICT_CHUNKS = max(1, round(FAST_EVICT_MS / 1000.0 / CHUNK_S))   # 1 chunk
+# Reserve = 2x the active set.  The max single-step spawn burst is N_ACTIVE, but at
+# full 24-voice churn overlapping bursts drain the reserve faster than a 1-chunk
+# fast-fade refills it; 2x empirically gives 0 steals on the 24-voice random-field
+# snapshot (1x left ~10k steals).  Pool 768 suffices -- bigger pools add nothing.
+TAIL_RESERVE  = MAX_VOICES * MAX_MODES_PER_OBJ * 2  # 384
+
+# Mode-tail RELEASE duration -- a LIVE knob (decisions.md 2026-06-16 "пэды").
+# When a mode's frequency changes (topology event) or its object dies, the OLD
+# frequency's slot fades out over RELEASE_MS.  The new mode's ATTACK stays fast
+# (one chunk, via _RAMP) so the cross-fade onset is unchanged; only the tail
+# length is user-controlled.  Short -> percussive "struck plate"; long (seconds)
+# -> tails of past topologies overlap into a continuous pad.
+#   release length in chunks = max(1, round(RELEASE_MS / 1000 / CHUNK_S))
+# computed live from state['release_ms'] each feed cycle (NOT a fixed constant),
+# so the knob retunes without restart.
+# NOTE (2-bank limit): each voice×mode owns only two physical slots (front/back).
+# A tail still ringing when the SAME voice×mode changes frequency again is reused
+# for the next attack, cutting that tail short.  So very long tails only fully
+# ring out between events (slow / paused fields); under continuous fast stepping
+# they are clipped at the next topology change.  A full overlapping pad of many
+# stacked tails needs a dedicated tail-slot pool (see questions.md follow-up).
+RELEASE_MS_DEFAULT = 50.0
+RELEASE_MS_MIN     = 20.0
+RELEASE_MS_MAX     = 4000.0
 
 # keyboard piano
 NOTE_DEFAULT = 48         # C3
@@ -205,8 +261,10 @@ def hsv(h, v):
     return (int(r * 255), int(g * 255), int(b * 255))
 
 
-def analyse(grid, f0):
+def analyse(grid, f0, spread=SPREAD_DEFAULT, alpha=ALPHA_DEFAULT):
     """Segment the field into connected objects and compute Laplacian voices.
+
+    spread / alpha are the live timbre knobs forwarded to map_laplacian.
 
     Returns:
         labels  : labelled grid (0 = background)
@@ -235,7 +293,7 @@ def analyse(grid, f0):
 
         cx = xs.mean() / max(GRID_W - 1, 1)   # stereo pan [0..1]
 
-        freqs, amps = map_laplacian(patch, f0, MAX_MODES_PER_OBJ)
+        freqs, amps = map_laplacian(patch, f0, MAX_MODES_PER_OBJ, spread, alpha)
 
         # Colour: hue by object index (spread across spectrum), brightness by area
         hue = (idx / max(MAX_VOICES - 1, 1)) * 0.72
@@ -260,8 +318,19 @@ def analyse(grid, f0):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def render_chunk_laplacian(phase, amp_cur, pan_cur,
-                           amp_tgt, pan_tgt, freq_slots, channels):
+                           amp_tgt, pan_tgt, freq_slots, channels, gain_prev, gain):
     """Render one gapless chunk over the flat slot pool.
+
+    gain_prev, gain : pre-clip master gain (MASTER_GAIN * volume) at the start and
+    end of this chunk.  The gain is GLIDED from gain_prev to gain across the chunk
+    (smoothstep) so dragging the volume slider doesn't step the level at a chunk
+    boundary (that step was an audible click).  Applied BEFORE the clip, so lowering
+    volume pulls the summed signal below the clip ceiling -- an honest headroom
+    control (the timbre/spectrum is untouched, only the level).
+
+    Returns (buf, peak, n_clip): buf is int16 (n_samples x channels); peak is the
+    PRE-clip absolute peak (1.0 == 0 dBFS ceiling; >1.0 means we clipped and by
+    how much); n_clip is the count of samples that exceeded the ceiling.
 
     Amplitudes and pan are linearly interpolated (glided) from their current
     values to the target values within each chunk.  Phase accumulation is
@@ -304,8 +373,16 @@ def render_chunk_laplacian(phase, amp_cur, pan_cur,
         amp_cur[k] = amp_tgt[k]
         pan_cur[k] = pan_tgt[k]
 
-    L = np.clip(L * MASTER_GAIN, -1.0, 1.0)
-    R = np.clip(R * MASTER_GAIN, -1.0, 1.0)
+    g = gain_prev + (gain - gain_prev) * _RAMP   # smooth gain ramp -> click-free volume drag
+    L *= g
+    R *= g
+    # Pre-clip metering: peak relative to the 1.0 ceiling (0 dBFS) and how many
+    # samples ran over.  Measured BEFORE the clip so the meter shows the true
+    # overshoot the user is asked to tame with the volume knob.
+    peak = float(max(np.abs(L).max(), np.abs(R).max()))
+    n_clip = int(np.count_nonzero(np.abs(L) > 1.0) + np.count_nonzero(np.abs(R) > 1.0))
+    L = np.clip(L, -1.0, 1.0)
+    R = np.clip(R, -1.0, 1.0)
 
     if channels <= 1:
         data = ((L + R) * 0.5)[:, None]
@@ -314,30 +391,33 @@ def render_chunk_laplacian(phase, amp_cur, pan_cur,
         data[:, 0] = L
         data[:, 1] = R
 
-    return np.ascontiguousarray((data * 32767).astype(np.int16))
+    return np.ascontiguousarray((data * 32767).astype(np.int16)), peak, n_clip
 
 
 class SlotPool:
-    """Manages assignment of voice×mode pairs to flat audio slots with
-    overlapping amplitude cross-fade when mode frequencies change.
+    """Active + tail slot pool with seamless (click-free) release tails.
 
-    Layout: slots 1..TOTAL_SLOTS.  Slot 0 is reserved / unused.
-    Each voice×mode pair occupies TWO slots (front bank and back bank):
-        stride = MAX_MODES_PER_OBJ * 2
-        front slot for voice v, mode m:  1 + v * stride + bank[v,m] * MAX_MODES_PER_OBJ + m
-        back  slot for voice v, mode m:  1 + v * stride + (1 - bank[v,m]) * MAX_MODES_PER_OBJ + m
+    Layout (slots 1..TOTAL_SLOTS; slot 0 unused):
+      ACTIVE slots 1..N_ACTIVE: one per voice×mode, holding the CURRENT sounding
+        mode.  active(v,m) = 1 + v * MAX_MODES_PER_OBJ + m.
+      TAIL slots N_ACTIVE+1..TOTAL_SLOTS: a pool of release-only slots.
 
-    On a frequency change for voice v / mode m:
-      1. The current front slot is put into RELEASE: amp_tgt -> 0, decaying over
-         FADE_CHUNKS audio chunks.
-      2. The back slot immediately becomes the new front: freq set to new value,
-         amp_cur forced to 0 (inaudible start), amp_tgt set to the target
-         amplitude (ATTACK ramp begins immediately).
-      3. During the fade both slots are rendered in parallel -> OVERLAP, no gap.
-      4. front/back bank index is swapped for that voice×mode.
+    On a frequency change (topology event) or voice death, the OLD mode is NOT
+    cut.  Its (freq, phase, current amplitude, pan) are MOVED into a free tail
+    slot which then rings down over release_chunks, while the active slot restarts
+    on the new frequency from amplitude 0 (fast one-chunk attack).  Because the
+    tail continues the EXACT waveform the active slot was producing (same phase,
+    same amplitude at the seam), the summed signal is continuous across the swap
+    -> no click -- and tails of arbitrary length overlap into a pad.
 
-    Result: the old resonance is still sounding while the new one rises -> the
-    "struck plate" analogy from decisions.md is faithfully reproduced.
+    This replaces the old front/back 2-bank scheme, which had only two slots per
+    voice×mode: a still-ringing tail got its amplitude slammed to 0 when the bank
+    was reused for the next attack, a step discontinuity heard as a boundary click
+    whenever release was long (DEV-2; confirmed on a session snapshot: forcing
+    release short cut sharp transients 465 -> 38).
+
+    If the tail pool is exhausted, the QUIETEST tail is stolen (smallest residual
+    amplitude -> smallest click) -- graceful degradation under extreme stacking.
     """
 
     def __init__(self):
@@ -346,133 +426,152 @@ class SlotPool:
         self.amp_tgt     = np.zeros(sz)
         self.pan_tgt     = np.full(sz, 0.5)
 
-        # Per voice×mode: which bank (0 or 1) is the current FRONT.
-        # Shape (MAX_VOICES, MAX_MODES_PER_OBJ); int8.
-        self._bank = np.zeros((MAX_VOICES, MAX_MODES_PER_OBJ), dtype=np.int8)
-
         # Release countdown (in chunks) per slot; 0 = not releasing.
         self._release_cnt = np.zeros(sz, dtype=int)
         # Amplitude at the start of release (for linear step computation).
         self._release_amp0 = np.zeros(sz)
+        # Release LENGTH (chunks) captured when each tail started, so a live
+        # release-knob change mid-tail does not rescale an in-flight fade.
+        self._release_len = np.ones(sz, dtype=int)
 
-        # Last committed frequency per slot (to detect changes).
+        # Last committed frequency per voice×mode active slot (to detect changes).
         self._freq_prev = np.zeros((MAX_VOICES, MAX_MODES_PER_OBJ))
 
-    # ------------------------------------------------------------------
-    # Slot index helpers
-    # ------------------------------------------------------------------
+        # Diagnostics: count tail-pool steals (pool exhausted -> a still-ringing
+        # tail had to be overwritten = a residual click) and the loudest stolen
+        # amplitude.  Read by the probe; zero in normal (non-exhausted) operation.
+        self.steals = 0
+        self.steal_amp_max = 0.0
 
-    def _stride(self):
-        return MAX_MODES_PER_OBJ * 2
+    @staticmethod
+    def _active(v, m):
+        """Slot index of the active (currently sounding) slot for voice v, mode m."""
+        return 1 + v * MAX_MODES_PER_OBJ + m
 
-    def _front_slot(self, v, m):
-        """Slot index of the current front bank for voice v, mode m."""
-        bank = int(self._bank[v, m])
-        return 1 + v * self._stride() + bank * MAX_MODES_PER_OBJ + m
+    def _acquire_tail(self, amp_cur):
+        """Return a tail slot for a new ringing-out mode: a free (silent, not
+        releasing) one if available, else the quietest currently-ringing one
+        (stealing it -> the smallest possible click)."""
+        lo, hi = N_ACTIVE + 1, TOTAL_SLOTS + 1
+        quietest, quiet_amp = lo, np.inf
+        for s in range(lo, hi):
+            if self._release_cnt[s] == 0 and amp_cur[s] < 1e-4:
+                return s
+            if amp_cur[s] < quiet_amp:
+                quiet_amp, quietest = amp_cur[s], s
+        # No free slot: stealing the quietest still-ringing tail.  Eviction below
+        # keeps the quietest near zero, so this steal is normally near-silent.
+        self.steals += 1
+        self.steal_amp_max = max(self.steal_amp_max, float(quiet_amp))
+        return quietest
 
-    def _back_slot(self, v, m):
-        """Slot index of the back bank for voice v, mode m."""
-        bank = 1 - int(self._bank[v, m])
-        return 1 + v * self._stride() + bank * MAX_MODES_PER_OBJ + m
+    def _enforce_tail_budget(self, amp_cur):
+        """When ringing tails exceed the pool minus a reserve, fast-fade the
+        QUIETEST excess to zero over FAST_EVICT_CHUNKS (a quick, smooth release --
+        not a cut) so slots free up before a loud tail must be stolen."""
+        lo, hi = N_ACTIVE + 1, TOTAL_SLOTS + 1
+        ring = [s for s in range(lo, hi)
+                if self._release_cnt[s] > 0 or amp_cur[s] >= 1e-4]
+        over = len(ring) - (N_TAIL - TAIL_RESERVE)
+        if over <= 0:
+            return
+        ring.sort(key=lambda s: amp_cur[s])      # quietest first
+        for s in ring[:over]:
+            if self._release_cnt[s] == 0 or self._release_cnt[s] > FAST_EVICT_CHUNKS:
+                self._release_cnt[s]  = FAST_EVICT_CHUNKS
+                self._release_len[s]  = FAST_EVICT_CHUNKS
+                self._release_amp0[s] = float(amp_cur[s])
 
-    # ------------------------------------------------------------------
-
-    def update(self, voices, amp_cur):
+    def update(self, voices, phase, amp_cur, pan_cur, release_chunks):
         """Push a new voice list into the slot pool.
 
-        Called once per GOL step (or audio feed cycle).  For each active
-        voice/mode:
-          - If the frequency is unchanged: update amp/pan targets smoothly on
-            the front slot.
-          - If the frequency changed (topology event):
-              a) Put the front slot into RELEASE: schedule FADE_CHUNKS countdown;
-                 amp_tgt will be stepped toward 0 linearly over those chunks.
-              b) Assign the new frequency to the BACK slot; set amp_cur=0 (silent
-                 start, so the phase accumulator starts at a known value while
-                 amplitude is zero -- no audible discontinuity) and amp_tgt to
-                 the target amplitude (ATTACK begins immediately).
-              c) Swap front/back banks for this voice×mode.
-          Both old and new slots are rendered simultaneously during the transition
-          -> overlapping envelopes, no amplitude gap.
-        Voices no longer present: release their front slots.
-        amp_cur is passed in so we can force back slot to silence before attack.
+        phase / amp_cur / pan_cur : the engine's per-slot state arrays (mutated in
+            place) -- needed so a replaced mode can be MOVED into a tail slot
+            continuing the exact same waveform (phase + amplitude), seamlessly.
+        release_chunks : current mode-tail release length in audio chunks (live
+            release knob -- see RELEASE_MS_* / feed_audio).
+
+        For each voice×mode:
+          - frequency unchanged: glide amp/pan targets on the active slot.
+          - frequency changed (or voice gone): if the old mode is audible, move it
+            into a tail slot (seamless continuation) to ring out over
+            release_chunks; then restart the active slot on the new frequency from
+            amplitude 0 (attack), or silence it if the mode is gone.
+        Old (tail) and new (active) sound in parallel -> overlap, no gap, no click.
         """
         n_voices = min(len(voices), MAX_VOICES)
 
-        # ── Phase 1: process new voice data (set targets, initiate swaps) ──────
-        for v in range(MAX_VOICES):
-            for m in range(MAX_MODES_PER_OBJ):
-                fslot = self._front_slot(v, m)
-                bslot = self._back_slot(v, m)
+        # Free up slots BEFORE this cycle's spawns: fast-fade the quietest excess
+        # tails so a per-step burst of new tails finds (near-)silent slots instead
+        # of stealing loud ones.  Run every update (incl. no-spawn ones) to keep
+        # headroom ready for the next GOL-step burst.
+        self._enforce_tail_budget(amp_cur)
 
-                if v >= n_voices:
-                    # Voice no longer present: start releasing front slot if needed.
-                    if self._release_cnt[fslot] == 0:
-                        if amp_cur[fslot] >= 0.01:
-                            self._release_cnt[fslot] = FADE_CHUNKS
-                            self._release_amp0[fslot] = float(amp_cur[fslot])
-                        else:
-                            self.amp_tgt[fslot] = 0.0  # already silent, just zero tgt
-                    # If already releasing, Phase 2 manages amp_tgt via countdown.
-                    # Silence the back slot directly (it should already be quiet).
-                    self.amp_tgt[bslot] = 0.0
-                    self._freq_prev[v, m] = 0.0
+        # ── Phase 1: assign active slots, spawn tails for replaced modes ──────
+        for v in range(MAX_VOICES):
+            present = v < n_voices
+            voice = voices[v] if present else None
+            for m in range(MAX_MODES_PER_OBJ):
+                a = self._active(v, m)
+                if present:
+                    freq_new = float(voice['freqs'][m]) if m < len(voice['freqs']) else 0.0
+                    amp_new  = float(voice['amps'][m])  if m < len(voice['amps'])  else 0.0
+                    pan_new  = voice['pan']
+                else:
+                    freq_new, amp_new, pan_new = 0.0, 0.0, pan_cur[a]
+
+                freq_changed = abs(freq_new - self._freq_prev[v, m]) > 0.01
+                if not freq_changed:
+                    # STABLE: smooth amp/pan glide on the active slot.
+                    self.freq_slots[a] = freq_new
+                    self.amp_tgt[a] = amp_new if freq_new > 0 else 0.0
+                    self.pan_tgt[a] = pan_new
+                    self._freq_prev[v, m] = freq_new
                     continue
 
-                voice = voices[v]
-                freq_new = float(voice['freqs'][m]) if m < len(voice['freqs']) else 0.0
-                amp_new  = float(voice['amps'][m])  if m < len(voice['amps'])  else 0.0
-                pan_new  = voice['pan']
+                # Frequency changed: ring the OLD mode out in a tail slot, if it
+                # is still audible -- copy freq/phase/amp/pan so the tail continues
+                # the active slot's exact waveform (no discontinuity at the seam).
+                if amp_cur[a] > TAIL_MIN_AMP and self.freq_slots[a] > 0.0:
+                    t = self._acquire_tail(amp_cur)
+                    self.freq_slots[t] = self.freq_slots[a]
+                    amp_cur[t]         = amp_cur[a]
+                    phase[t]           = phase[a]
+                    pan_cur[t]         = pan_cur[a]
+                    self.pan_tgt[t]    = self.pan_tgt[a]
+                    self._release_cnt[t]  = release_chunks
+                    self._release_len[t]  = release_chunks
+                    self._release_amp0[t] = float(amp_cur[a])
+                    # amp_tgt[t] is stepped down by Phase 2 below.
 
-                freq_old = self._freq_prev[v, m]
-                freq_changed = abs(freq_new - freq_old) > 0.01
-
-                if freq_changed:
-                    # ── OVERLAPPING CROSSFADE ────────────────────────────────
-                    # a) Put front slot into release (if not already releasing).
-                    if self._release_cnt[fslot] == 0:
-                        self._release_cnt[fslot] = FADE_CHUNKS
-                        self._release_amp0[fslot] = float(amp_cur[fslot])
-                    # amp_tgt for the releasing slot is managed by Phase 2 below.
-
-                    # b) Attack on back slot with the new frequency.
-                    #    amp_cur[bslot]=0 ensures render starts from silence so the
-                    #    phase accumulator value is inconsequential (inaudible start).
-                    amp_cur[bslot] = 0.0
-                    self.freq_slots[bslot] = freq_new
-                    self.amp_tgt[bslot] = amp_new if freq_new > 0 else 0.0
-                    self.pan_tgt[bslot] = pan_new
-                    self._release_cnt[bslot] = 0   # new front is not releasing
-
-                    # c) Swap banks.
-                    self._bank[v, m] = 1 - self._bank[v, m]
-                    self._freq_prev[v, m] = freq_new
-
+                # Restart the active slot on the new frequency (attack from 0),
+                # or silence it if the mode is gone.  amp_cur=0 makes the phase
+                # value inaudible at the restart.
+                amp_cur[a] = 0.0
+                self.pan_tgt[a] = pan_new
+                if freq_new > 0.0:
+                    self.freq_slots[a] = freq_new
+                    self.amp_tgt[a] = amp_new
                 else:
-                    # ── STABLE: smooth amp/pan update on front slot ──────────
-                    self.freq_slots[fslot] = freq_new
-                    self.amp_tgt[fslot] = amp_new if freq_new > 0 else 0.0
-                    self.pan_tgt[fslot] = pan_new
-                    self._freq_prev[v, m] = freq_new
+                    self.freq_slots[a] = 0.0
+                    self.amp_tgt[a] = 0.0
+                self._freq_prev[v, m] = freq_new
 
-        # ── Phase 2: advance all active release countdowns ────────────────────
-        # Iterate over every slot to decrement countdowns and compute the next
-        # amp_tgt step.  This is done AFTER the voice-assignment loop so that a
-        # slot put into release this cycle gets its FIRST countdown step applied
-        # (countdown goes from FADE_CHUNKS to FADE_CHUNKS-1 in this same call,
-        # i.e. the very first amp_tgt value already reflects one chunk of decay).
-        for slot in range(1, TOTAL_SLOTS + 1):
-            cnt = self._release_cnt[slot]
+        # ── Phase 2: advance tail release countdowns ──────────────────────────
+        # Done AFTER assignment so a tail spawned this cycle gets its first decay
+        # step immediately (countdown release_chunks -> release_chunks-1 here).
+        # The divisor is the per-slot length captured at spawn, so changing the
+        # knob mid-tail does not jump an in-flight fade.
+        for s in range(N_ACTIVE + 1, TOTAL_SLOTS + 1):
+            cnt = self._release_cnt[s]
             if cnt <= 0:
                 continue
             new_cnt = cnt - 1
-            self._release_cnt[slot] = new_cnt
-            # Linear step: amp_tgt = amp0 * remaining_fraction
-            self.amp_tgt[slot] = self._release_amp0[slot] * new_cnt / FADE_CHUNKS
-            # Once countdown hits 0, amp_tgt is 0; render_chunk_laplacian glides
-            # amp_cur to 0 within the next chunk.  Silence the freq when done.
-            if new_cnt == 0 and amp_cur[slot] < 0.01:
-                self.freq_slots[slot] = 0.0
+            self._release_cnt[s] = new_cnt
+            self.amp_tgt[s] = self._release_amp0[s] * new_cnt / self._release_len[s]
+            # When done and silent, free the slot (render glides amp_cur to 0).
+            if new_cnt == 0 and amp_cur[s] < 0.01:
+                self.freq_slots[s] = 0.0
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -545,14 +644,24 @@ def _dump_session(rec, prefix="_session"):
     else:
         gens, grids, notes = (np.zeros(0),
                               np.zeros((0, GRID_H, GRID_W), np.uint8), np.zeros(0))
+    # Faithful-replay log (per rendered frame): inputs + chunk count.
+    # replay columns: [n_rendered, note, spread, alpha, release_ms, vol]
+    replay = (np.array(rec.get('replay', []), dtype=float)
+              if rec.get('replay') else np.zeros((0, 6)))
+    replay_grids = (np.stack(rec['replay_grids']).astype(np.uint8)
+                    if rec.get('replay_grids')
+                    else np.zeros((0, GRID_H, GRID_W), np.uint8))
     np.savez_compressed(f"{base}.npz", frames=frames, gens=gens, grids=grids,
                         notes=notes, sr=SR, chunk_s=CHUNK_S, step_hz=STEP_HZ,
-                        max_voices=MAX_VOICES, underruns=rec['underruns'])
+                        max_voices=MAX_VOICES, master_gain=MASTER_GAIN,
+                        max_modes=MAX_MODES_PER_OBJ, patch_size=PATCH_SIZE,
+                        underruns=rec['underruns'],
+                        replay=replay, replay_grids=replay_grids)
     # frames columns: [dt_ms, gen, n_voices, n_rendered, underrun]
     n_hitch = int((frames[:, 0] > CHUNK_S * 1000).sum()) if len(frames) else 0
     print(f"[session saved] {base}.wav ({len(rec['chunks'])} chunks) + {base}.npz "
-          f"({len(rec['steps'])} steps)  underruns={rec['underruns']}  "
-          f"frames>{int(CHUNK_S*1000)}ms={n_hitch}")
+          f"({len(rec['steps'])} steps, {len(replay)} replay frames)  "
+          f"underruns={rec['underruns']}  frames>{int(CHUNK_S*1000)}ms={n_hitch}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -572,11 +681,11 @@ def main():
     audio_q = _queue.Queue()
     _resid  = {'buf': None, 'pos': 0}          # partial chunk across callbacks
     _ur     = {'n': 0, 'prev': 0}              # underrun counter (audio thread)
-    vol_box = [VOL_DEFAULT]                     # volume, read by the audio thread
 
     def _audio_cb(outdata, frames, time_info, status):
+        # Volume is now applied PRE-clip in render_chunk_laplacian, so the callback
+        # just copies finished int16 samples -- no per-sample multiply here.
         filled = 0
-        v = vol_box[0]
         while filled < frames:
             if _resid['buf'] is None:
                 try:
@@ -589,8 +698,7 @@ def main():
             buf = _resid['buf']
             pos = _resid['pos']
             take = min(frames - filled, len(buf) - pos)
-            seg = buf[pos:pos + take]
-            outdata[filled:filled + take] = seg if v >= 0.999 else (seg * v).astype(np.int16)
+            outdata[filled:filled + take] = buf[pos:pos + take]
             filled += take
             pos += take
             if pos >= len(buf):
@@ -638,17 +746,27 @@ def main():
     amp_cur = np.zeros(sz)
     pan_cur = np.full(sz, 0.5)
 
-    # optional session recording (env CASYNTH_RECORD=1)
+    # Level/clip meter (updated in feed_audio, read in draw -- same thread).
+    meter = {'peak': 0.0, 'clip': False}
+
+    # optional session recording (env CASYNTH_RECORD=1).
+    # 'replay'/'replay_grids' capture, per RENDERED frame, the FULL engine input
+    # (grid + note + every live knob + how many chunks were rendered) so the
+    # session can be re-rendered deterministically offline and a fix verified on
+    # the user's exact snapshot (see _render_probe.py session mode).
     rec = None
     if os.environ.get('CASYNTH_RECORD'):
-        rec = dict(chunks=[], frames=[], steps=[], underruns=0)
-        print("[CASYNTH_RECORD on] capturing audio + field; quit (Esc) to save")
+        rec = dict(chunks=[], frames=[], steps=[], underruns=0,
+                   replay=[], replay_grids=[])
+        print("[CASYNTH_RECORD on] capturing audio + field + all knobs; "
+              "quit (Esc) to save")
 
     state = dict(
         run=False, hz=STEP_HZ, gen=0, acc=0.0,
         note=NOTE_DEFAULT, vol=VOL_DEFAULT,
         kb_base=NOTE_DEFAULT,
         sidebar_open=True,
+        spread=SPREAD_DEFAULT, alpha=ALPHA_DEFAULT, release_ms=RELEASE_MS_DEFAULT,
     )
 
     # toolbar layout (identical to gol_life_synth.py)
@@ -662,7 +780,25 @@ def main():
         bx += bw + 8
     legend_x = 12
     vol_track = pygame.Rect(W - VOL_W - 24, info_y + 14, VOL_W, 8)
+    meter_track = pygame.Rect(vol_track.left, by + 4, VOL_W, 10)  # level/clip meter
     _pat_btn = pygame.Rect(bx + 8, by, 128, 40)
+
+    # Live timbre knobs (spread / alpha / release) -- mouse-drag sliders stacked
+    # to the right of the pattern button.  Range/format per knob; values live in
+    # state and feed map_laplacian (spread/alpha) and the release-tail length.
+    CTRL_LABEL_W, CTRL_TRACK_W = 56, 120
+    _ctrl_x = _pat_btn.right + 16
+    _ctrl_defs = [
+        ('spread',     'spread', 0.0, 1.0,                      lambda v: f"{v:.2f}"),
+        ('alpha',      'alpha',  ALPHA_MIN, ALPHA_MAX,          lambda v: f"{v:.2f}"),
+        ('release_ms', 'rel',    RELEASE_MS_MIN, RELEASE_MS_MAX, lambda v: f"{v:.0f}ms"),
+    ]
+    ctrls = []
+    for _i, (_cid, _clbl, _lo, _hi, _fmt) in enumerate(_ctrl_defs):
+        ctrls.append(dict(
+            id=_cid, label=_clbl, lo=_lo, hi=_hi, fmt=_fmt,
+            track=pygame.Rect(_ctrl_x + CTRL_LABEL_W, by + 2 + _i * 22,
+                              CTRL_TRACK_W, 8)))
 
     # sidebar items
     _sb_items = []
@@ -686,6 +822,7 @@ def main():
 
     paint = None
     dragging_vol = False
+    dragging_ctrl = None          # id of the timbre knob being dragged, or None
     drag = {'active': False, 'cells': [], 'name': '', 'snap': None}
     _ghost = pygame.Surface((CELL - 2, CELL - 2), pygame.SRCALPHA)
     _ghost.fill((111, 208, 224, 110))
@@ -699,8 +836,16 @@ def main():
         return midi_to_freq(state['note'])
 
     def set_vol(mx):
+        # Pre-clip master volume: lowering it pulls the signal below the clip
+        # ceiling (manual headroom).  Read in feed_audio on the main thread.
         state['vol'] = float(np.clip((mx - vol_track.left) / vol_track.width, 0, 1))
-        vol_box[0] = state['vol']   # picked up by the audio callback
+
+    def ctrl_by_id(cid):
+        return next(c for c in ctrls if c['id'] == cid)
+
+    def set_ctrl(c, mx):
+        frac = float(np.clip((mx - c['track'].left) / c['track'].width, 0, 1))
+        state[c['id']] = c['lo'] + frac * (c['hi'] - c['lo'])
 
     def do(bid):
         nonlocal grid
@@ -721,23 +866,37 @@ def main():
                 return m
         return None
 
+    gain_prev_box = [MASTER_GAIN * state['vol']]   # master gain of the last chunk
+
     def feed_audio(voices):
         if not audio_ok:
             return 0, 0
         # Top the ring buffer up to AUDIO_LOOKAHEAD_CHUNKS of look-ahead.
         # pool.update is advanced once PER CHUNK rendered (not per frame), so the
-        # cross-fade (FADE_CHUNKS) now counts chunks and is no longer coupled to
-        # the frame rate.
+        # release-tail countdown counts chunks and is not coupled to the frame rate.
         n_rendered = 0
+        # Release-tail length in chunks, derived live from the knob (decoupled
+        # from the crossfade attack, which stays one chunk).
+        release_chunks = max(1, round(state['release_ms'] / 1000.0 / CHUNK_S))
+        gain = MASTER_GAIN * state['vol']      # pre-clip master gain (chunk target)
+        frame_peak = 0.0
+        frame_clip = 0
         while audio_q.qsize() < AUDIO_LOOKAHEAD_CHUNKS:
-            pool.update(voices, amp_cur)
-            buf = render_chunk_laplacian(phase, amp_cur, pan_cur,
-                                         pool.amp_tgt, pool.pan_tgt,
-                                         pool.freq_slots, 2)
+            pool.update(voices, phase, amp_cur, pan_cur, release_chunks)
+            buf, peak, n_clip = render_chunk_laplacian(phase, amp_cur, pan_cur,
+                                                       pool.amp_tgt, pool.pan_tgt,
+                                                       pool.freq_slots, 2,
+                                                       gain_prev_box[0], gain)
+            gain_prev_box[0] = gain            # glide from here next chunk
             audio_q.put(buf)
             n_rendered += 1
+            frame_peak = max(frame_peak, peak)
+            frame_clip += n_clip
             if rec is not None:
                 rec['chunks'].append(buf)
+        # Peak-hold with decay so the meter is readable; clip flag is per-frame.
+        meter['peak'] = max(frame_peak, meter['peak'] * METER_DECAY)
+        meter['clip'] = frame_clip > 0
         ur_delta = _ur['n'] - _ur['prev']      # underruns since last frame
         _ur['prev'] = _ur['n']
         if rec is not None:
@@ -795,6 +954,13 @@ def main():
                         elif vol_track.collidepoint(e.pos):
                             dragging_vol = True
                             set_vol(e.pos[0])
+                        elif any(c['track'].inflate(0, 14).collidepoint(e.pos)
+                                 for c in ctrls):
+                            for c in ctrls:
+                                if c['track'].inflate(0, 14).collidepoint(e.pos):
+                                    dragging_ctrl = c['id']
+                                    set_ctrl(c, e.pos[0])
+                                    break
                         else:
                             for b in buttons:
                                 if b['rect'].collidepoint(e.pos):
@@ -809,6 +975,7 @@ def main():
                     drag.update(active=False, snap=None, cells=[], name='')
                 paint = None
                 dragging_vol = False
+                dragging_ctrl = None
 
             elif e.type == pygame.MOUSEMOTION:
                 if drag['active']:
@@ -819,6 +986,8 @@ def main():
                         grid[rc] = paint
                 elif dragging_vol:
                     set_vol(e.pos[0])
+                elif dragging_ctrl is not None:
+                    set_ctrl(ctrl_by_id(dragging_ctrl), e.pos[0])
 
             elif e.type == pygame.MOUSEWHEEL:
                 if state['sidebar_open'] and pygame.mouse.get_pos()[0] >= W:
@@ -837,11 +1006,21 @@ def main():
                 if rec is not None:
                     rec['steps'].append((state['gen'], grid.copy(), state['note']))
 
-        labels, voices, color = analyse(grid, f0())
+        labels, voices, color = analyse(grid, f0(), state['spread'], state['alpha'])
         n_rendered, ur_delta = feed_audio(voices)
         if rec is not None:
             rec['frames'].append((round(dt * 1000.0, 2), state['gen'],
                                   len(voices), n_rendered, ur_delta))
+            # Faithful-replay log: capture inputs ONLY for frames that actually
+            # rendered chunks (frames with n_rendered=0 produce no audio and would
+            # just bloat the grid log).  Values are constant within a frame, so
+            # replaying pool.update/render n_rendered times reproduces the engine
+            # output chunk-for-chunk.
+            if n_rendered > 0:
+                rec['replay'].append((n_rendered, int(state['note']),
+                                      float(state['spread']), float(state['alpha']),
+                                      float(state['release_ms']), float(state['vol'])))
+                rec['replay_grids'].append(grid.copy())
 
         # ── draw field ──────────────────────────────────────────────────────
         screen.fill(C_BG)
@@ -912,6 +1091,39 @@ def main():
         pygame.draw.circle(screen, C_TXT, (vol_track.left + fw, vol_track.centery), 6)
         if not audio_ok:
             screen.blit(small.render("audio disabled", True, C_DIM), (W - 110, 6))
+
+        # timbre knobs: spread / alpha / release
+        for c in ctrls:
+            tr = c['track']
+            screen.blit(small.render(c['label'], True, C_DIM),
+                        (tr.left - CTRL_LABEL_W, tr.centery - 7))
+            pygame.draw.rect(screen, C_BTN, tr, border_radius=4)
+            frac = float(np.clip((state[c['id']] - c['lo']) / (c['hi'] - c['lo']), 0, 1))
+            cw = int(tr.width * frac)
+            pygame.draw.rect(screen, C_ACCENT, (tr.left, tr.top, cw, tr.height),
+                             border_radius=4)
+            pygame.draw.circle(screen, C_TXT, (tr.left + cw, tr.centery), 5)
+            screen.blit(small.render(c['fmt'](state[c['id']]), True, C_DIM),
+                        (tr.right + 6, tr.centery - 7))
+
+        # level / clip meter: pre-clip peak vs the 0 dBFS ceiling (right edge).
+        # Bar turns red and shows "CLIP +X.XdB" of overshoot when over the ceiling
+        # -> lower the volume slider below it for honest (un-clipped) sound.
+        pk = meter['peak']
+        db = 20.0 * np.log10(pk + 1e-9)
+        clipping = meter['clip'] or pk >= 1.0
+        screen.blit(small.render("level", True, C_DIM),
+                    (meter_track.left, meter_track.top - 13))
+        pygame.draw.rect(screen, C_BTN, meter_track, border_radius=3)
+        fillw = int(meter_track.width * min(pk, 1.0))
+        pygame.draw.rect(screen, (212, 76, 76) if clipping else C_ACCENT,
+                         (meter_track.left, meter_track.top, fillw, meter_track.height),
+                         border_radius=3)
+        pygame.draw.line(screen, C_TXT, (meter_track.right - 1, meter_track.top - 1),
+                         (meter_track.right - 1, meter_track.bottom + 1))
+        mlbl = (f"CLIP +{db:.1f}dB" if clipping else f"{db:.0f}dB")
+        msurf = small.render(mlbl, True, (235, 96, 96) if clipping else C_DIM)
+        screen.blit(msurf, (meter_track.right - msurf.get_width(), meter_track.bottom + 1))
 
         # ── piano ───────────────────────────────────────────────────────────
         for rect, m in white_keys:

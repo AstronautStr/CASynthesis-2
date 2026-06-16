@@ -2,6 +2,16 @@
 
 ## Files
 - **`gol_life_synth.py`** — the interactive desktop app (main artifact).
+- **`gol_life_synth_laplacian.py`** — second interactive prototype: voice spectrum =
+  Laplacian resonant modes of each object's shape (inharmonic, metallic). Uses a
+  sounddevice callback stream + overlapping mode cross-fade. Has **live timbre knobs**
+  (on-screen sliders, no restart): *spread* (low modes → whole spectrum), *alpha*
+  (1/i^α brightness), *release* (mode-tail length: percussive ↔ pad). The lowest mode
+  is always pinned to the carrier f0. See `memory/current.md` for the full state.
+- **`casynth_core.py`** — shared shape→spectrum mapping library (`map_*`, `extract`),
+  single source of truth for bench + prototypes; numpy/scipy only, unit-tested
+  (`tests/test_casynth_core.py`).
+- **`mapping_bench.py`** — discover bench (oscillator × mapping matrix).
 - `gol_synth.py` — an earlier offline renderer that writes a WAV of a fixed scene
   (block + blinker + toad + glider). Useful as a minimal reference and for
   non-interactive rendering.

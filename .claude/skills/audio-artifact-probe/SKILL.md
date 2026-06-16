@@ -15,10 +15,31 @@ the synth **offline, deterministically** to a WAV and **measure** the artifact,
 then **measure again after the fix**. Never declare a fix done without a
 before/after number.
 
+## PRIMARY pipeline: reproduce + verify on the USER'S session snapshot
+Artifacts here are usually **state-dependent** (a specific field × knob
+combination — e.g. a click that only appears with long *release* on a particular
+shape). A synthetic scene may not hit it. So the canonical pipeline is:
+
+1. **Record the user's session** with full inputs (`CASYNTH_RECORD=1`, below).
+   The user reproduces the artifact and quits; this saves the exact field history
+   AND every live knob (spread / alpha / release / volume) per rendered frame.
+2. **Replay that snapshot offline** with the current (unfixed) engine:
+   `python _render_probe.py session <ts>`. This re-renders the user's exact
+   inputs and prints a **fidelity check** vs the recorded WAV — they should be
+   IDENTICAL, proving the replay reproduces the live artifact (not a guess).
+3. **Measure** the artifact on the snapshot (clipping / clicks, below).
+4. **Fix**, then **replay the SAME snapshot again** and re-measure: artifact gone,
+   spectrum preserved (`compare`).
+
+Do NOT diagnose a state-dependent artifact on a synthetic scene when a user
+snapshot is available — reproduce on the snapshot. Synthetic scenes are a
+**fallback only** (see "Fallback scenes" below), for when no snapshot exists or
+the snapshot doesn't trigger it.
+
 Ready-to-run tools live in the repo root:
-- `_render_probe.py` — render the canonical scene, print distortion + click
-  metrics, save a normalised spectrum (`python _render_probe.py <label>`), and
-  compare two saved spectra (`python _render_probe.py compare A B`).
+- `_render_probe.py` — `session <ts>` replays a recorded snapshot (PRIMARY);
+  `<label>` renders the fallback pentadecathlon scene; `compare A B` compares two
+  saved spectra. Prints distortion + click metrics and saves a normalised spectrum.
 - `_click_test.py` — isolate the envelope-corner click from carrier curvature
   (a controlled micro-test + a linear-vs-smooth scene diff).
 
@@ -45,16 +66,29 @@ conclude it's fixed** — record a real session (below) and analyse THAT.
 ```
 Play until it clicks, then quit (Esc / close). On quit it writes:
 - `_session_<ts>.wav` — the exact gapless audio the engine produced.
-- `_session_<ts>.npz` — `frames` `[dt_ms, gen, n_voices, n_rendered, underrun]`
-  per frame, plus `grids`/`gens`/`notes` (field history for replay), and meta.
+- `_session_<ts>.npz` — diagnosis + replay data:
+  - `frames` `[dt_ms, gen, n_voices, n_rendered, underrun]` per frame (timing /
+    underrun diagnosis).
+  - `replay` `[n_rendered, note, spread, alpha, release_ms, vol]` and
+    `replay_grids` `[F, GRID_H, GRID_W]` — per RENDERED frame, the FULL engine
+    input (field + carrier note + every live knob + chunk count). This is what
+    makes `_render_probe.py session <ts>` reproduce the output deterministically.
+  - `grids`/`gens`/`notes` (legacy field history), plus meta
+    (`sr/chunk_s/step_hz/master_gain/max_modes/patch_size/...`).
 
-Diagnose:
+Reproduce + diagnose:
+- `python _render_probe.py session <ts>` re-renders the snapshot and prints a
+  fidelity check vs the recorded WAV (max|diff|). IDENTICAL ⇒ the replay faithfully
+  reproduces the live engine output; now measure the artifact on it.
 - **WAV has clicks** ⇒ render-content artifact (envelope/crossfade/`amp_cur`
-  decoupling). Replay `grids`/`notes` to reproduce; fix in the engine.
+  decoupling). The replay reproduces it; fix in the engine and re-replay.
 - **WAV clean but `underruns>0` / `frames` with `dt_ms > CHUNK_S*1000`** ⇒
-  playback-starvation clicks. Fix = decouple audio from the frame loop / lighten
-  per-frame cost (don't `eigvalsh` every frame; cache voices between GOL steps;
-  render audio ahead on its own cadence), not the synthesis math.
+  playback-starvation clicks (the click is in playback timing, NOT the samples).
+  Fix = decouple audio from the frame loop / lighten per-frame cost (don't
+  `eigvalsh` every frame; cache voices between GOL steps; render ahead), not the
+  synthesis math. NOTE the meter reports the PRE-clip peak: a click while the
+  meter shows headroom (e.g. −15 dB, no clip) is NOT clipping — it's a
+  render-content envelope/crossfade artifact, so go the WAV-has-clicks route.
 
 ## How the offline render works
 Drive the real engine functions, no pygame window/audio:
@@ -62,26 +96,40 @@ Drive the real engine functions, no pygame window/audio:
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 import gol_life_synth_laplacian as L
-# per chunk: advance GOL by CHUNK_S, analyse(grid,f0) -> voices,
-#            pool.update(voices, amp_cur),
+# per chunk: advance GOL by CHUNK_S, analyse(grid,f0[,spread,alpha]) -> voices,
+#            pool.update(voices, amp_cur, release_chunks),
 #            render_chunk_laplacian(phase, amp_cur, pan_cur,
-#                pool.amp_tgt, pool.pan_tgt, pool.freq_slots, channels=2)
+#                pool.amp_tgt, pool.pan_tgt, pool.freq_slots, channels=2, gain)
+#            -> returns (buf, pre_clip_peak, n_clipped)
 ```
 The sim is deterministic, so two renders of the same scene are identical — this
 is what lets you cancel the carrier and isolate envelope artifacts (below).
 
-## Canonical repro scene
-**3 pentadecathlons**, evenly spaced on the 52-wide torus so they never touch
-(gaps ~15 cells), vertically centred:
-```python
-PENTA = [(0,1),(1,1),(2,0),(2,2),(3,1),(4,1),(5,1),(6,1),(7,0),(7,2),(8,1),(9,1)]
-COLS  = [8, 25, 42];  ROW0 = 10
-```
-Why this scene: each pentadecathlon p15 internally fragments during its period
-(3 → up to 24 connected components) so it exercises MAX_VOICES, constant
-topology changes (cross-fades every GOL step), and heavy partial summation — the
-exact conditions that trigger both clicks and clipping. For a clipping-headroom
-worst case also test dense random fields (`RANDOM_DENSITY`), which peak higher.
+## Fallback scenes (only when no user snapshot reproduces it)
+Use these ONLY if there is no recorded session, or the session doesn't trigger
+the artifact and you need to provoke it. The primary repro is always the user's
+snapshot (above). Escalate breadth until it reproduces:
+
+1. **3 pentadecathlons**, evenly spaced on the 52-wide torus so they never touch
+   (gaps ~15 cells), vertically centred:
+   ```python
+   PENTA = [(0,1),(1,1),(2,0),(2,2),(3,1),(4,1),(5,1),(6,1),(7,0),(7,2),(8,1),(9,1)]
+   COLS  = [8, 25, 42];  ROW0 = 10
+   ```
+   Each p15 internally fragments during its period (3 → up to 24 components) so it
+   exercises MAX_VOICES, constant topology changes (cross-fades every GOL step),
+   and heavy partial summation.
+2. **Dense random fill** (`RANDOM_DENSITY`, or higher) — peaks higher (clipping /
+   headroom worst case) and produces many simultaneous voices + rapid topology
+   churn.
+3. **A pile of mixed oscillators** (from `patterns.py`: blinkers, toads, beacons,
+   pulsars, pentadecathlons…) packed in — more variety of shapes / mode counts /
+   topology-change cadences than a single repeated oscillator.
+
+If reproducing yourself, **also set the relevant knobs** (spread / alpha /
+release / volume) to the regime the user reported — a release-tail or
+brightness-dependent artifact won't show at default knobs. A few pentadecathlons
+at default settings may simply not be enough; widen the scene and push the knob.
 
 ## Metrics
 
