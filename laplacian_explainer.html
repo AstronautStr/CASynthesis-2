@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CASynth — Laplacian: теория + интерактив</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --ink:#e6e9ef; --mut:#9aa0a6;
+    --acc:#ffd43b; --lap:#ffe066; --grn:#69db7c; --red:#ff8787; --blu:#74c0fc; --cy:#66d9e8;
+    --line:#2b313c; --mono:"SF Mono",Consolas,"Roboto Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--blu)}
+  h1,h2,h3{line-height:1.2}
+  h1{font-size:26px;margin:0 0 4px}
+  h2{font-size:20px;margin:30px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  h3{font-size:16px;margin:16px 0 6px;color:var(--acc)}
+  .wrap{max-width:1280px;margin:0 auto;padding:24px 20px 80px}
+  .sub{color:var(--mut);margin:0 0 8px}
+  .mono{font-family:var(--mono)}
+  code{font-family:var(--mono);background:#22272f;padding:1px 5px;border-radius:4px;font-size:.92em}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .pill{display:inline-block;font-family:var(--mono);font-size:12px;padding:2px 8px;border-radius:999px;
+    background:#262b34;color:var(--mut);border:1px solid var(--line);margin-right:6px}
+  .step{display:flex;gap:12px;align-items:flex-start;margin:10px 0}
+  .step .n{flex:0 0 30px;height:30px;border-radius:50%;background:var(--lap);color:#1a1a1a;
+    font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--mono)}
+  .muted{color:var(--mut)}
+  .warn{border-left:3px solid var(--acc);background:#1c1b12;padding:10px 14px;border-radius:0 8px 8px 0}
+  .ok{color:var(--grn)} .bad{color:var(--red)}
+  /* playground */
+  .play{display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start}
+  @media(max-width:980px){.play{grid-template-columns:1fr}.grid2,.grid3{grid-template-columns:1fr}}
+  canvas{display:block;background:#0c0e12;border:1px solid var(--line);border-radius:10px}
+  .controls label{display:block;font-size:13px;color:var(--mut);margin:10px 0 2px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;
+    padding:7px 11px;cursor:pointer;font-size:13px}
+  button:hover{border-color:#3a4150}
+  button.primary{background:var(--lap);color:#1a1a1a;border-color:var(--lap);font-weight:600}
+  button.on{background:var(--grn);color:#0a0a0a;border-color:var(--grn)}
+  input[type=range]{width:100%}
+  select{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px}
+  table{border-collapse:collapse;font-family:var(--mono);font-size:12.5px}
+  th,td{border:1px solid var(--line);padding:3px 7px;text-align:right}
+  th{color:var(--mut);font-weight:600}
+  .kv{font-family:var(--mono);font-size:13px}
+  .kv b{color:var(--cy)}
+  .legend{font-size:12px;color:var(--mut)}
+  .barwrap{position:relative}
+  .hint{font-size:12.5px;color:var(--mut);margin-top:6px}
+  .tag-lap{color:#1a1a1a;background:var(--lap);padding:1px 6px;border-radius:4px;font-weight:600}
+  svg text{fill:var(--ink);font-family:var(--mono);font-size:12px}
+  svg .mut{fill:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Laplacian-маппинг: <span style="color:var(--lap)">форма → спектр → звук</span></h1>
+  <p class="sub">Обучающая инфографика + интерактивная песочница для проекта CASynth.
+  Цель — теоретическая база и эмпирическая интуиция по тому, как форма объекта Game of Life
+  превращается в металлический тембр.</p>
+  <p><span class="pill">теория ниже ↓</span><span class="pill">песочница ещё ниже ↓↓</span>
+  <span class="pill">всё считается тем же алгоритмом, что и в синте (<code>casynth_core.map_laplacian</code>)</span></p>
+
+  <!-- ============================ ИНФОГРАФИКА ============================ -->
+  <h2>Часть 1 · Как это работает (конвейер)</h2>
+
+  <div class="card">
+    <svg viewBox="0 0 1180 120" width="100%" height="120" aria-label="pipeline">
+      <!-- boxes -->
+      <g font-size="12">
+        <rect x="6"   y="30" width="150" height="60" rx="8" fill="#1e222b" stroke="#2b313c"/>
+        <text x="81" y="55" text-anchor="middle">Форма</text>
+        <text x="81" y="73" text-anchor="middle" class="mut">клетки on/off</text>
+
+        <rect x="196" y="30" width="150" height="60" rx="8" fill="#1e222b" stroke="#2b313c"/>
+        <text x="271" y="55" text-anchor="middle">Граф</text>
+        <text x="271" y="73" text-anchor="middle" class="mut">узлы+рёбра (8-связ.)</text>
+
+        <rect x="386" y="30" width="160" height="60" rx="8" fill="#1e222b" stroke="#2b313c"/>
+        <text x="466" y="55" text-anchor="middle">Лапласиан L=D−A</text>
+        <text x="466" y="73" text-anchor="middle" class="mut">матрица n×n</text>
+
+        <rect x="586" y="30" width="160" height="60" rx="8" fill="#1e222b" stroke="#2b313c"/>
+        <text x="666" y="50" text-anchor="middle">Собств. значения λ</text>
+        <text x="666" y="68" text-anchor="middle" class="mut">→ частоты √λ</text>
+
+        <rect x="786" y="30" width="170" height="60" rx="8" fill="#241f0a" stroke="#5a4a10"/>
+        <text x="871" y="50" text-anchor="middle" style="fill:var(--lap)">Нормировка → f0</text>
+        <text x="871" y="68" text-anchor="middle" class="mut">низшая мода = нота</text>
+
+        <rect x="996" y="30" width="178" height="60" rx="8" fill="#1e222b" stroke="#2b313c"/>
+        <text x="1085" y="50" text-anchor="middle">Партиалы (freqs,amps)</text>
+        <text x="1085" y="68" text-anchor="middle" class="mut">аддитивный синтез</text>
+      </g>
+      <g stroke="#5a6172" stroke-width="2" fill="none" marker-end="url(#ar)">
+        <path d="M156 60 H196"/><path d="M346 60 H386"/><path d="M546 60 H586"/>
+        <path d="M746 60 H786"/><path d="M956 60 H996"/>
+      </g>
+      <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0 0 L6 3 L0 6 z" fill="#5a6172"/></marker></defs>
+    </svg>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Шаг 1–2 · Форма становится графом</h3>
+      <div class="step"><div class="n">1</div><div>
+        Каждая <b>живая клетка</b> — это <b>узел</b> графа. Между двумя узлами есть <b>ребро</b>,
+        если клетки — соседи по <b>8 направлениям</b> (включая диагонали — та же связность, что
+        в самом автомате).</div></div>
+      <div class="step"><div class="n">2</div><div>
+        Получается «сетка пружин» формы. Дальше нас интересует не картинка, а то,
+        <b>как эта сетка вибрирует</b>.</div></div>
+      <p class="hint">Инвариантность: сдвиг / поворот / отражение формы дают <b>тот же граф</b> →
+      тот же звук. А вот добавление клетки-перемычки меняет связность → <b>другой граф</b> →
+      это уже «событие смены топологии» (слышно как смену набора резонансов).</p>
+    </div>
+
+    <div class="card">
+      <h3>Шаг 3 · Лапласиан <span class="mono">L = D − A</span></h3>
+      <p class="muted" style="margin-top:0">Маленький пример — «blinker», 3 клетки в ряд
+      <span class="mono">●●●</span>. Средняя соседствует с двумя, крайние — с одной:</p>
+      <svg viewBox="0 0 520 150" width="100%" height="150">
+        <text x="0"  y="20" class="mut">A (смежность)</text>
+        <text x="200" y="20" class="mut">D (степени)</text>
+        <text x="360" y="20" class="mut">L = D − A</text>
+        <g font-family="var(--mono)" font-size="14">
+          <text x="0" y="55">[0 1 0]</text><text x="0" y="80">[1 0 1]</text><text x="0" y="105">[0 1 0]</text>
+          <text x="200" y="55">[1 0 0]</text><text x="200" y="80">[0 2 0]</text><text x="200" y="105">[0 0 1]</text>
+          <text x="360" y="55" style="fill:var(--lap)">[ 1 −1  0]</text>
+          <text x="360" y="80" style="fill:var(--lap)">[−1  2 −1]</text>
+          <text x="360" y="105" style="fill:var(--lap)">[ 0 −1  1]</text>
+        </g>
+        <text x="0" y="140" class="mut" font-size="12">диагональ = степень узла · вне диагонали −1 = ребро</text>
+      </svg>
+    </div>
+
+    <div class="card">
+      <h3>Шаг 4 · Собственные значения = частоты мод</h3>
+      <p style="margin-top:0">У blinker'а <span class="mono">L</span> имеет собственные значения
+      <span class="mono" style="color:var(--lap)">λ = {0, 1, 3}</span>. Физическая аналогия —
+      это <b>квадраты собственных частот</b> вибрирующей мембраны/сетки пружин, поэтому
+      частота моды ∝ <b>√λ</b>:</p>
+      <p class="mono" style="font-size:15px">√λ = {0, 1, √3 ≈ 1.732}</p>
+      <p class="muted">• Нулевая мода (λ=0) — это «вся форма качается как целое», без внутренней
+      вибрации. Число нулевых λ = <b>числу компонент связности</b> (две отдельные фигуры → две нулевые моды).
+      Нулевые моды звука не дают — их отбрасываем.</p>
+    </div>
+
+    <div class="card">
+      <h3>Шаг 5 · Привязка к ноте + амплитуды</h3>
+      <div class="step"><div class="n">5</div><div>
+        <b>Низшую ненулевую</b> моду нормируем к частоте сыгранной ноты <code>f0</code>
+        (карьерная нота с пианино). Остальные масштабируются <b>пропорционально</b>.
+        Для blinker'а: <span class="mono">f0</span> и <span class="mono" style="color:var(--lap)">√3·f0</span>.</div></div>
+      <div class="warn">
+        <b>Почему металл.</b> Отношение <span class="mono">√3 ≈ 1.732</span> — <b>не целое</b>.
+        У струны/трубы партиалы кратны f0 (1, 2, 3… — «органный» гармонический ряд). Здесь
+        частоты <b>инхармоничны</b> → ухо слышит это как металл/колокол/гонг.
+      </div>
+      <p class="hint" style="margin-top:10px"><b>Честная оговорка (важно для интуиции):</b>
+      форма задаёт <b>набор ЧАСТОТ</b>. Громкости же берутся фиксированным спадом
+      <span class="mono">1/i<sup>α</sup></span> <b>по рангу</b> моды, а не из формы. Сделать
+      амплитуды формозависимыми (через собственные <i>векторы</i>) — отложенная идея «B» в рисёрче.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Зачем это вообще — и где подвох на больших полях</h3>
+    <p style="margin-top:0">Вопрос «<i>Can one hear the shape of a drum?</i>» (Марк Кац, 1966):
+    спектр собственных значений кодирует <b>геометрию</b> — площадь (закон Вейля), периметр,
+    число дырок. Поэтому Laplace-тембр «принадлежит» форме: разные формы звучат по-разному
+    <b>органично</b>, а не по произвольному коду.</p>
+    <p>Но у этого есть оборотная сторона, которую мы услышали на живом большом поле:
+    <b>низшие</b> моды большого графа кодируют в основном <b>размер/площадь</b>, а не детали
+    контура (и они сжаты у нуля → звук тёмный и однородный). Мы сейчас берём именно низ спектра —
+    отсюда диагноз «тёмно/одинаково». Рычаги <span class="tag-lap">A: открыть верхние моды</span>
+    и <span class="tag-lap">D: мягче спад</span> — попытка достать яркие верхние резонансы, не
+    отвязывая низшую моду от ноты. Покрути их в песочнице ниже и услышь разницу.</p>
+  </div>
+
+  <!-- ============================ ПЕСОЧНИЦА ============================ -->
+  <h2>Часть 2 · Песочница (рисуй · смотри · слушай)</h2>
+  <p class="sub">Кликай по клеткам (или зажми и веди), чтобы рисовать форму. Все значения справа
+  пересчитываются мгновенно — это ровно те числа, что уходят в синтез. Нажми
+  <b>▶ Звук</b>, чтобы услышать спектр формы.</p>
+
+  <div class="play">
+    <!-- LEFT: grid + controls -->
+    <div>
+      <div class="card" style="padding:12px">
+        <canvas id="grid" width="336" height="336"></canvas>
+        <p class="legend" id="gridhint">Сетка 8×8 = окно извлечения формы (PATCH_SIZE). Рисуй здесь.</p>
+        <div class="row" style="margin-top:6px">
+          <button id="clear">Очистить</button>
+          <button id="random">Случайно</button>
+          <select id="preset">
+            <option value="">— пресеты —</option>
+            <option value="blinker">Blinker (3 в ряд)</option>
+            <option value="block">Block (2×2)</option>
+            <option value="beacon">Beacon</option>
+            <option value="toad">Toad</option>
+            <option value="lshape">L-уголок</option>
+            <option value="ring">Кольцо (дырка)</option>
+            <option value="two">Две фигуры (2 компоненты)</option>
+            <option value="diag">Диагональ</option>
+            <option value="plus">Плюс</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card controls" style="padding:14px">
+        <h3 style="margin-top:0">Параметры синтеза</h3>
+        <label>Карьерная нота f0: <span class="mono" id="f0v">220</span> Гц</label>
+        <input id="f0" type="range" min="55" max="880" step="1" value="220">
+        <label>Число партиалов n: <span class="mono" id="nv">12</span></label>
+        <input id="n" type="range" min="1" max="20" step="1" value="12">
+        <label>spread (0 = низ спектра · 1 = по всему спектру) <span class="tag-lap">рычаг A</span>:
+          <span class="mono" id="spreadv">0.00</span></label>
+        <input id="spread" type="range" min="0" max="1" step="0.01" value="0">
+        <label>α — экспонента спада 1/i<sup>α</sup> <span class="tag-lap">рычаг D</span>:
+          <span class="mono" id="alphav">1.00</span></label>
+        <input id="alpha" type="range" min="0" max="2.5" step="0.05" value="1">
+        <div class="row" style="margin-top:12px">
+          <button id="play" class="primary">▶ Звук</button>
+          <span class="legend">громкость авто-нормирована, без клиппинга</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: computation -->
+    <div>
+      <div class="card">
+        <h3 style="margin-top:0">Конвейер вычисления (живой)</h3>
+        <div class="kv" id="pipe"></div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h3 style="margin-top:0">Граф формы</h3>
+          <canvas id="graph" width="300" height="240"></canvas>
+          <p class="hint" id="graphhint"></p>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">Собственные значения λ
+            <span class="legend">(клик по бару → форма моды слева)</span></h3>
+          <canvas id="eig" width="300" height="240"></canvas>
+          <p class="hint" id="eighint">Серый = нулевые моды (компоненты связности). Жёлтый = звучащие.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Матрицы формы
+          <span class="legend">— A (смежность) · D (степени) · L = D − A</span></h3>
+        <div class="row" style="margin-bottom:8px">
+          <label style="margin:0"><input type="radio" name="mat" value="A"> A — смежность</label>
+          <label style="margin:0"><input type="radio" name="mat" value="D"> D — степени</label>
+          <label style="margin:0"><input type="radio" name="mat" value="L" checked> L = D − A</label>
+          <span class="legend" id="matsize"></span>
+        </div>
+        <canvas id="mat" width="360" height="360"></canvas>
+        <p class="hint" id="mathint">Наведи курсор на ячейку. Строка/столбец <b>i</b> = клетка-узел <b>i</b>
+        (номера на графе слева). Диагональ = степень узла (сколько соседей). Каждая <b>−1</b> вне
+        диагонали = одно ребро. Правило то же, что в blinker'е 3×3 — просто узлов больше.</p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Итоговый спектр партиалов
+          <span class="legend">— что реально уходит в синтез</span></h3>
+        <canvas id="spec" width="640" height="200"></canvas>
+        <p class="hint">Жёлтые линии — наши инхармонические партиалы (высота = частота, толщина/яркость = амплитуда).
+        Бледные засечки внизу — гармонический ряд f0·k (1,2,3…) для сравнения: видно, что наши частоты
+        в него <b>не</b> попадают → инхармоничность → металл.</p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Таблица значений</h3>
+        <div id="table"></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="sub" style="margin-top:30px">Связано: дерево решений проекта — <code>ResearchMap2.canvas</code>;
+  обоснования — <code>memory/decisions.md</code> (привязка к несущей, рычаги A/B/C/D);
+  профиль приёма — <code>obsidian/mappings/Laplacian.md</code>. Алгоритм этой страницы 1:1
+  повторяет <code>casynth_core.map_laplacian</code> (8-связность, √λ, низшая мода=f0, спад 1/i<sup>α</sup>,
+  spread-выбор мод).</p>
+</div>
+
+<script>
+"use strict";
+//=================== ПАРАМЕТРЫ (как в casynth_core) ===================
+const SIZE = 8;                 // PATCH_SIZE
+const SR = 44100;
+const GUARD = 0.45 * SR;        // anti-alias guard
+const NEIGH = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]; // 8-связность
+
+//=================== СОСТОЯНИЕ ===================
+let cells = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+let selMode = -1;               // выбранная мода для визуализации (индекс в полном спектре λ)
+let last = null;                // последний результат вычисления
+let hoverNodes = new Set();     // узлы, подсвеченные при наведении на матрицу
+
+const $ = id => document.getElementById(id);
+
+//=================== ЛИНЕЙНАЯ АЛГЕБРА: симметричный Jacobi ===================
+// Возвращает {values:[], vectors:[]} отсортированные по возрастанию λ.
+// vectors[k] — собственный вектор для values[k] (длина n).
+function jacobiEigen(Ain){
+  const n = Ain.length;
+  if(n===0) return {values:[],vectors:[]};
+  if(n===1) return {values:[Ain[0][0]], vectors:[[1]]};
+  const a = Ain.map(r=>r.slice());
+  const v = Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>i===j?1:0));
+  for(let sweep=0; sweep<100; sweep++){
+    let off=0;
+    for(let p=0;p<n;p++) for(let q=p+1;q<n;q++) off += a[p][q]*a[p][q];
+    if(off < 1e-22) break;
+    for(let p=0;p<n;p++){
+      for(let q=p+1;q<n;q++){
+        const apq=a[p][q];
+        if(Math.abs(apq) < 1e-18) continue;
+        const denom = a[q][q]-a[p][p];
+        let t;
+        if(Math.abs(denom) < 1e-30){ t = 1; }
+        else { const theta = denom/(2*apq);
+               t = (theta>=0?1:-1)/(Math.abs(theta)+Math.sqrt(theta*theta+1)); }
+        const c = 1/Math.sqrt(t*t+1), s = t*c;
+        for(let k=0;k<n;k++){ const akp=a[k][p], akq=a[k][q];
+          a[k][p]=c*akp - s*akq; a[k][q]=s*akp + c*akq; }
+        for(let k=0;k<n;k++){ const apk=a[p][k], aqk=a[q][k];
+          a[p][k]=c*apk - s*aqk; a[q][k]=s*apk + c*aqk; }
+        for(let k=0;k<n;k++){ const vkp=v[k][p], vkq=v[k][q];
+          v[k][p]=c*vkp - s*vkq; v[k][q]=s*vkp + c*vkq; }
+      }
+    }
+  }
+  const pairs=[];
+  for(let i=0;i<n;i++) pairs.push({val:a[i][i], vec:v.map(r=>r[i])});
+  pairs.sort((x,y)=>x.val-y.val);
+  return {values:pairs.map(p=>p.val), vectors:pairs.map(p=>p.vec)};
+}
+
+//=================== ВЫБОР МОД (как _select_modes) ===================
+function selectModes(nModes, n, spread){
+  if(nModes <= n || spread <= 0) {
+    const m = Math.min(n,nModes); return Array.from({length:m},(_,i)=>i);
+  }
+  const sel = [];
+  for(let i=0;i<n;i++){
+    const consec = i;
+    const spreadIdx = (nModes-1) * (i/(n-1));
+    let raw = (1-spread)*consec + spread*spreadIdx;
+    sel.push(Math.round(raw));
+  }
+  sel[0]=0;
+  for(let i=1;i<n;i++) if(sel[i] <= sel[i-1]) sel[i]=sel[i-1]+1;
+  return sel.filter(x=>x<nModes);
+}
+
+//=================== КОМПОНЕНТЫ СВЯЗНОСТИ (BFS) ===================
+function components(liveSet, liveList){
+  const seen=new Set(); let comp=0;
+  const key=(r,c)=>r+","+c;
+  for(const [r,c] of liveList){
+    if(seen.has(key(r,c))) continue;
+    comp++; const st=[[r,c]]; seen.add(key(r,c));
+    while(st.length){ const [y,x]=st.pop();
+      for(const [dy,dx] of NEIGH){ const ny=y+dy,nx=x+dx;
+        if(liveSet.has(key(ny,nx)) && !seen.has(key(ny,nx))){ seen.add(key(ny,nx)); st.push([ny,nx]); } } }
+  }
+  return comp;
+}
+
+//=================== ОСНОВНОЕ ВЫЧИСЛЕНИЕ (map_laplacian) ===================
+function computeLaplacian(){
+  const f0 = +$("f0").value, n = +$("n").value,
+        spread = +$("spread").value, alpha = +$("alpha").value;
+  // живые клетки в row-major (как np.argwhere)
+  const live=[];
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) if(cells[r][c]) live.push([r,c]);
+  const res = {f0,n,spread,alpha, live, cnt:live.length,
+    L:null, eigs:[], sqrtAll:[], nonzero:[], scale:0, modeFreqs:[],
+    sel:[], freqs:new Array(n).fill(0), amps:new Array(n).fill(0),
+    vectors:[], comp:0, edges:0, note:""};
+
+  if(live.length < 2){ res.note="меньше 2 клеток → тишина"; return res; }
+
+  const key=(r,c)=>r+","+c;
+  const liveSet=new Set(live.map(([r,c])=>key(r,c)));
+  res.comp = components(liveSet, live);
+  const pos=new Map(); live.forEach(([r,c],i)=>pos.set(key(r,c),i));
+  const cnt=live.length;
+  // матрица смежности A и степени
+  const A=Array.from({length:cnt},()=>Array(cnt).fill(0));
+  let edgeCount=0;
+  for(let i=0;i<cnt;i++){ const [r,c]=live[i];
+    for(const [dr,dc] of NEIGH){ const j=pos.get(key(r+dr,c+dc));
+      if(j!==undefined){ A[i][j]=1; } } }
+  // L = D - A
+  const L=Array.from({length:cnt},()=>Array(cnt).fill(0));
+  for(let i=0;i<cnt;i++){ let deg=0;
+    for(let j=0;j<cnt;j++){ if(A[i][j]){ deg++; L[i][j]=-1; } }
+    L[i][i]=deg; edgeCount+=deg; }
+  res.edges = edgeCount/2;
+  res.L=L;
+  if(edgeCount===0){ res.note="нет рёбер (изолированные клетки) → тишина"; return res; }
+
+  const {values, vectors} = jacobiEigen(L);
+  res.eigs=values; res.vectors=vectors;
+  res.sqrtAll = values.map(v=>Math.sqrt(Math.max(v,0)));
+  // ненулевые √λ
+  const nz=[]; for(const v of values) if(v>1e-6) nz.push(Math.sqrt(Math.max(v,0)));
+  res.nonzero=nz;
+  if(nz.length===0){ res.note="все λ≈0 → тишина"; return res; }
+  res.scale = f0/nz[0];
+  let mf = nz.map(x=>x*res.scale).filter(x=>x<GUARD);
+  res.modeFreqs=mf;
+  const sel = selectModes(mf.length, n, spread);
+  res.sel=sel;
+  const num=sel.length;
+  for(let i=0;i<num;i++) res.freqs[i]=mf[sel[i]];
+  // амплитуды 1/i^alpha, нормировка к max
+  if(num>0){ let mx=0;
+    for(let i=0;i<num;i++){ const a=1/Math.pow(i+1,alpha); res.amps[i]=a; if(a>mx)mx=a; }
+    for(let i=0;i<num;i++) res.amps[i]/=mx; }
+  return res;
+}
+
+//=================== ОТРИСОВКА: сетка ===================
+const gc=$("grid").getContext("2d"), GPX=336, CELL=GPX/SIZE;
+function drawGrid(){
+  gc.clearRect(0,0,GPX,GPX);
+  // подсветка моды: цвет клетки по компоненте собственного вектора
+  let vec=null, vmax=1;
+  if(last && selMode>=0 && last.vectors[selMode]){
+    vec=last.vectors[selMode]; vmax=Math.max(1e-9,...vec.map(Math.abs));
+  }
+  const posIndex=new Map();
+  if(last) last.live.forEach(([r,c],i)=>posIndex.set(r+","+c,i));
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+    const x=c*CELL,y=r*CELL;
+    gc.strokeStyle="#1c2129"; gc.strokeRect(x,y,CELL,CELL);
+    if(cells[r][c]){
+      if(vec){
+        const i=posIndex.get(r+","+c); const val=vec?vec[i]:0; const t=val/vmax;
+        // diverging blue(-)..white(0)..red(+)
+        const R=t>0?255:Math.round(255*(1+t)), B=t<0?255:Math.round(255*(1-t)),
+              G=Math.round(255*(1-Math.abs(t)));
+        gc.fillStyle=`rgb(${R},${G},${B})`;
+      } else gc.fillStyle="#ffe066";
+      gc.fillRect(x+1,y+1,CELL-2,CELL-2);
+    }
+  }
+}
+
+//=================== ОТРИСОВКА: граф ===================
+const grc=$("graph").getContext("2d");
+function drawGraphView(){
+  const W=300,H=240; grc.clearRect(0,0,W,H);
+  if(!last || last.cnt<1){ grc.fillStyle="#9aa0a6"; grc.font="13px monospace";
+    grc.fillText("пусто",10,20); return; }
+  const pad=24, sx=(W-2*pad)/(SIZE-1||1), sy=(H-2*pad)/(SIZE-1||1);
+  const P=last.live.map(([r,c])=>[pad+c*sx, pad+r*sy]);
+  const key=(r,c)=>r+","+c; const pos=new Map(); last.live.forEach(([r,c],i)=>pos.set(key(r,c),i));
+  // рёбра
+  grc.strokeStyle="#3a4350"; grc.lineWidth=1.5;
+  for(let i=0;i<last.live.length;i++){ const [r,c]=last.live[i];
+    for(const [dr,dc] of NEIGH){ const j=pos.get(key(r+dr,c+dc));
+      if(j!==undefined && j>i){ grc.beginPath(); grc.moveTo(P[i][0],P[i][1]); grc.lineTo(P[j][0],P[j][1]); grc.stroke(); } } }
+  // узлы (цвет по моде если выбрана)
+  let vec=null,vmax=1;
+  if(selMode>=0 && last.vectors[selMode]){ vec=last.vectors[selMode]; vmax=Math.max(1e-9,...vec.map(Math.abs)); }
+  const showIdx = P.length<=30;
+  for(let i=0;i<P.length;i++){
+    const rad = showIdx?9:7;
+    grc.beginPath(); grc.arc(P[i][0],P[i][1],rad,0,7);
+    if(vec){ const t=vec[i]/vmax; const R=t>0?255:Math.round(255*(1+t)),
+      B=t<0?255:Math.round(255*(1-t)), G=Math.round(255*(1-Math.abs(t)));
+      grc.fillStyle=`rgb(${R},${G},${B})`; } else grc.fillStyle="#ffe066";
+    grc.fill(); grc.strokeStyle="#0c0e12"; grc.lineWidth=1.5; grc.stroke();
+    if(hoverNodes.has(i)){ grc.beginPath(); grc.arc(P[i][0],P[i][1],rad+3,0,7);
+      grc.strokeStyle="#ffe066"; grc.lineWidth=2; grc.stroke(); }
+    if(showIdx){ grc.fillStyle="#0a0a0a"; grc.font="10px monospace";
+      grc.textAlign="center"; grc.textBaseline="middle"; grc.fillText(i,P[i][0],P[i][1]); }
+  }
+  grc.textAlign="left"; grc.textBaseline="alphabetic";
+  $("graphhint").textContent =
+    `узлов ${last.cnt} · рёбер ${last.edges} · компонент связности ${last.comp} (→ ${last.comp} нулевых мод)`
+    + (showIdx?" · номера узлов = строки матрицы":"");
+}
+
+//=================== ОТРИСОВКА: собственные значения ===================
+const ec=$("eig").getContext("2d"), eW=300,eH=240;
+let eigBars=[]; // для кликов
+function drawEig(){
+  ec.clearRect(0,0,eW,eH); eigBars=[];
+  if(!last || last.eigs.length===0){ ec.fillStyle="#9aa0a6"; ec.font="13px monospace";
+    ec.fillText("нет мод",10,20); return; }
+  const eigs=last.eigs, m=eigs.length, maxv=Math.max(1e-9,...eigs);
+  const pad=28, bw=(eW-2*pad)/m, base=eH-26;
+  // ось
+  ec.strokeStyle="#2b313c"; ec.beginPath(); ec.moveTo(pad,base); ec.lineTo(eW-6,base); ec.stroke();
+  // какие индексы звучат: nonzero index → modeFreq index → sel
+  const selSet=new Set(last.sel);
+  // сопоставим индекс полного спектра → позиция среди ненулевых
+  let nzPtr=0;
+  for(let i=0;i<m;i++){
+    const h=(eigs[i]/maxv)*(base-12);
+    const x=pad+i*bw+1, y=base-h, w=Math.max(2,bw-3);
+    const isZero = eigs[i]<=1e-6;
+    let sounding=false, nzIndex=-1;
+    if(!isZero){ nzIndex=nzPtr; nzPtr++;
+      // звучит, если nzIndex попал в modeFreqs (после guard) И в sel
+      if(nzIndex < last.modeFreqs.length && selSet.has(nzIndex)) sounding=true; }
+    ec.fillStyle = isZero? "#3a4350" : (sounding? "#ffe066":"#5a6172");
+    if(selMode===i){ ec.fillStyle="#69db7c"; }
+    ec.fillRect(x,y,w,h);
+    eigBars.push({x,y:Math.min(y,base),w,h:Math.max(h,8),idx:i,base});
+  }
+  ec.fillStyle="#9aa0a6"; ec.font="11px monospace";
+  ec.fillText("λ (по возрастанию) →", pad, eH-8);
+  ec.fillText("высота = λ", pad, 14);
+}
+$("eig").addEventListener("click",e=>{
+  const rect=$("eig").getBoundingClientRect();
+  const x=(e.clientX-rect.left)*(eW/rect.width), y=(e.clientY-rect.top)*(eH/rect.height);
+  for(const b of eigBars){ if(x>=b.x-1 && x<=b.x+b.w+1 && y>=b.y-6 && y<=b.base){
+    selMode = (selMode===b.idx? -1 : b.idx); redrawAll(); return; } }
+});
+
+//=================== ОТРИСОВКА: матрицы A / D / L ===================
+const matCanvas=$("mat"), mc=matCanvas.getContext("2d");
+const DEFAULT_MATHINT=$("mathint").innerHTML;
+let matCells=[], hoverIJ=null;
+function currentMatType(){ const r=document.querySelector('input[name=mat]:checked'); return r?r.value:'L'; }
+function drawMatrix(){
+  if(!last||!last.L||last.L.length===0){ matCanvas.width=360;matCanvas.height=80;
+    mc.clearRect(0,0,360,80); mc.fillStyle="#9aa0a6"; mc.font="13px monospace";
+    mc.fillText("нарисуй форму (≥2 связанные клетки)",10,40); $("matsize").textContent=""; matCells=[]; return; }
+  const L=last.L, cnt=L.length, type=currentMatType();
+  const head=22, W=Math.min(640, document.querySelector('.play').clientWidth-60||620);
+  const s=Math.max(7, Math.min(30, Math.floor((W-head-4)/cnt)));
+  const dim=head+cnt*s+3;
+  matCanvas.width=dim; matCanvas.height=dim;
+  mc.clearRect(0,0,dim,dim); matCells=[];
+  $("matsize").textContent=`${cnt}×${cnt}`;
+  // степень узла = диагональ L
+  const maxDeg=Math.max(1,...L.map((r,i)=>r[i]));
+  mc.font=(s>=10?11:9)+"px monospace"; mc.textAlign="center"; mc.textBaseline="middle";
+  // заголовки-индексы
+  mc.fillStyle="#9aa0a6";
+  if(s>=9) for(let i=0;i<cnt;i++){ mc.fillText(i,head+i*s+s/2,head/2); mc.fillText(i,head/2,head+i*s+s/2); }
+  for(let i=0;i<cnt;i++)for(let j=0;j<cnt;j++){
+    const x=head+j*s, y=head+i*s;
+    const edge=(i!==j && L[i][j]===-1), diag=(i===j);
+    let val, fill="#10131a";
+    if(type==='A'){ val=edge?1:0; if(edge) fill="#3b6ea5"; }
+    else if(type==='D'){ val=diag?L[i][i]:0; if(diag&&val>0) fill=`rgba(105,219,124,${0.22+0.6*val/maxDeg})`; }
+    else { val=L[i][j]; if(diag) fill=`rgba(105,219,124,${0.22+0.6*val/maxDeg})`; else if(edge) fill="#a5494f"; }
+    mc.fillStyle=fill; mc.fillRect(x+1,y+1,s-1,s-1);
+    if(hoverIJ&&(hoverIJ[0]===i||hoverIJ[1]===j)){ mc.strokeStyle="rgba(255,224,102,.5)";mc.lineWidth=1;mc.strokeRect(x+1,y+1,s-1,s-1); }
+    if(s>=16 && val!==0){ mc.fillStyle=(type==='L'&&val<0)?"#ffd1d1":"#0a0a0a"; mc.fillText(val,x+s/2,y+s/2); }
+    matCells.push({x,y,s,i,j});
+  }
+  mc.textAlign="left"; mc.textBaseline="alphabetic";
+}
+matCanvas.addEventListener("mousemove",e=>{
+  if(!last||!last.L) return;
+  const rect=matCanvas.getBoundingClientRect();
+  const x=(e.clientX-rect.left)*(matCanvas.width/rect.width), y=(e.clientY-rect.top)*(matCanvas.height/rect.height);
+  let f=null; for(const c of matCells){ if(x>=c.x&&x<c.x+c.s&&y>=c.y&&y<c.y+c.s){ f=c; break; } }
+  if(!f) return;
+  hoverIJ=[f.i,f.j]; hoverNodes=new Set([f.i,f.j]);
+  const t=currentMatType();
+  let msg;
+  if(f.i===f.j){ const deg=last.L[f.i][f.i];
+    msg=`${t}[${f.i}][${f.i}] = ${t==='A'?0:deg} — степень узла ${f.i}: у клетки ${deg} сосед(а/ей).`; }
+  else { const edge=last.L[f.i][f.j]===-1;
+    msg= edge ? `${t}[${f.i}][${f.j}] = ${t==='A'?1:(t==='D'?0:'−1')} — узлы ${f.i} и ${f.j} СОСЕДИ (ребро).`
+              : `${t}[${f.i}][${f.j}] = 0 — узлы ${f.i} и ${f.j} НЕ соседи.`; }
+  $("mathint").textContent=msg;
+  drawMatrix(); drawGraphView();
+});
+matCanvas.addEventListener("mouseleave",()=>{ hoverIJ=null; hoverNodes=new Set();
+  $("mathint").innerHTML=DEFAULT_MATHINT; drawMatrix(); drawGraphView(); });
+document.querySelectorAll('input[name=mat]').forEach(r=>r.addEventListener('change',drawMatrix));
+
+//=================== ОТРИСОВКА: спектр партиалов ===================
+const sc=$("spec").getContext("2d"), spW=640,spH=200;
+function drawSpec(){
+  sc.clearRect(0,0,spW,spH);
+  const pad=36, base=spH-28;
+  sc.strokeStyle="#2b313c"; sc.beginPath(); sc.moveTo(pad,base); sc.lineTo(spW-6,base); sc.stroke();
+  if(!last) return;
+  const fs=last.freqs.filter(f=>f>0), as=last.amps.slice(0,fs.length);
+  const f0=last.f0;
+  const fmax=Math.max(f0*($("n").value)*1.05, ...fs, f0*8)*1.0;
+  const X=f=>pad+(f/fmax)*(spW-pad-10);
+  // гармонический ряд f0*k (бледные засечки)
+  sc.strokeStyle="#33414f"; sc.fillStyle="#5a6172"; sc.font="10px monospace";
+  for(let k=1;k*f0<=fmax;k++){ const x=X(k*f0);
+    sc.beginPath(); sc.moveTo(x,base); sc.lineTo(x,base+6); sc.stroke();
+    if(k<=8||k%2===0) sc.fillText(k+"·f0", x-8, base+18); }
+  // наши партиалы
+  for(let i=0;i<fs.length;i++){ const x=X(fs[i]); const h=(base-14)*as[i];
+    sc.strokeStyle=`rgba(255,224,102,${0.35+0.65*as[i]})`;
+    sc.lineWidth=Math.max(1.5,3.2*as[i]);
+    sc.beginPath(); sc.moveTo(x,base); sc.lineTo(x,base-h); sc.stroke();
+    sc.fillStyle="#ffe066"; sc.beginPath(); sc.arc(x,base-h,2.6,0,7); sc.fill(); }
+  // f0 маркер
+  const xf=X(f0); sc.strokeStyle="#69db7c"; sc.setLineDash([3,3]);
+  sc.beginPath(); sc.moveTo(xf,8); sc.lineTo(xf,base); sc.stroke(); sc.setLineDash([]);
+  sc.fillStyle="#69db7c"; sc.font="11px monospace"; sc.fillText("f0",xf-6,8+10);
+  sc.fillStyle="#9aa0a6"; sc.fillText("частота, Гц →", pad, spH-8);
+}
+
+//=================== КОНВЕЙЕР (текст) ===================
+function fmt(x,d=1){ return (Math.round(x*Math.pow(10,d))/Math.pow(10,d)).toString(); }
+function drawPipe(){
+  if(!last) return;
+  const r=last;
+  let h="";
+  h+=`<b>1.</b> живых клеток: <b>${r.cnt}</b>`;
+  if(r.note){ h+=` — <span class="bad">${r.note}</span>`; $("pipe").innerHTML=h; $("table").innerHTML=""; return; }
+  h+=`<br><b>2.</b> граф: рёбер <b>${r.edges}</b>, компонент <b>${r.comp}</b>`;
+  h+=`<br><b>3.</b> λ = [${r.eigs.map(v=>fmt(v,2)).join(", ")}]`;
+  h+=`<br>&nbsp;&nbsp;&nbsp;нулевых (λ≈0): <b>${r.eigs.filter(v=>v<=1e-6).length}</b> = компонент связности ✓`;
+  h+=`<br><b>4.</b> √λ ненулевых = [${r.nonzero.map(v=>fmt(v,3)).join(", ")}]`;
+  h+=`<br><b>5.</b> низшая ненулевая → f0: scale = f0/√λ₁ = ${fmt(r.f0)}/${fmt(r.nonzero[0],3)} = <b>${fmt(r.scale,2)}</b>`;
+  h+=`<br>&nbsp;&nbsp;&nbsp;частоты мод (Гц) = [${r.modeFreqs.map(v=>fmt(v,1)).join(", ")}]`;
+  h+=`<br><b>6.</b> spread=${fmt(r.spread,2)} → выбраны индексы [${r.sel.join(", ")}]`;
+  const fs=r.freqs.filter(f=>f>0);
+  h+=`<br>&nbsp;&nbsp;&nbsp;<span style="color:var(--lap)">freqs → [${fs.map(v=>fmt(v,1)).join(", ")}] Гц</span>`;
+  h+=`<br>&nbsp;&nbsp;&nbsp;ratios f/f0 = [${fs.map(v=>fmt(v/r.f0,3)).join(", ")}] <span class="muted">(нецелые → инхармонично)</span>`;
+  $("pipe").innerHTML=h;
+  // таблица
+  let t="<table><tr><th>i</th><th>freq, Гц</th><th>f/f0</th><th>amp</th></tr>";
+  for(let i=0;i<fs.length;i++){
+    t+=`<tr><td>${i+1}</td><td>${fmt(fs[i],1)}</td><td>${fmt(fs[i]/r.f0,3)}</td><td>${fmt(r.amps[i],3)}</td></tr>`;
+  }
+  t+="</table>";
+  $("table").innerHTML=t;
+}
+
+//=================== WEB AUDIO (аддитивный синтез) ===================
+let actx=null, master=null, voices=[], playing=false;
+const NVOICE=20;
+function initAudio(){
+  if(actx) return;
+  actx=new (window.AudioContext||window.webkitAudioContext)();
+  master=actx.createGain(); master.gain.value=0; master.connect(actx.destination);
+  for(let i=0;i<NVOICE;i++){
+    const o=actx.createOscillator(); o.type="sine"; o.frequency.value=440;
+    const g=actx.createGain(); g.gain.value=0;
+    o.connect(g); g.connect(master); o.start();
+    voices.push({o,g});
+  }
+}
+function updateAudio(){
+  if(!actx||!playing||!last) return;
+  const fs=last.freqs, as=last.amps;
+  const nf=fs.filter(f=>f>0).length;
+  const norm = nf>0? 0.9/ as.slice(0,nf).reduce((a,b)=>a+b,0.0001) : 0; // не клиппить сумму
+  const tnow=actx.currentTime;
+  for(let i=0;i<NVOICE;i++){ const v=voices[i];
+    if(i<nf && fs[i]>0){ v.o.frequency.setTargetAtTime(fs[i],tnow,0.02);
+      v.g.gain.setTargetAtTime(as[i]*norm,tnow,0.03); }
+    else v.g.gain.setTargetAtTime(0,tnow,0.03);
+  }
+}
+$("play").addEventListener("click",()=>{
+  initAudio(); if(actx.state==="suspended") actx.resume();
+  playing=!playing;
+  const b=$("play");
+  if(playing){ b.textContent="■ Стоп"; b.classList.add("on"); b.classList.remove("primary");
+    master.gain.setTargetAtTime(0.25,actx.currentTime,0.05); updateAudio(); }
+  else { b.textContent="▶ Звук"; b.classList.remove("on"); b.classList.add("primary");
+    master.gain.setTargetAtTime(0,actx.currentTime,0.05); }
+});
+
+//=================== ПЕРЕСЧЁТ + ОТРИСОВКА ===================
+function recompute(){ last=computeLaplacian();
+  if(selMode>=0 && (!last.vectors[selMode])) selMode=-1;
+  redrawAll(); updateAudio(); }
+function redrawAll(){ drawGrid(); drawGraphView(); drawEig(); drawMatrix(); drawSpec(); drawPipe(); }
+
+//=================== ВВОД: рисование ===================
+let painting=false, paintVal=1;
+function cellAt(e){ const rect=$("grid").getBoundingClientRect();
+  const x=(e.clientX-rect.left)*(GPX/rect.width), y=(e.clientY-rect.top)*(GPX/rect.height);
+  return [Math.floor(y/CELL), Math.floor(x/CELL)]; }
+$("grid").addEventListener("mousedown",e=>{ const [r,c]=cellAt(e);
+  if(r<0||r>=SIZE||c<0||c>=SIZE) return;
+  paintVal = cells[r][c]?0:1; cells[r][c]=paintVal; painting=true; selMode=-1; recompute(); });
+window.addEventListener("mousemove",e=>{ if(!painting) return; const [r,c]=cellAt(e);
+  if(r<0||r>=SIZE||c<0||c>=SIZE) return; if(cells[r][c]!==paintVal){ cells[r][c]=paintVal; recompute(); } });
+window.addEventListener("mouseup",()=>painting=false);
+// touch
+$("grid").addEventListener("touchstart",e=>{e.preventDefault(); const t=e.touches[0]; const [r,c]=cellAt(t);
+  if(r>=0&&r<SIZE&&c>=0&&c<SIZE){ paintVal=cells[r][c]?0:1; cells[r][c]=paintVal; painting=true; selMode=-1; recompute(); }},{passive:false});
+$("grid").addEventListener("touchmove",e=>{e.preventDefault(); if(!painting)return; const t=e.touches[0]; const [r,c]=cellAt(t);
+  if(r>=0&&r<SIZE&&c>=0&&c<SIZE&&cells[r][c]!==paintVal){ cells[r][c]=paintVal; recompute(); }},{passive:false});
+window.addEventListener("touchend",()=>painting=false);
+
+//=================== КОНТРОЛЫ ===================
+for(const id of ["f0","n","spread","alpha"]){
+  $(id).addEventListener("input",()=>{
+    $("f0v").textContent=$("f0").value; $("nv").textContent=$("n").value;
+    $("spreadv").textContent=(+$("spread").value).toFixed(2);
+    $("alphav").textContent=(+$("alpha").value).toFixed(2);
+    recompute();
+  });
+}
+$("clear").addEventListener("click",()=>{ cells=Array.from({length:SIZE},()=>Array(SIZE).fill(0)); selMode=-1; recompute(); });
+$("random").addEventListener("click",()=>{ cells=Array.from({length:SIZE},()=>Array.from({length:SIZE},()=>Math.random()<0.35?1:0)); selMode=-1; recompute(); });
+
+//=================== ПРЕСЕТЫ ===================
+const PRESETS={
+  blinker:[[3,2],[3,3],[3,4]],
+  block:[[3,3],[3,4],[4,3],[4,4]],
+  beacon:[[2,2],[2,3],[3,2],[4,5],[5,4],[5,5]],
+  toad:[[3,3],[3,4],[3,5],[4,2],[4,3],[4,4]],
+  lshape:[[2,2],[3,2],[4,2],[4,3],[4,4]],
+  ring:[[2,2],[2,3],[2,4],[3,2],[3,4],[4,2],[4,3],[4,4]],
+  two:[[1,1],[1,2],[2,1],[5,5],[5,6],[6,5],[6,6]],
+  diag:[[1,1],[2,2],[3,3],[4,4],[5,5]],
+  plus:[[2,4],[3,4],[4,4],[3,3],[3,5]]
+};
+$("preset").addEventListener("change",e=>{ const p=PRESETS[e.target.value]; if(!p) return;
+  cells=Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+  for(const [r,c] of p) if(r<SIZE&&c<SIZE) cells[r][c]=1;
+  selMode=-1; recompute(); e.target.value=""; });
+
+//=================== СТАРТ ===================
+for(const [r,c] of PRESETS.blinker) cells[r][c]=1;  // стартовая форма
+recompute();
+</script>
+</body>
+</html>
