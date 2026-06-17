@@ -25,5 +25,5 @@ smoke_*.txt
 .obsidian/
 obsidian/.obsidian/
 
-# rendered research-map image (regenerable: python render_canvas.py ResearchMap3.canvas)
-ResearchMap3.png
+# rendered research-map image (regenerable: python render_canvas.py ResearchMap.canvas)
+ResearchMap.png

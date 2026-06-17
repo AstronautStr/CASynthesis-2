@@ -140,6 +140,6 @@ def render(src: str, dst: str):
 
 if __name__ == '__main__':
     import sys
-    src = sys.argv[1] if len(sys.argv) > 1 else 'ResearchMap3.canvas'
+    src = sys.argv[1] if len(sys.argv) > 1 else 'ResearchMap.canvas'
     dst = sys.argv[2] if len(sys.argv) > 2 else Path(src).with_suffix('.png').name
     render(src, dst)

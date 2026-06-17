@@ -371,7 +371,7 @@ scale-инвариантность. В прозе/доках можно зват
 → изменит тембр → **load-bearing, не менять молча**: добавить как ОТДЕЛЬНЫЙ приём и сравнить на
 слух с текущим (равновесным). Текущий равновесный Laplace остаётся активным дефолтом.
 **Implications:** обновлены `obsidian/mappings/Laplacian.md` (родословная + развилка),
-`obsidian/research/Untested-Branches.md`, узел-кандидат на `ResearchMap2.canvas`.
+`obsidian/research/Untested-Branches.md`, узел-кандидат на `ResearchMap.canvas`.
 
 ## 2026-06-17 — Профиль инхармонического резонатора + диагноз «шумного верха»; живые крутилки приняты
 **Decision:** (1) Реализация крутилок spread/alpha/release ПРИНЯТА — соответствует замыслу
