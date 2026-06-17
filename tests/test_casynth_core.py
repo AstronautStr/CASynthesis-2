@@ -190,6 +190,37 @@ def test_random_slice_consistency():
     assert np.array_equal(raw20[:8], raw8), "random projection rows not consistent"
 
 
+# ── Engine registry (gol_synth.py selector) ──────────────────────────────────
+
+def test_engine_registry_integrity():
+    """Every ENGINES entry has a unique id, a callable map_*, and param specs
+    whose default sits inside [lo, hi] -- so the gol_synth selector can build a
+    knob from each spec and call the engine with its defaults without surprises."""
+    ids = [e['id'] for e in c.ENGINES]
+    assert len(ids) == len(set(ids)), f"duplicate engine ids: {ids}"
+    assert c.ENGINE_BY_ID == {e['id']: e for e in c.ENGINES}, "ENGINE_BY_ID out of sync"
+    for e in c.ENGINES:
+        assert callable(e['fn']), f"{e['id']} fn not callable"
+        args = [p[0] for p in e['params']]
+        assert 'n' in args, f"{e['id']} missing partial-count param 'n'"
+        for (arg, label, lo, hi, integer, default) in e['params']:
+            assert lo <= default <= hi, f"{e['id']}.{arg} default {default} outside [{lo},{hi}]"
+            assert isinstance(label, str) and label, f"{e['id']}.{arg} bad label"
+
+
+def test_engine_registry_call_with_defaults():
+    """Calling each engine with its default params yields a finite (freqs, amps)
+    pair of equal length n -- locks the registry against signature drift."""
+    for e in c.ENGINES:
+        kwargs = {p[0]: p[5] for p in e['params']}
+        freqs, amps = e['fn'](_ell_patch(), F0, **kwargs)
+        n = kwargs['n']
+        assert freqs.shape == (n,) and amps.shape == (n,), \
+            f"{e['id']} returned wrong length at defaults"
+        assert np.all(np.isfinite(freqs)) and np.all(np.isfinite(amps)), \
+            f"{e['id']} produced non-finite output"
+
+
 # ── extract() ─────────────────────────────────────────────────────────────────
 
 def test_extract_size_and_centering():

@@ -238,3 +238,30 @@ def map_granulo(patch, f0, n=N_PARTIALS_DEFAULT):
     amps = amps[::-1].copy()  # small scale (index 0) -> high harmonic; large scale -> low harmonic
     freqs = f0 * np.arange(1, n + 1)
     return freqs, amps
+
+
+# ── Engine registry ───────────────────────────────────────────────────────────
+# Single source of truth for the set of sound engines and their tunable
+# attributes, shared by any app that offers an engine selector (gol_synth.py).
+# Pure data (no pygame / no UI formatting) so it stays in the dependency-light
+# library; the UI derives sliders + display formatting from these specs.
+#
+# Each engine: id, human label, the map_* function (contract form -> (freqs,amps)),
+# and `params` = its tunable ENGINE attributes (NOT synth-wide knobs like release).
+# Param spec tuple: (arg, label, lo, hi, integer, default)
+#   arg     : keyword name passed to fn -- 'n' (partial count), 'spread', 'alpha'.
+#   integer : True -> value snapped/stored as int (partial count).
+#   default : starting value; an app remembers per-engine values across switches.
+# The harmonic mappings expose only the partial count; Laplacian adds spread/alpha.
+ENGINES = [
+    dict(id='laplacian', label='Laplace', fn=map_laplacian, params=[
+        ('n',      'part',   1,   20,  True,  12),
+        ('spread', 'spread', 0.0, 1.0, False, 0.0),
+        ('alpha',  'alpha',  0.0, 2.0, False, 1.0)]),
+    dict(id='fft2d',   label='FFT',     fn=map_fft2d,   params=[('n', 'part', 1, 20, True, 16)]),
+    dict(id='walsh',   label='Walsh',   fn=map_walsh,   params=[('n', 'part', 1, 20, True, 16)]),
+    dict(id='random',  label='Random',  fn=map_random,  params=[('n', 'part', 1, 20, True, 16)]),
+    dict(id='granulo', label='Granulo', fn=map_granulo, params=[('n', 'part', 1, 20, True, 16)]),
+]
+
+ENGINE_BY_ID = {e['id']: e for e in ENGINES}
