@@ -1,7 +1,7 @@
 ---
 type: index
 ---
-
+	
 # CASynth — карта исследования
 
 Синтезатор, чей тембр управляется живым полем Conway's Game of Life.
@@ -39,14 +39,15 @@ type: index
 ## Проблемы
 
 - [[Bip-Topology-Change]] — #solved (кросс-фейд наборов мод)
-- [[Chunk-Clicks]] — #open (гигиена сшивки чанков)
+- [[Chunk-Clicks]] — #solved (sounddevice callback-стрим + smoothstep-рамп; P1-legacy не мигрирован)
 
 ---
 
 ## Прототипы
 
-- [[P1-Main]] — `gol_life_synth.py` (рабочий)
-- [[P2-Laplacian]] — `gol_life_synth_laplacian.py` (#in-progress)
+- [[P1-Main]] — `gol_life_synth.py` (legacy v1, pygame.mixer)
+- [[P2-Laplacian]] — `gol_life_synth_laplacian.py` (#done — лапласиан в живом виде; крутилки приняты 2026-06-17)
+- `gol_synth.py` — мульти-движковый наследник P2 (живой селектор 5 приёмов: FFT/Walsh/Random/Laplace/Granulo); активный стенд профилирования. _(Заметку P3 завести по запросу.)_
 
 ---
 

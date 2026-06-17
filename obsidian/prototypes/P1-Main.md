@@ -21,7 +21,7 @@ file: gol_life_synth.py
 `size → k`, `freq = k * f0` — гармоническая решётка. Контракт расширен: `render_chunk` принимает `freq_cur[]` (сделано для [[P2-Laplacian]]).
 
 ## Проблемы
-- [[Chunk-Clicks]] — клики на сшивке чанков
+- [[Chunk-Clicks]] — клики на сшивке (P1 на `pygame.mixer` не мигрирован; вылечено в sounddevice-прототипах P2/`gol_synth.py`)
 - Сегментация не wrap-aware
 - Нет identity tracking
 

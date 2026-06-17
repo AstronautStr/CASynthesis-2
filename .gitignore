@@ -20,3 +20,10 @@ _probe_*.npy
 _session_*.wav
 _session_*.npz
 smoke_*.txt
+
+# Obsidian editor/workspace config (volatile per-session UI state, not shared)
+.obsidian/
+obsidian/.obsidian/
+
+# rendered research-map image (regenerable: python render_canvas.py ResearchMap3.canvas)
+ResearchMap3.png

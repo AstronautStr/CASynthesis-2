@@ -1,12 +1,12 @@
 ---
 type: prototype
-status: in-progress
+status: done
 file: gol_life_synth_laplacian.py
 ---
 
 # P2 — gol_life_synth_laplacian.py
 
-#in-progress
+#done
 
 ## Цель
 Вывести [[Laplacian]]-маппинг со стенда в живой интерактивный контекст. «Сырой вид» — наиграть характер приёма на реальной динамике поля (рождение/смерть/рост структур, непрерывная смена топологии). Не финальный инструмент.
@@ -24,12 +24,16 @@ file: gol_life_synth_laplacian.py
 ## Что НЕ меняется
 GOL-симуляция, UI, пианино, паттерны, сайдбар.
 
-## Проблемы к решению
-- [[Bip-Topology-Change]] — реализовать кросс-фейд (блокер качества)
-- [[Chunk-Clicks]] — гигиена сшивки чанков (separate)
+## Проблемы (решены)
+- [[Bip-Topology-Change]] — кросс-фейд наборов мод реализован (overlapping → затем tail-pool для длинных хвостов/пэда)
+- [[Chunk-Clicks]] — вылечено миграцией на sounddevice callback-стрим + smoothstep-рамп
 
 ## Статус
-Developer реализует. Ожидается результат.
+#done — лапласиан выведен в живой контекст и наигран. Реализованы и **приняты Researcher
+(2026-06-17)** живые крутилки тембра spread/alpha/release (итог — профиль резонатора:
+музыкальная зона ≈3–4 разнесённых мод). Аудио чистое (sounddevice). DEV-1 — ручной headroom,
+DEV-2 закрыт (tail-pool). **Наследник:** `gol_synth.py` — мульти-движковый прототип (живой
+селектор 5 приёмов), активная линия профилирования.
 
 ## Связано
 [[Laplacian]] · [[P1-Main]] · [[Bip-Topology-Change]] · [[Chunk-Clicks]] · [[Frequency-Framing]]
