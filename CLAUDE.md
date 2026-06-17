@@ -5,8 +5,9 @@ A synthesizer whose timbre is driven by a live Conway's Game of Life field. Each
 connected object in the field is a **harmonic of a carrier note** played on an
 on-screen piano; the field = the evolving spectrum of that note.
 
-Read `docs/01-problem.md`, `docs/02-design-space.md`, and `docs/03-prototype.md`
-before any substantive work — they hold the full context and reasoning.
+`docs/01-problem.md`, `docs/02-design-space.md`, and `docs/03-prototype.md` hold the
+full context and reasoning — consult them when a decision touches design rationale
+(reference, not mandatory each session).
 
 ## Load-bearing decisions (do not silently reverse)
 1. **Hand-crafted, interpretable perceptual features are the mapping backbone —
@@ -44,14 +45,19 @@ python gol_life_synth.py
   to validate logic / draw / synth without a display or audio device (works in CI).
 
 ## Project memory (version-controlled, under `memory/`)
-Read these at the start of every substantive session:
-- `memory/current.md` — what is implemented, in-flight, and prioritised next
-- `memory/decisions.md` — Researcher decision log
-- `memory/questions.md` — Developer questions queue (open / answered)
-- `memory/log/` — per-session summaries
+Read these at the start of every substantive session (lean — live state, not history):
+- `memory/current.md` — what is implemented, in-flight, prioritised next (snapshot, not a changelog)
+- `memory/decisions.md` — Researcher decision log; **read the index at the top**, full entry on demand
+- `memory/questions.md` — live questions (OPEN + items awaiting review)
+- `memory/decision-tree.md` — дерево развилок проекта (Mermaid): корень → ветки → текущая точка
 
-Role definitions live in `roles/researcher.md` and `roles/developer.md`.
-Reference docs (read-only, do not append): `docs/01-problem.md`, `docs/02-design-space.md`, `docs/03-prototype.md`.
+Consult on demand, NOT at session start:
+- `memory/archive/` — resolved questions and trimmed history (recall a settled item)
+- `memory/log/` — per-session summaries (detailed record of how each fix was done)
+- `docs/01-problem.md`, `docs/02-design-space.md`, `docs/03-prototype.md` — read-only reference; read when a decision touches design rationale (do not append)
+
+Role definitions live in `.claude/agents/researcher.md` and `.claude/agents/developer.md`
+(single source — full role + subagent frontmatter; valid for subagent and standalone sessions).
 
 ## Working conventions (collaborator's preference)
 - Propose before changing; offer devil's-advocate critique; decide one thing at a time.
