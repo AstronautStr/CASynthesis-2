@@ -59,6 +59,7 @@ RUN
 """
 
 import os
+import time
 import colorsys
 import queue as _queue
 import numpy as np
@@ -76,15 +77,33 @@ from patterns import PATTERNS
 # ──────────────────────────────────────────────────────────────────────────────
 GRID_W, GRID_H = 52, 30
 CELL = 20
-# Toolbar gained a dedicated engine-selector tab row at the bottom (24px strip),
-# so it is taller than the single-engine laplacian prototype (was 96).
-TOOLBAR_H = 124
+# Toolbar: main button row (40px) + note-division button row (18px) + status/vol
+# row (~38px) + engine-tab strip (24px) + padding = 148px.
+TOOLBAR_H = 148
 PIANO_H = 96
 FPS = 60
 
 SR = 44100
-STEP_HZ = 6.0            # generations per second (start value)
 RANDOM_DENSITY = 0.28
+
+# BPM / note-division tempo control  (replaces the old STEP_HZ knob)
+BPM_DEFAULT = 120
+BPM_MIN     = 40
+BPM_MAX     = 240
+# Each entry: (UI label, beats-per-step)  where 1 beat = one quarter note.
+# Triplet = 2/3 of the straight note value (3 notes in the space of 2).
+NOTE_DIVS = [
+    ('1/1',   4.0),
+    ('1/2',   2.0),
+    ('1/4',   1.0),
+    ('1/8',   0.5),
+    ('1/16',  0.25),
+    ('1/2T',  4.0 / 3),
+    ('1/4T',  2.0 / 3),
+    ('1/8T',  1.0 / 3),
+    ('1/16T', 1.0 / 6),
+]
+DIV_DEFAULT = 2           # index into NOTE_DIVS → 1/4 (quarter note)
 MAX_VOICES = 24          # max connected objects to sonify
 
 CHUNK_S = 0.09           # audio render chunk length (seconds)
@@ -688,7 +707,9 @@ def _dump_session(rec, prefix="_session"):
                     if rec.get('replay_grids')
                     else np.zeros((0, GRID_H, GRID_W), np.uint8))
     np.savez_compressed(f"{base}.npz", frames=frames, gens=gens, grids=grids,
-                        notes=notes, sr=SR, chunk_s=CHUNK_S, step_hz=STEP_HZ,
+                        notes=notes, sr=SR, chunk_s=CHUNK_S,
+                        bpm=rec.get('bpm', BPM_DEFAULT),
+                        div_idx=rec.get('div_idx', DIV_DEFAULT),
                         max_voices=MAX_VOICES, master_gain=MASTER_GAIN,
                         max_modes=MAX_MODES_PER_OBJ, patch_size=PATCH_SIZE,
                         underruns=rec['underruns'],
@@ -794,37 +815,60 @@ def main():
     rec = None
     if os.environ.get('CASYNTH_RECORD'):
         rec = dict(chunks=[], frames=[], steps=[], underruns=0,
-                   replay=[], replay_grids=[], replay_engines=[])
+                   replay=[], replay_grids=[], replay_engines=[],
+                   bpm=BPM_DEFAULT, div_idx=DIV_DEFAULT)
         print("[CASYNTH_RECORD on] capturing audio + field + all knobs; "
               "quit (Esc) to save")
 
     state = dict(
-        run=False, hz=STEP_HZ, gen=0, acc=0.0,
+        run=False, gen=0,
+        bpm=BPM_DEFAULT, div_idx=DIV_DEFAULT,
+        # next_step_time: absolute perf_counter deadline for the next GOL step.
+        # None until the first Play press; reset to now+interval on each Play.
+        next_step_time=None,
         note=NOTE_DEFAULT, vol=VOL_DEFAULT,
         kb_base=NOTE_DEFAULT,
         sidebar_open=True,
-        # Active engine + per-engine attribute memory (each engine remembers the
-        # user's last values so switching back restores its sound).  release_ms is
-        # SYNTH-WIDE (mode-tail length), deliberately NOT inside engine_params.
         engine=ENGINES[0]['id'],
         engine_params={e['id']: {arg: default for (arg, _l, _lo, _hi, _i, default)
                                  in e['params']} for e in ENGINES},
         release_ms=RELEASE_MS_DEFAULT,
     )
 
-    # toolbar layout (identical to gol_life_synth.py)
-    by = GRID_H * CELL + 8
-    info_y = GRID_H * CELL + 58
-    defs = [("play", None, 96), ("step", "Step", 70), ("random", "Random", 96),
-            ("clear", "Clear", 78), ("slower", "-", 40), ("faster", "+", 40)]
+    # toolbar layout
+    by     = GRID_H * CELL + 8
+    div_y  = by + 46            # note-division button row
+    info_y = GRID_H * CELL + 76 # status / volume row (shifted down for div row)
+    defs = [("play", None, 96), ("step", "Step", 70),
+            ("random", "Random", 96), ("clear", "Clear", 78)]
     buttons, bx = [], 12
     for bid, label, bw in defs:
         buttons.append(dict(id=bid, label=label, rect=pygame.Rect(bx, by, bw, 40)))
         bx += bw + 8
+
+    # BPM widget: "BPM" label + slider track + value  (right of the main buttons)
+    _BPM_LBL_W  = 34   # width reserved for "BPM" text
+    _BPM_TRACK_W = 84
+    _BPM_VAL_W   = 32
+    _bpm_x = bx + 8
+    bpm_track = pygame.Rect(_bpm_x + _BPM_LBL_W, by + 16, _BPM_TRACK_W, 8)
+    _bpm_widget_w = _BPM_LBL_W + _BPM_TRACK_W + 4 + _BPM_VAL_W
+
     legend_x = 12
+    _pat_btn = pygame.Rect(_bpm_x + _bpm_widget_w + 8, by, 96, 40)
     vol_track = pygame.Rect(W - VOL_W - 24, info_y + 14, VOL_W, 8)
     meter_track = pygame.Rect(vol_track.left, by + 4, VOL_W, 10)  # level/clip meter
-    _pat_btn = pygame.Rect(bx + 8, by, 128, 40)
+
+    # Note-division buttons  (one compact row below main buttons)
+    _DIV_BTN_H = 18
+    _DIV_BTN_GAP = 3
+    div_buttons = []
+    _dx = 12
+    for _di, (_dlbl, _) in enumerate(NOTE_DIVS):
+        _dw = small.size(_dlbl)[0] + 14   # label + padding
+        div_buttons.append(dict(idx=_di, label=_dlbl,
+                                rect=pygame.Rect(_dx, div_y, _dw, _DIV_BTN_H)))
+        _dx += _dw + _DIV_BTN_GAP
 
     # ── Engine selector: a row of TABS in the toolbar's bottom strip ──────────
     # Built from the shared engine registry (casynth_core.ENGINES); a click
@@ -895,6 +939,7 @@ def main():
 
     paint = None
     dragging_vol = False
+    dragging_bpm = False
     dragging_ctrl = None          # id of the timbre knob being dragged, or None
     drag = {'active': False, 'cells': [], 'name': '', 'snap': None}
     _ghost = pygame.Surface((CELL - 2, CELL - 2), pygame.SRCALPHA)
@@ -908,10 +953,18 @@ def main():
     def f0():
         return midi_to_freq(state['note'])
 
+    def _step_interval():
+        """GOL step period in seconds for the current BPM + note division."""
+        return NOTE_DIVS[state['div_idx']][1] * 60.0 / state['bpm']
+
     def set_vol(mx):
         # Pre-clip master volume: lowering it pulls the signal below the clip
         # ceiling (manual headroom).  Read in feed_audio on the main thread.
         state['vol'] = float(np.clip((mx - vol_track.left) / vol_track.width, 0, 1))
+
+    def set_bpm(mx):
+        frac = float(np.clip((mx - bpm_track.left) / bpm_track.width, 0, 1))
+        state['bpm'] = int(round(BPM_MIN + frac * (BPM_MAX - BPM_MIN)))
 
     def ctrl_by_id(cid):
         return next(c for c in ctrls if c['id'] == cid)
@@ -934,13 +987,16 @@ def main():
 
     def do(bid):
         nonlocal grid
-        if bid == "play":    state['run'] = not state['run']
+        if bid == "play":
+            state['run'] = not state['run']
+            if state['run']:
+                # Schedule first step one interval from now so the user hears the
+                # current generation first, then the clock starts ticking.
+                state['next_step_time'] = time.perf_counter() + _step_interval()
         elif bid == "step":  grid = step(grid); state['gen'] += 1
         elif bid == "random":
             grid[:] = (np.random.random((GRID_H, GRID_W)) < RANDOM_DENSITY).astype(np.uint8)
         elif bid == "clear": grid[:] = 0; state['gen'] = 0
-        elif bid == "slower": state['hz'] = max(1.0, state['hz'] - 1.0)
-        elif bid == "faster": state['hz'] = min(30.0, state['hz'] + 1.0)
 
     def hit_piano(pos):
         for rect, m in black_keys:
@@ -1012,8 +1068,16 @@ def main():
                 elif e.key == pygame.K_SPACE:  do("play")
                 elif e.key == pygame.K_r:       do("random")
                 elif e.key == pygame.K_c:       do("clear")
-                elif e.key == pygame.K_UP:      do("faster")
-                elif e.key == pygame.K_DOWN:    do("slower")
+                elif e.key == pygame.K_UP:
+                    _d = 10 if (pygame.key.get_mods() & pygame.KMOD_SHIFT) else 5
+                    state['bpm'] = min(BPM_MAX, state['bpm'] + _d)
+                elif e.key == pygame.K_DOWN:
+                    _d = 10 if (pygame.key.get_mods() & pygame.KMOD_SHIFT) else 5
+                    state['bpm'] = max(BPM_MIN, state['bpm'] - _d)
+                elif e.key == pygame.K_RIGHT:
+                    state['div_idx'] = min(len(NOTE_DIVS) - 1, state['div_idx'] + 1)
+                elif e.key == pygame.K_LEFT:
+                    state['div_idx'] = max(0, state['div_idx'] - 1)
 
             elif e.type == pygame.MOUSEBUTTONDOWN:
                 if state['sidebar_open'] and e.pos[0] >= W and e.button == 1:
@@ -1042,6 +1106,15 @@ def main():
                             state['sidebar_open'] = not state['sidebar_open']
                             nw = W + (SIDEBAR_W if state['sidebar_open'] else 0)
                             screen = pygame.display.set_mode((nw, H))
+                        elif bpm_track.inflate(0, 16).collidepoint(e.pos):
+                            dragging_bpm = True
+                            set_bpm(e.pos[0])
+                        elif any(b['rect'].inflate(0, 6).collidepoint(e.pos)
+                                 for b in div_buttons):
+                            for b in div_buttons:
+                                if b['rect'].inflate(0, 6).collidepoint(e.pos):
+                                    state['div_idx'] = b['idx']
+                                    break
                         elif vol_track.collidepoint(e.pos):
                             dragging_vol = True
                             set_vol(e.pos[0])
@@ -1066,6 +1139,7 @@ def main():
                     drag.update(active=False, snap=None, cells=[], name='')
                 paint = None
                 dragging_vol = False
+                dragging_bpm = False
                 dragging_ctrl = None
 
             elif e.type == pygame.MOUSEMOTION:
@@ -1077,6 +1151,8 @@ def main():
                         grid[rc] = paint
                 elif dragging_vol:
                     set_vol(e.pos[0])
+                elif dragging_bpm:
+                    set_bpm(e.pos[0])
                 elif dragging_ctrl is not None:
                     set_ctrl(ctrl_by_id(dragging_ctrl), e.pos[0])
 
@@ -1084,18 +1160,25 @@ def main():
                 if state['sidebar_open'] and pygame.mouse.get_pos()[0] >= W:
                     _sb_scroll = max(_sb_scroll_min, min(0, _sb_scroll + e.y * 20))
 
-        # GOL advance
-        if state['run']:
-            interval = 1.0 / state['hz']
-            state['acc'] += dt
-            steps = 0
-            while state['acc'] >= interval and steps < 4:
-                state['acc'] -= interval
+        # GOL advance — strict BPM-aligned timing via perf_counter deadline.
+        # next_step_time advances by exactly one interval each step, so the step
+        # sequence lands on a perfect periodic grid regardless of frame-time jitter
+        # (no float accumulation: += interval, not = now + interval).
+        if state['run'] and state['next_step_time'] is not None:
+            interval = _step_interval()
+            now = time.perf_counter()
+            n_steps = 0
+            while now >= state['next_step_time'] and n_steps < 4:
                 grid = step(grid)
                 state['gen'] += 1
-                steps += 1
+                state['next_step_time'] += interval
+                n_steps += 1
                 if rec is not None:
                     rec['steps'].append((state['gen'], grid.copy(), state['note']))
+            # If the clock drifted far behind (e.g. OS pause), snap forward so we
+            # don't spiral trying to catch up.
+            if state['next_step_time'] < now - interval:
+                state['next_step_time'] = now + interval
 
         _ep = state['engine_params'][state['engine']]
         labels, voices, color = analyse(grid, f0(), state['engine'], _ep)
@@ -1153,6 +1236,29 @@ def main():
         plbl = small.render("◀ Lib" if state['sidebar_open'] else "Lib ▶", True, C_ACCENT)
         screen.blit(plbl, plbl.get_rect(center=_pat_btn.center))
 
+        # BPM slider
+        screen.blit(small.render("BPM", True, C_DIM),
+                    (_bpm_x, bpm_track.centery - 7))
+        pygame.draw.rect(screen, C_BTN, bpm_track, border_radius=4)
+        _bpm_frac = (state['bpm'] - BPM_MIN) / (BPM_MAX - BPM_MIN)
+        _bfw = int(bpm_track.width * _bpm_frac)
+        pygame.draw.rect(screen, C_ACCENT,
+                         (bpm_track.left, bpm_track.top, _bfw, bpm_track.height),
+                         border_radius=4)
+        pygame.draw.circle(screen, C_TXT, (bpm_track.left + _bfw, bpm_track.centery), 6)
+        screen.blit(small.render(str(state['bpm']), True, C_TXT),
+                    (bpm_track.right + 5, bpm_track.centery - 7))
+
+        # Note-division buttons
+        for _db in div_buttons:
+            _dactive = (_db['idx'] == state['div_idx'])
+            _dhot = _db['rect'].collidepoint(mouse)
+            pygame.draw.rect(screen,
+                             C_ACCENT if _dactive else (C_BTN_HOT if _dhot else C_BTN),
+                             _db['rect'], border_radius=3)
+            _dtxt = small.render(_db['label'], True, C_BG if _dactive else C_TXT)
+            screen.blit(_dtxt, _dtxt.get_rect(center=_db['rect'].center))
+
         # info row: legend
         lw, lh = 110, 10
         lx, ly = legend_x, info_y + 5
@@ -1165,8 +1271,10 @@ def main():
 
         # info row: status
         sx = lx + lw + 16
+        _div_lbl = NOTE_DIVS[state['div_idx']][0]
         st = (f"{note_name(state['note'])} {f0():.0f}Hz  "
-              f"gen {state['gen']:>4}  {state['hz']:.0f}/s  "
+              f"gen {state['gen']:>4}  "
+              f"{state['bpm']} BPM {_div_lbl}  "
               f"obj {len(voices)}")
         screen.blit(font.render(st, True, C_TXT), (sx, info_y + 1))
         mode = "RUNNING" if state['run'] else "PAUSED"
