@@ -159,6 +159,54 @@ def test_laplacian_alpha_controls_brightness():
     assert a_steep[1] < a_mid[1] < a_flat[1], "alpha rolloff not monotonic in steepness"
 
 
+# ── Step B: shape parameter (decisions.md 2026-06-18) ────────────────────────
+
+def test_laplacian_shape_does_not_affect_freqs():
+    """shape never changes any partial frequency (criterion B).
+    At any shape value freqs must be identical to the shape=0 call with same
+    spread so that pitch is never disturbed."""
+    for p in (_blinker_patch(), _ell_patch(), _dense_patch()):
+        f0_res, _ = c.map_laplacian(p, F0, 8, shape=0.0)
+        f1_res, _ = c.map_laplacian(p, F0, 8, shape=1.0)
+        assert np.allclose(f0_res, f1_res, atol=1e-6), \
+            f"shape changed frequencies: {f0_res} vs {f1_res}"
+
+
+def test_laplacian_shape_blinker_exact_amplitudes():
+    """Criterion C: index-alignment check on blinker (P3, eigenvalues 0,1,3).
+    Edge excitation e=[1,2,1] is symmetric; lambda=1 eigenvector [1,0,-1] is
+    anti-symmetric -> projection = 0; lambda=3 eigenvector [1,-2,1] -> 2/sqrt(6).
+    At shape=1: amps[:2] must be [0.0, 1.0] (not [1.0, 0.0] -- wrong column order
+    would satisfy weaker checks but swap the physical meaning).
+    Zeros are correct for symmetric shapes (decisions.md 2026-06-18, questions.md C)."""
+    freqs, amps = c.map_laplacian(_blinker_patch(), F0, 8, shape=1.0)
+    assert np.all(np.isfinite(amps)), f"non-finite amps at shape=1: {amps}"
+    assert not np.any(np.isnan(amps)), f"NaN in amps at shape=1: {amps}"
+    nz_freqs = freqs[freqs > 0]
+    assert len(nz_freqs) == 2, f"blinker should have 2 mode freqs, got {nz_freqs}"
+    assert abs(amps.max() - 1.0) < 1e-9, f"amps not normalised to max=1: {amps}"
+    assert np.allclose(amps[:2], [0.0, 1.0], atol=1e-6), \
+        f"amps[:2] wrong (index mis-alignment?): {amps[:2]}, expected [0.0, 1.0]"
+
+
+def test_laplacian_shape_amplitude_invariant_to_rotation():
+    """Criterion D: at shape=1 the sorted amplitude vector is invariant under
+    rotation/reflection/translation of an asymmetric shape (L-patch).
+    Edge excitation e_i=deg_i is graph-intrinsic -> |<e,phi_k>| transforms as a
+    scalar under isomorphism of the underlying graph."""
+    base = _ell_patch()
+    _, a_base = c.map_laplacian(base, F0, 8, shape=1.0)
+    a_sorted = np.sort(a_base)
+    for name, q in [("rot90",  np.rot90(base)),
+                    ("rot180", np.rot90(base, 2)),
+                    ("fliplr", np.fliplr(base)),
+                    ("flipud", np.flipud(base)),
+                    ("roll",   np.roll(np.roll(base, 1, 0), -1, 1))]:
+        _, aq = c.map_laplacian(np.ascontiguousarray(q), F0, 8, shape=1.0)
+        assert np.allclose(a_sorted, np.sort(aq), atol=1e-6), \
+            f"shape=1 amps not invariant under {name}: {np.sort(aq)} vs {a_sorted}"
+
+
 # ── FFT / Random characteristics ──────────────────────────────────────────────
 
 def test_fft_translation_invariant():

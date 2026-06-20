@@ -164,7 +164,7 @@ def _select_modes(n_modes, n, spread):
     return sel[sel < n_modes]
 
 
-def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0):
+def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.0):
     """Graph Laplacian eigenvalues -> inharmonic partial frequencies via sqrt(lambda).
     Lowest selected mode is normalized to f0; amplitudes follow 1/i**alpha rolloff.
 
@@ -173,9 +173,12 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0):
              f0 (pitch anchored to the carrier -- see decisions.md 2026-06-16).
     alpha  : amplitude rolloff exponent 1/i**alpha.  alpha=1 -> historical 1/i;
              alpha->0 -> flat / brighter; alpha>1 -> steeper / darker.
+    shape  : 0.0 = rolloff only (bit-for-bit historical); 1.0 = amplitudes from
+             |<e, phi_k>| projection of edge-excitation onto each eigenvector.
+             Linear blend at intermediate values; frequencies are never touched.
+             (decisions.md 2026-06-18 -- Step B.)
 
-    Defaults (spread=0, alpha=1) reproduce the original output bit-for-bit, so
-    the listening bench (which calls without these) is unchanged."""
+    Defaults (spread=0, alpha=1, shape=0) reproduce the original output bit-for-bit."""
     live = list(map(tuple, np.argwhere(patch > 0)))
     cnt = len(live)
     if cnt < 2:
@@ -193,26 +196,67 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0):
         return np.zeros(n), np.zeros(n)
     A = csr_matrix((np.ones(len(ri)), (ri, ci_)), shape=(cnt, cnt))
     L = sparse_laplacian(A).toarray().astype(float)
-    eigs = np.linalg.eigvalsh(L)
-    # sqrt(lambda) is proportional to resonant mode frequency (membrane analogy)
-    nonzero_sq = np.sqrt(np.maximum(eigs[eigs > 1e-6], 0.0))
+
+    # sqrt(lambda) is proportional to resonant mode frequency (membrane analogy).
+    # shape>0 needs eigenvectors; shape==0 uses the faster eigvalsh-only path.
+    if shape > 0.0:
+        eigs, vecs = np.linalg.eigh(L)
+        nonzero_mask = eigs > 1e-6
+        nonzero_idx = np.where(nonzero_mask)[0]
+        nonzero_sq = np.sqrt(np.maximum(eigs[nonzero_mask], 0.0))
+    else:
+        eigs = np.linalg.eigvalsh(L)
+        nonzero_sq = np.sqrt(np.maximum(eigs[eigs > 1e-6], 0.0))
+
     if len(nonzero_sq) == 0:
         return np.zeros(n), np.zeros(n)
+
     # Normalize: lowest mode -> f0; others proportionally higher
     scale = f0 / nonzero_sq[0]
     mode_freqs = nonzero_sq * scale
-    # Anti-alias guard
-    mode_freqs = mode_freqs[mode_freqs < _GUARD]
+
+    # Anti-alias guard -- track column indices when eigenvectors are needed
+    if shape > 0.0:
+        guard_mask = mode_freqs < _GUARD
+        survived_idx = nonzero_idx[guard_mask]
+        mode_freqs = mode_freqs[guard_mask]
+    else:
+        mode_freqs = mode_freqs[mode_freqs < _GUARD]
+
+    if len(mode_freqs) == 0:
+        return np.zeros(n), np.zeros(n)
+
     # Choose which modes sound (spread spans low->whole-spectrum); index 0 stays f0
     sel = _select_modes(len(mode_freqs), n, spread)
     num = len(sel)
     freqs = np.zeros(n)
     freqs[:num] = mode_freqs[sel]
-    # Amplitudes: 1/i**alpha rolloff (softer for higher modes)
+
+    # Amplitudes
     amps = np.zeros(n)
     if num > 0:
-        amps[:num] = 1.0 / np.arange(1, num + 1) ** alpha
-        amps[:num] /= amps[:num].max()
+        rolloff = 1.0 / np.arange(1, num + 1) ** alpha
+        rolloff /= rolloff.max()   # rolloff[0] = 1.0 always
+
+        if shape > 0.0:
+            # Edge excitation e_i = deg_i = diagonal of L (graph-intrinsic,
+            # invariant to position/rotation/reflection -- decisions.md 2026-06-18).
+            e = L.diagonal()
+            # Columns of vecs that survived both masks and the mode selection
+            final_idx = survived_idx[sel]
+            proj = np.array([abs(float(np.dot(e, vecs[:, j]))) for j in final_idx])
+            mx_proj = proj.max()
+            if mx_proj > 1e-9:
+                proj /= mx_proj
+            else:
+                proj = rolloff.copy()   # regular graph: all projections zero -> fallback
+            blended = (1.0 - shape) * rolloff + shape * proj
+            mx_blend = blended.max()
+            if mx_blend > 1e-9:
+                blended /= mx_blend
+            amps[:num] = blended
+        else:
+            amps[:num] = rolloff
     return freqs, amps
 
 
@@ -257,7 +301,8 @@ ENGINES = [
     dict(id='laplacian', label='Laplace', fn=map_laplacian, params=[
         ('n',      'part',   1,   20,  True,  12),
         ('spread', 'spread', 0.0, 1.0, False, 0.0),
-        ('alpha',  'alpha',  0.0, 2.0, False, 1.0)]),
+        ('alpha',  'alpha',  0.0, 2.0, False, 1.0),
+        ('shape',  'shape',  0.0, 1.0, False, 0.0)]),
     dict(id='fft2d',   label='FFT',     fn=map_fft2d,   params=[('n', 'part', 1, 20, True, 16)]),
     dict(id='walsh',   label='Walsh',   fn=map_walsh,   params=[('n', 'part', 1, 20, True, 16)]),
     dict(id='random',  label='Random',  fn=map_random,  params=[('n', 'part', 1, 20, True, 16)]),
