@@ -805,6 +805,97 @@ def _dump_session(rec, prefix="_session"):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# OFFLINE SESSION REPLAY  (read side of the session log -- see _dump_session)
+# ──────────────────────────────────────────────────────────────────────────────
+def replay_session(ts, prefix="_session"):
+    """Re-render a recorded session (<prefix>_<ts>.npz) OFFLINE from the
+    AUTHORITATIVE per-frame control log, deterministically -- so a reported bug
+    reproduces on the user's exact snapshot and a fix is validated against it
+    (with unfixed code the replay must match the recorded WAV).
+
+    Uses `replay_controls` (object array -> needs allow_pickle), which captures
+    the FULL control state per rendered frame (engine id + note + vol + ADSR +
+    every engine_params knob, incl. shape).  Because it forwards the whole
+    engine_params dict through the SAME analyse()/SlotPool/render path the live
+    synth uses, replay tracks the engine exactly and needs no per-knob edits when
+    a new control is added (only that the control is in the snapshot).
+
+    Returns (audio int16 (N,2), pre_clip_peak, n_clipped).
+    """
+    import os
+    npz = f"{prefix}_{ts}.npz"
+    if not os.path.exists(npz):
+        raise SystemExit(f"no session file {npz} (recorded sessions: "
+                         f"{prefix}_<ts>.npz from CASYNTH_RECORD=1)")
+    d = np.load(npz, allow_pickle=True)
+    controls = d["replay_controls"] if "replay_controls" in d.files else np.array([])
+    if len(controls) == 0:
+        raise SystemExit(
+            f"{prefix}_{ts}.npz has no replay_controls log (recorded before "
+            "full-control logging was added -- nothing to replay faithfully)")
+    grids = d["replay_grids"]
+    # Match the recorded run's master gain so old sessions stay faithful even if
+    # the MASTER_GAIN constant changes later (live gain = master_gain * vol).
+    master_gain = float(d["master_gain"]) if "master_gain" in d.files else MASTER_GAIN
+
+    pool = SlotPool()
+    sz = TOTAL_SLOTS + 1
+    phase   = np.zeros(sz)
+    amp_cur = np.zeros(sz)
+    pan_cur = np.full(sz, 0.5)
+    out, pkmax, nclip = [], 0.0, 0
+    # gain_prev seeds the first chunk's gain glide (as the live gain_prev_box does).
+    gain_prev = master_gain * float(controls[0]["vol"])
+    for i, c in enumerate(controls):
+        c = dict(c)                              # 0-d object array -> dict
+        grid = grids[i]
+        f0 = midi_to_freq(int(c["note"]))
+        _, voices, _ = analyse(grid, f0, c["engine"], dict(c["engine_params"]))
+        release_chunks = max(1, round(float(c["release_ms"]) / 1000.0 / CHUNK_S))
+        attack_chunks  = max(1, round(float(c["attack_ms"])  / 1000.0 / CHUNK_S))
+        decay_chunks   = max(1, round(float(c["decay_ms"])   / 1000.0 / CHUNK_S))
+        sustain        = float(c["sustain"])
+        gain = master_gain * float(c["vol"])
+        for _ in range(int(c["n_rendered"])):
+            pool.update(voices, phase, amp_cur, pan_cur, release_chunks,
+                        attack_chunks, decay_chunks, sustain)
+            buf, pk, nc = render_chunk_laplacian(phase, amp_cur, pan_cur,
+                                                 pool.amp_tgt, pool.pan_tgt,
+                                                 pool.freq_slots, 2, gain_prev, gain)
+            gain_prev = gain
+            out.append(buf)
+            pkmax = max(pkmax, pk)
+            nclip += nc
+    audio = np.concatenate(out) if out else np.zeros((0, 2), np.int16)
+    return audio, pkmax, nclip
+
+
+def _replay_cli(ts, prefix="_session"):
+    """`python gol_synth.py replay <ts>`: render the session offline to
+    artifacts/_replay_<ts>.wav and, if the recorded WAV is present, report
+    sample-level fidelity (max/mean abs diff) -- the regression check."""
+    import os
+    from scipy.io import wavfile
+    audio, pk, nclip = replay_session(ts, prefix)
+    os.makedirs("artifacts", exist_ok=True)
+    out = os.path.join("artifacts", f"_replay_{ts}.wav")
+    wavfile.write(out, SR, audio)
+    print(f"[replay] {out}  {len(audio)} samples  pre-clip peak={pk:.3f}  "
+          f"clipped={nclip}")
+    rec_wav = f"{prefix}_{ts}.wav"
+    if os.path.exists(rec_wav):
+        _sr, ref = wavfile.read(rec_wav)
+        n = min(len(ref), len(audio))
+        if n:
+            diff = np.abs(ref[:n].astype(np.int64) - audio[:n].astype(np.int64))
+            print(f"[fidelity vs {rec_wav}] common={n} samples  "
+                  f"max|diff|={int(diff.max())}  mean|diff|={diff.mean():.3f}  "
+                  f"(len ref={len(ref)} replay={len(audio)})")
+    else:
+        print(f"[fidelity] no recorded {rec_wav} to compare against")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -1529,4 +1620,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    if len(sys.argv) >= 3 and sys.argv[1] == 'replay':
+        _replay_cli(sys.argv[2])
+    else:
+        main()
