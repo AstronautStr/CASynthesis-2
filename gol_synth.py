@@ -78,8 +78,10 @@ from patterns import PATTERNS
 GRID_W, GRID_H = 52, 30
 CELL = 20
 # Toolbar: main button row (40px) + note-division button row (18px) + status/vol
-# row (~38px) + engine-tab strip (24px) + padding = 148px.
-TOOLBAR_H = 148
+# row (~38px) + engine-tab strip (24px) + padding.  Raised from 148 to 236 to
+# host the synth-wide ADSR ENVELOPE block (header + 4 sliders) below the engine
+# knobs on the right side without overlapping the engine-tab strip.
+TOOLBAR_H = 236
 PIANO_H = 96
 FPS = 60
 
@@ -190,10 +192,10 @@ TAIL_RESERVE  = MAX_VOICES * MAX_MODES_PER_OBJ * 2  # 960
 
 # Mode-tail RELEASE duration -- a LIVE knob (decisions.md 2026-06-16 "пэды").
 # When a mode's frequency changes (topology event) or its object dies, the OLD
-# frequency's slot fades out over RELEASE_MS.  The new mode's ATTACK stays fast
-# (one chunk, via _RAMP) so the cross-fade onset is unchanged; only the tail
-# length is user-controlled.  Short -> percussive "struck plate"; long (seconds)
-# -> tails of past topologies overlap into a continuous pad.
+# frequency's slot fades out over RELEASE_MS.  The new mode's onset is shaped by
+# the ATTACK/DECAY/SUSTAIN knobs below (was a fixed one-chunk attack); only the
+# tail length is user-controlled here.  Short -> percussive "struck plate"; long
+# (seconds) -> tails of past topologies overlap into a continuous pad.
 #   release length in chunks = max(1, round(RELEASE_MS / 1000 / CHUNK_S))
 # computed live from state['release_ms'] each feed cycle (NOT a fixed constant),
 # so the knob retunes without restart.
@@ -206,6 +208,33 @@ TAIL_RESERVE  = MAX_VOICES * MAX_MODES_PER_OBJ * 2  # 960
 RELEASE_MS_DEFAULT = 50.0
 RELEASE_MS_MIN     = 20.0
 RELEASE_MS_MAX     = 4000.0
+
+# Per-mode ATTACK/DECAY/SUSTAIN -- LIVE knobs forming a classic ADSR envelope
+# keyed to a mode's LIFE (there is no per-note on/off: a "note-on" = a mode onset
+# = a new frequency appearing on an active slot at a topology event; "note-off" =
+# that mode dying / changing frequency -> the existing RELEASE tail).  The
+# envelope is a normalised 0..1 multiplier on the engine's per-mode amplitude
+# (amp_new from the shape mapping), advanced one step per audio chunk in SlotPool:
+#   attack : level 0 -> 1            over ATTACK_MS   (onset rise to peak)
+#   decay  : level 1 -> SUSTAIN      over DECAY_MS    (fall to the held level)
+#   sustain: level == SUSTAIN        held while the mode stays alive (generation
+#                                    alive / topology stable)
+#   release: handled by the tail pool (RELEASE_MS) on mode death/frequency change
+# chunk counts: max(1, round(MS / 1000 / CHUNK_S)); SUSTAIN is a level, not a time.
+# Defaults reproduce the original sound EXACTLY: ATTACK->1 chunk (the old fixed
+# one-chunk onset), SUSTAIN=1 -> level stays 1 for the mode's whole life -> amp_tgt
+# == amp_new as before (DECAY then has no effect since peak == sustain level).
+# A pure attack->release pluck = SUSTAIN 0 (+ short DECAY); holding the full level
+# for the whole generation = SUSTAIN 1.
+ATTACK_MS_DEFAULT  = 1.0
+ATTACK_MS_MIN      = 0.0
+ATTACK_MS_MAX      = 2000.0
+DECAY_MS_DEFAULT   = 0.0
+DECAY_MS_MIN       = 0.0
+DECAY_MS_MAX       = 4000.0
+SUSTAIN_DEFAULT    = 1.0
+SUSTAIN_MIN        = 0.0
+SUSTAIN_MAX        = 1.0
 
 # keyboard piano
 NOTE_DEFAULT = 48         # C3
@@ -489,6 +518,12 @@ class SlotPool:
         # Last committed frequency per voice×mode active slot (to detect changes).
         self._freq_prev = np.zeros((MAX_VOICES, MAX_MODES_PER_OBJ))
 
+        # ADSR envelope state per ACTIVE slot (tails ring out via the release
+        # countdown instead).  phase: 0 idle, 1 attack, 2 decay, 3 sustain.
+        # level: current 0..1 multiplier applied to the engine's per-mode amplitude.
+        self._env_phase = np.zeros(sz, dtype=int)
+        self._env_level = np.zeros(sz)
+
         # Diagnostics: count tail-pool steals (pool exhausted -> a still-ringing
         # tail had to be overwritten = a residual click) and the loudest stolen
         # amplitude.  Read by the probe; zero in normal (non-exhausted) operation.
@@ -534,7 +569,29 @@ class SlotPool:
                 self._release_len[s]  = FAST_EVICT_CHUNKS
                 self._release_amp0[s] = float(amp_cur[s])
 
-    def update(self, voices, phase, amp_cur, pan_cur, release_chunks):
+    def _advance_env(self, a, attack_chunks, decay_chunks, sustain):
+        """Advance the ADSR envelope of active slot `a` by one audio chunk.
+
+        attack/decay are lengths in chunks (>=1); sustain is the held 0..1 level.
+        Sets self._env_level[a] in place; release is NOT handled here (tail pool).
+        """
+        ph = self._env_phase[a]
+        if ph == 1:                                   # attack: 0 -> 1 (peak)
+            lvl = self._env_level[a] + 1.0 / attack_chunks
+            if lvl >= 1.0:
+                lvl, self._env_phase[a] = 1.0, 2      # -> decay
+            self._env_level[a] = lvl
+        elif ph == 2:                                 # decay: 1 -> sustain level
+            lvl = self._env_level[a] - (1.0 - sustain) / decay_chunks
+            if lvl <= sustain:
+                lvl, self._env_phase[a] = sustain, 3  # -> sustain
+            self._env_level[a] = lvl
+        elif ph == 3:                                 # sustain: track live level
+            self._env_level[a] = sustain
+        # ph == 0 (idle): level stays at its current value (0 for a silent slot).
+
+    def update(self, voices, phase, amp_cur, pan_cur, release_chunks,
+               attack_chunks, decay_chunks, sustain):
         """Push a new voice list into the slot pool.
 
         phase / amp_cur / pan_cur : the engine's per-slot state arrays (mutated in
@@ -542,13 +599,20 @@ class SlotPool:
             continuing the exact same waveform (phase + amplitude), seamlessly.
         release_chunks : current mode-tail release length in audio chunks (live
             release knob -- see RELEASE_MS_* / feed_audio).
+        attack_chunks / decay_chunks / sustain : live ADSR knobs (see
+            ATTACK_MS_* / DECAY_MS_* / SUSTAIN_*).  Each active slot carries an
+            envelope (0..1) multiplying the engine's per-mode amplitude; it is
+            (re)triggered to ATTACK on every mode onset and advanced one chunk per
+            update via _advance_env.
 
         For each voice×mode:
-          - frequency unchanged: glide amp/pan targets on the active slot.
+          - frequency unchanged: advance the envelope, glide amp(=env·amp_new)/pan
+            targets on the active slot.
           - frequency changed (or voice gone): if the old mode is audible, move it
             into a tail slot (seamless continuation) to ring out over
             release_chunks; then restart the active slot on the new frequency from
-            amplitude 0 (attack), or silence it if the mode is gone.
+            amplitude 0 with the envelope re-triggered to ATTACK, or silence it if
+            the mode is gone.
         Old (tail) and new (active) sound in parallel -> overlap, no gap, no click.
         """
         n_voices = min(len(voices), MAX_VOICES)
@@ -574,10 +638,16 @@ class SlotPool:
 
                 freq_changed = abs(freq_new - self._freq_prev[v, m]) > 0.01
                 if not freq_changed:
-                    # STABLE: smooth amp/pan glide on the active slot.
+                    # STABLE: advance the envelope, glide amp(=env·amp_new)/pan.
                     self.freq_slots[a] = freq_new
-                    self.amp_tgt[a] = amp_new if freq_new > 0 else 0.0
                     self.pan_tgt[a] = pan_new
+                    if freq_new > 0.0:
+                        self._advance_env(a, attack_chunks, decay_chunks, sustain)
+                        self.amp_tgt[a] = self._env_level[a] * amp_new
+                    else:
+                        self._env_phase[a] = 0
+                        self._env_level[a] = 0.0
+                        self.amp_tgt[a] = 0.0
                     self._freq_prev[v, m] = freq_new
                     continue
 
@@ -596,16 +666,21 @@ class SlotPool:
                     self._release_amp0[t] = float(amp_cur[a])
                     # amp_tgt[t] is stepped down by Phase 2 below.
 
-                # Restart the active slot on the new frequency (attack from 0),
-                # or silence it if the mode is gone.  amp_cur=0 makes the phase
-                # value inaudible at the restart.
+                # Restart the active slot on the new frequency, re-triggering the
+                # ADSR envelope to ATTACK from 0; or silence it if the mode is gone.
+                # amp_cur=0 makes the phase value inaudible at the restart.
                 amp_cur[a] = 0.0
                 self.pan_tgt[a] = pan_new
                 if freq_new > 0.0:
                     self.freq_slots[a] = freq_new
-                    self.amp_tgt[a] = amp_new
+                    self._env_phase[a] = 1          # (re)trigger -> attack
+                    self._env_level[a] = 0.0
+                    self._advance_env(a, attack_chunks, decay_chunks, sustain)
+                    self.amp_tgt[a] = self._env_level[a] * amp_new
                 else:
                     self.freq_slots[a] = 0.0
+                    self._env_phase[a] = 0
+                    self._env_level[a] = 0.0
                     self.amp_tgt[a] = 0.0
                 self._freq_prev[v, m] = freq_new
 
@@ -697,11 +772,17 @@ def _dump_session(rec, prefix="_session"):
         gens, grids, notes = (np.zeros(0),
                               np.zeros((0, GRID_H, GRID_W), np.uint8), np.zeros(0))
     # Faithful-replay log (per rendered frame): inputs + chunk count.
-    # replay columns: [n_rendered, note, spread, alpha, release_ms, vol, n_partials]
+    # replay (legacy fixed-width, laplacian-probe contract) columns:
+    #   [n_rendered, note, spread, alpha, release_ms, vol, n_partials]
+    # replay_controls: AUTHORITATIVE per-frame dict of EVERY synth control
+    #   (engine id, note, vol, attack/decay/sustain/release, full engine_params) ->
+    #   any control bug is reproducible from the recording; use this for faithful
+    #   replay (it auto-captures every knob, incl. ones added after this matrix).
     # replay_engines: parallel array of the active engine id per rendered frame
     # (multi-engine; faithful replay must call the matching map_* per frame).
     replay = (np.array(rec.get('replay', []), dtype=float)
               if rec.get('replay') else np.zeros((0, 7)))
+    replay_controls = np.array(rec.get('replay_controls', []), dtype=object)
     replay_engines = np.array(rec.get('replay_engines', []), dtype=object)
     replay_grids = (np.stack(rec['replay_grids']).astype(np.uint8)
                     if rec.get('replay_grids')
@@ -714,7 +795,8 @@ def _dump_session(rec, prefix="_session"):
                         max_modes=MAX_MODES_PER_OBJ, patch_size=PATCH_SIZE,
                         underruns=rec['underruns'],
                         replay=replay, replay_grids=replay_grids,
-                        replay_engines=replay_engines)
+                        replay_engines=replay_engines,
+                        replay_controls=replay_controls)
     # frames columns: [dt_ms, gen, n_voices, n_rendered, underrun]
     n_hitch = int((frames[:, 0] > CHUNK_S * 1000).sum()) if len(frames) else 0
     print(f"[session saved] {base}.wav ({len(rec['chunks'])} chunks) + {base}.npz "
@@ -816,6 +898,7 @@ def main():
     if os.environ.get('CASYNTH_RECORD'):
         rec = dict(chunks=[], frames=[], steps=[], underruns=0,
                    replay=[], replay_grids=[], replay_engines=[],
+                   replay_controls=[],
                    bpm=BPM_DEFAULT, div_idx=DIV_DEFAULT)
         print("[CASYNTH_RECORD on] capturing audio + field + all knobs; "
               "quit (Esc) to save")
@@ -833,6 +916,9 @@ def main():
         engine_params={e['id']: {arg: default for (arg, _l, _lo, _hi, _i, default)
                                  in e['params']} for e in ENGINES},
         release_ms=RELEASE_MS_DEFAULT,
+        attack_ms=ATTACK_MS_DEFAULT,
+        decay_ms=DECAY_MS_DEFAULT,
+        sustain=SUSTAIN_DEFAULT,
     )
 
     # toolbar layout
@@ -882,38 +968,53 @@ def main():
                                 rect=pygame.Rect(_tx, _tab_y, _tw, 20)))
         _tx += _tw + 4
 
-    # Live timbre knobs -- mouse-drag sliders stacked to the right of the Lib
-    # button.  The panel is DYNAMIC: rebuild_ctrls() fills it from the ACTIVE
-    # engine's attributes (ENGINES[*]['params']) plus the synth-wide release knob
-    # (always last).  Engine-attribute sliders write into
-    # state['engine_params'][engine]; release writes state['release_ms'].
+    # Live knobs -- mouse-drag sliders to the right of the Lib button, in TWO
+    # stacked groups: the ACTIVE engine's attributes (top, DYNAMIC per engine via
+    # rebuild_ctrls) and the synth-wide ADSR ENVELOPE block A/D/S/R (fixed position
+    # below, so it reads as a stable separate block independent of engine).
+    # Engine-attribute sliders write state['engine_params'][engine]; the ADSR
+    # sliders write state['attack_ms'/'decay_ms'/'sustain'/'release_ms'].
     CTRL_LABEL_W, CTRL_TRACK_W = 56, 120
-    _ctrl_x = _pat_btn.right + 16
+    _ctrl_x  = _pat_btn.right + 16
+    _ctrl_y0 = by + 2
+    _CTRL_ROW_H = 22
+    # ADSR block sits below up to 4 engine knobs (max is Laplace: part/spread/
+    # alpha/shape) -> header + 4 sliders at a FIXED y, regardless of engine count.
+    _ENV_HDR_Y = _ctrl_y0 + 4 * _CTRL_ROW_H + 6
+    _ENV_Y0    = _ENV_HDR_Y + 18
     ctrls = []
 
-    def _fmt_for(integer, is_release):
-        if is_release:
+    def _fmt_for(integer, is_ms):
+        if is_ms:
             return lambda v: f"{v:.0f}ms"
         if integer:
             return lambda v: f"{int(v)}"
         return lambda v: f"{v:.2f}"
 
     def rebuild_ctrls():
-        """Repopulate `ctrls` for the active engine (+ synth-wide release last)."""
+        """Repopulate `ctrls`: the active engine's params (top) + the synth-wide
+        ADSR envelope block A/D/S/R (fixed position below -- see _ENV_* geometry)."""
         ctrls.clear()
-        row = 0
-        for (arg, lbl, lo, hi, integer, _default) in ENGINE_BY_ID[state['engine']]['params']:
+        for row, (arg, lbl, lo, hi, integer, _default) in enumerate(
+                ENGINE_BY_ID[state['engine']]['params']):
             ctrls.append(dict(
                 id=arg, label=lbl, lo=lo, hi=hi, integer=integer, scope='engine',
-                fmt=_fmt_for(integer, False),
-                track=pygame.Rect(_ctrl_x + CTRL_LABEL_W, by + 2 + row * 22,
-                                  CTRL_TRACK_W, 8)))
-            row += 1
-        ctrls.append(dict(
-            id='release_ms', label='rel', lo=RELEASE_MS_MIN, hi=RELEASE_MS_MAX,
-            integer=False, scope='synth', fmt=_fmt_for(False, True),
-            track=pygame.Rect(_ctrl_x + CTRL_LABEL_W, by + 2 + row * 22,
-                              CTRL_TRACK_W, 8)))
+                block='engine', fmt=_fmt_for(integer, False),
+                track=pygame.Rect(_ctrl_x + CTRL_LABEL_W,
+                                  _ctrl_y0 + row * _CTRL_ROW_H, CTRL_TRACK_W, 8)))
+        # ADSR envelope (synth-wide).  is_ms: A/D/R are durations, S is a 0..1 level.
+        env_specs = [
+            ('attack_ms',  'A', ATTACK_MS_MIN,  ATTACK_MS_MAX,  True),
+            ('decay_ms',   'D', DECAY_MS_MIN,   DECAY_MS_MAX,   True),
+            ('sustain',    'S', SUSTAIN_MIN,    SUSTAIN_MAX,    False),
+            ('release_ms', 'R', RELEASE_MS_MIN, RELEASE_MS_MAX, True),
+        ]
+        for i, (arg, lbl, lo, hi, is_ms) in enumerate(env_specs):
+            ctrls.append(dict(
+                id=arg, label=lbl, lo=lo, hi=hi, integer=False, scope='synth',
+                block='env', fmt=_fmt_for(False, is_ms),
+                track=pygame.Rect(_ctrl_x + CTRL_LABEL_W,
+                                  _ENV_Y0 + i * _CTRL_ROW_H, CTRL_TRACK_W, 8)))
 
     rebuild_ctrls()
 
@@ -1019,11 +1120,17 @@ def main():
         # Release-tail length in chunks, derived live from the knob (decoupled
         # from the crossfade attack, which stays one chunk).
         release_chunks = max(1, round(state['release_ms'] / 1000.0 / CHUNK_S))
+        # ADSR onset shaping, derived live from the knobs (chunk-quantised like
+        # release).  sustain is a level, not a time.
+        attack_chunks = max(1, round(state['attack_ms'] / 1000.0 / CHUNK_S))
+        decay_chunks  = max(1, round(state['decay_ms']  / 1000.0 / CHUNK_S))
+        sustain       = float(state['sustain'])
         gain = MASTER_GAIN * state['vol']      # pre-clip master gain (chunk target)
         frame_peak = 0.0
         frame_clip = 0
         while audio_q.qsize() < AUDIO_LOOKAHEAD_CHUNKS:
-            pool.update(voices, phase, amp_cur, pan_cur, release_chunks)
+            pool.update(voices, phase, amp_cur, pan_cur, release_chunks,
+                        attack_chunks, decay_chunks, sustain)
             buf, peak, n_clip = render_chunk_laplacian(phase, amp_cur, pan_cur,
                                                        pool.amp_tgt, pool.pan_tgt,
                                                        pool.freq_slots, 2,
@@ -1190,14 +1297,29 @@ def main():
             # rendered chunks (frames with n_rendered=0 produce no audio and would
             # just bloat the grid log).  Values are constant within a frame, so
             # replaying pool.update/render n_rendered times reproduces the engine
-            # output chunk-for-chunk.  spread/alpha default for engines that lack
-            # them; the active engine id is logged alongside for faithful replay.
+            # output chunk-for-chunk.
             if n_rendered > 0:
+                # Legacy fixed-width matrix (laplacian-probe contract; do not drop
+                # columns).  spread/alpha default for engines that lack them.
                 rec['replay'].append((n_rendered, int(state['note']),
                                       float(_ep.get('spread', 0.0)),
                                       float(_ep.get('alpha', 1.0)),
                                       float(state['release_ms']), float(state['vol']),
                                       int(_ep.get('n', N_PARTIALS_DEFAULT))))
+                # AUTHORITATIVE per-frame control snapshot: EVERY synth control so
+                # any bug is reproducible from the recording and a fix validated.
+                # Copy the whole engine_params dict -> captures every engine knob
+                # (incl. shape and any knob added later) with no per-knob edits here.
+                rec['replay_controls'].append(dict(
+                    n_rendered=int(n_rendered),
+                    engine=state['engine'],
+                    note=int(state['note']),
+                    vol=float(state['vol']),
+                    attack_ms=float(state['attack_ms']),
+                    decay_ms=float(state['decay_ms']),
+                    sustain=float(state['sustain']),
+                    release_ms=float(state['release_ms']),
+                    engine_params=dict(_ep)))
                 rec['replay_engines'].append(state['engine'])
                 rec['replay_grids'].append(grid.copy())
 
@@ -1295,7 +1417,12 @@ def main():
         if not audio_ok:
             screen.blit(small.render("audio disabled", True, C_DIM), (W - 110, 6))
 
-        # timbre knobs: active engine's attributes + synth-wide release
+        # knobs: active engine's attributes (top) + the ADSR ENV block (below).
+        # A separator + "ENV" header set the envelope apart from the engine knobs.
+        _env_right = _ctrl_x + CTRL_LABEL_W + CTRL_TRACK_W + 44
+        pygame.draw.line(screen, C_EDGE, (_ctrl_x, _ENV_HDR_Y),
+                         (_env_right, _ENV_HDR_Y))
+        screen.blit(small.render("ENV", True, C_DIM), (_ctrl_x, _ENV_HDR_Y + 2))
         for c in ctrls:
             tr = c['track']
             val = ctrl_value(c)
