@@ -207,6 +207,66 @@ def test_laplacian_shape_amplitude_invariant_to_rotation():
             f"shape=1 amps not invariant under {name}: {np.sort(aq)} vs {a_sorted}"
 
 
+# ── Step C: harm parameter (decisions.md 2026-06-21) ─────────────────────────
+
+def test_laplacian_harm_zero_is_bitexact():
+    """harm=0 (default) must be bit-for-bit identical to the baseline call."""
+    for p in (_blinker_patch(), _ell_patch(), _dense_patch()):
+        f_base, a_base = c.map_laplacian(p, F0, 8)
+        f_harm, a_harm = c.map_laplacian(p, F0, 8, harm=0.0)
+        assert np.array_equal(f_base, f_harm) and np.array_equal(a_base, a_harm), \
+            "harm=0 not bit-for-bit with baseline"
+
+
+def test_laplacian_harm_one_integer_multiples():
+    """harm=1 -> every non-zero frequency must be an integer multiple of f0."""
+    for p in (_ell_patch(), _dense_patch()):
+        freqs, _ = c.map_laplacian(p, F0, 8, harm=1.0)
+        nz = freqs[freqs > 0]
+        ratios = nz / F0
+        assert np.allclose(ratios, np.round(ratios), atol=1e-6), \
+            f"harm=1 produced non-integer ratios: {ratios}"
+
+
+def test_laplacian_harm_lowest_mode_stays_f0():
+    """harm never moves the lowest sounding mode off f0 (r_0=1, round(1)=1)."""
+    for p in (_ell_patch(), _dense_patch()):
+        for h in (0.0, 0.5, 1.0):
+            freqs, _ = c.map_laplacian(p, F0, 8, harm=h)
+            nz = np.sort(freqs[freqs > 0])
+            assert abs(nz[0] - F0) < 1e-6, \
+                f"harm={h} moved lowest mode to {nz[0]}, expected {F0}"
+
+
+def test_laplacian_harm_does_not_affect_amps():
+    """harm only touches frequencies; amplitudes must be identical to harm=0."""
+    for p in (_ell_patch(), _dense_patch()):
+        _, a_base = c.map_laplacian(p, F0, 8, harm=0.0)
+        for h in (0.5, 1.0):
+            _, a_h = c.map_laplacian(p, F0, 8, harm=h)
+            assert np.allclose(a_base, a_h, atol=1e-9), \
+                f"harm={h} changed amplitudes: {a_h} vs {a_base}"
+
+
+def test_laplacian_harm_blend_monotonic():
+    """Intermediate harm values move each mode ratio toward round(r) monotonically:
+    |r(harm) - round(r)| decreases as harm increases (0 -> 0.5 -> 1)."""
+    p = _ell_patch()
+    f0_r, _ = c.map_laplacian(p, F0, 8, harm=0.0)
+    f05_r, _ = c.map_laplacian(p, F0, 8, harm=0.5)
+    f1_r, _ = c.map_laplacian(p, F0, 8, harm=1.0)
+    nz = f0_r > 0
+    r0 = f0_r[nz] / F0
+    r05 = f05_r[nz] / F0
+    r1 = f1_r[nz] / F0
+    rnd = np.round(r0)
+    dist0 = np.abs(r0 - rnd)
+    dist05 = np.abs(r05 - rnd)
+    dist1 = np.abs(r1 - rnd)
+    assert np.all(dist05 <= dist0 + 1e-9), "harm=0.5 moved ratios further from integer"
+    assert np.all(dist1 <= dist05 + 1e-9), "harm=1.0 moved ratios further than harm=0.5"
+
+
 # ── FFT / Random characteristics ──────────────────────────────────────────────
 
 def test_fft_translation_invariant():

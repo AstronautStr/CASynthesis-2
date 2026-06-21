@@ -164,7 +164,8 @@ def _select_modes(n_modes, n, spread):
     return sel[sel < n_modes]
 
 
-def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.0):
+def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.0,
+                  harm=0.0):
     """Graph Laplacian eigenvalues -> inharmonic partial frequencies via sqrt(lambda).
     Lowest selected mode is normalized to f0; amplitudes follow 1/i**alpha rolloff.
 
@@ -177,8 +178,15 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=
              |<e, phi_k>| projection of edge-excitation onto each eigenvector.
              Linear blend at intermediate values; frequencies are never touched.
              (decisions.md 2026-06-18 -- Step B.)
+    harm   : 0.0 = inharmonic metal (bit-for-bit); 1.0 = fully quantised to the
+             nearest integer harmonic of f0.  Linear blend: each mode's frequency
+             ratio r_k = freq_k/f0 is pulled toward round(r_k) by `harm`.
+             The shape (which harmonics are occupied) comes from the Laplacian --
+             NOT reassigned to 1..n.  Amplitudes are never touched.
+             (decisions.md 2026-06-21.)
 
-    Defaults (spread=0, alpha=1, shape=0) reproduce the original output bit-for-bit."""
+    Defaults (spread=0, alpha=1, shape=0, harm=0) reproduce the original output
+    bit-for-bit."""
     live = list(map(tuple, np.argwhere(patch > 0)))
     cnt = len(live)
     if cnt < 2:
@@ -231,6 +239,13 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=
     num = len(sel)
     freqs = np.zeros(n)
     freqs[:num] = mode_freqs[sel]
+
+    # Harmonic quantisation: pull frequency ratios toward nearest integer multiple
+    # of f0.  harm=0 -> no change (bit-for-bit); harm=1 -> fully quantised.
+    # Only the ratios are blended; r_0 = 1 always -> round(1) = 1 -> f0 preserved.
+    if harm > 0.0 and num > 0:
+        r = freqs[:num] / f0
+        freqs[:num] = f0 * ((1.0 - harm) * r + harm * np.round(r))
 
     # Amplitudes
     amps = np.zeros(n)
@@ -302,7 +317,8 @@ ENGINES = [
         ('n',      'part',   1,   20,  True,  12),
         ('spread', 'spread', 0.0, 1.0, False, 0.0),
         ('alpha',  'alpha',  0.0, 2.0, False, 1.0),
-        ('shape',  'shape',  0.0, 1.0, False, 0.0)]),
+        ('shape',  'shape',  0.0, 1.0, False, 0.0),
+        ('harm',   'harm',   0.0, 1.0, False, 0.0)]),
     dict(id='fft2d',   label='FFT',     fn=map_fft2d,   params=[('n', 'part', 1, 20, True, 16)]),
     dict(id='walsh',   label='Walsh',   fn=map_walsh,   params=[('n', 'part', 1, 20, True, 16)]),
     dict(id='random',  label='Random',  fn=map_random,  params=[('n', 'part', 1, 20, True, 16)]),
