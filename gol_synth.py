@@ -79,9 +79,14 @@ GRID_W, GRID_H = 52, 30
 CELL = 20
 # Toolbar: main button row (40px) + note-div row (18px) + status row (~38px) +
 # engine-knob panel (Laplace 6×22px, right col: ADSR 4×22px + vol/level) +
-# engine-tab strip (24px) + gaps.  Right col ends at by+178; tabs at -24 from
-# bottom → 178 + 20 gap + 24 tab = 222 → round up to 230.
-TOOLBAR_H = 230
+# engine-tab strip (24px) + gaps.
+# Height is determined by the ADSR+meter+vol column:
+#   _vol_section_y = by+96; vol_track bottom = by+96+62+8 = by+166;
+#   tabs at by+170 (4px gap), tab height 20, gap 4 → bar bottom = by+194
+#   TOOLBAR_H = 8 + 194 = 202.
+# (The envelope/vol block is NOT excluded -- it is compacted to sit right after
+# the ADSR R-track so the bar height is governed by the vol slider, not air.)
+TOOLBAR_H = 202
 PIANO_H = 96
 FPS = 60
 
@@ -1039,7 +1044,7 @@ def main():
     _RC_LABEL_W  = 24                             # width of label area
     _rc_track_x  = _rc_x + _RC_LABEL_W + 4       # track left = W + 36
     _RC_TRACK_W  = 100                            # track width (value label at W+142, 50px to edge)
-    _vol_section_y = by + 108                     # starts below 4 ADSR rows + gap
+    _vol_section_y = by + 96                      # starts 4px below R-track (by+86+8+4)
     meter_track  = pygame.Rect(_rc_track_x, _vol_section_y + 13, _RC_TRACK_W, 10)
     vol_track    = pygame.Rect(_rc_track_x, _vol_section_y + 62, _RC_TRACK_W, 8)
 
