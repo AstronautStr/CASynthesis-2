@@ -1,5 +1,5 @@
 {
-  "last_commit": "cbf92ac26fc816cf0160da2f7e0264f4ff6ceef0",
-  "date": "2026-06-17",
-  "note": "Маркер последней dream-консолидации. ВНИМАНИЕ: память и obsidian НЕ коммитятся по сессиям — на момент консолидации рабочее дерево было далеко впереди HEAD (мульти-движок gol_synth.py и др. ещё не закоммичены). Источник сигнала для следующего dream — memory/log/*.md новее date + сам код, НЕ git diff от last_commit."
+  "last_commit": "4cd53fdba7c59edb6ca6fbb1d4772579f61b9692",
+  "date": "2026-06-22",
+  "note": "Маркер последней dream-консолидации. ВНИМАНИЕ: память и obsidian НЕ коммитятся по сессиям — рабочее дерево обычно впереди HEAD. Источник сигнала для следующего dream — memory/log/*.md новее date + сам код, НЕ git diff от last_commit. На 2026-06-22 в КОДЕ реализованы (но логов log/ по ним нет): harm, fullshape, gol_vocoder.py, переделка laplacian_explainer.html — сверялось чтением кода."
 }

@@ -43,11 +43,13 @@ type: index
 
 ---
 
-## Прототипы
+## Прототипы и инструменты
 
 - [[P1-Main]] — `gol_life_synth.py` (legacy v1, pygame.mixer)
 - [[P2-Laplacian]] — `gol_life_synth_laplacian.py` (#done — лапласиан в живом виде; крутилки приняты 2026-06-17)
-- `gol_synth.py` — мульти-движковый наследник P2 (живой селектор 5 приёмов: FFT/Walsh/Random/Laplace/Granulo); активный стенд профилирования. _(Заметку P3 завести по запросу.)_
+- `gol_synth.py` — мульти-движковый наследник P2 (живой селектор 5 приёмов: FFT/Walsh/Random/Laplace/Granulo); ручки Laplace: spread/alpha/shape/harm/full + synth-wide ADSR; лог сессии + офлайн-реплей. Активный стенд профилирования. _(Заметку P3 завести по запросу.)_
+- `gol_vocoder.py` — offline GoL-вокодер (SA-ресинтез под спектр цели через `map_laplacian`); #untested (REQ T3 `[OPEN]`).
+- `laplacian_explainer.html` — discover-обучалка: клик-toggle мод, слайдер `shape`, краевое возбуждение; #untested (REQ-ы explainer `[OPEN]`).
 
 ---
 
