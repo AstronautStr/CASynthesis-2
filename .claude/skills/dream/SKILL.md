@@ -1,6 +1,6 @@
 ---
 name: dream
-description: Ручная консолидация проектной памяти CASynth (memory/ + obsidian/) — снапшот реализации под код, перенос решённых вопросов в archive, поддержка индекса/дат в логе решений, синк decision-tree.md (Mermaid) ↔ ResearchMap.canvas, сверка статусов obsidian-вульта, починка ссылок. Запускается ТОЛЬКО явной командой /dream — никаких автотриггеров. Manual project-memory consolidation for the CASynth project.
+description: Ручная консолидация проектной памяти CASynth (memory/ + obsidian/) — снапшот реализации под код, перенос решённых вопросов в archive, поддержка индекса/дат в логе решений, актуализация ResearchMap.canvas, сверка статусов obsidian-вульта, починка ссылок. Запускается ТОЛЬКО явной командой /dream — никаких автотриггеров. Manual project-memory consolidation for the CASynth project.
 ---
 
 # Dream — консолидация памяти CASynth
@@ -25,12 +25,10 @@ description: Ручная консолидация проектной памят
 - **`memory/questions.md`** — живая очередь вопросов Developer (`[OPEN]` /
   `[ANSWERED]`-на-ревью). Полностью закрытые треды (реализовано + принято Researcher) →
   в `memory/archive/questions-resolved.md`. Счётчик в шапке обновлять.
-- **`memory/decision-tree.md`** — граф развилок (Mermaid). Текстовый источник графа.
-- **`ResearchMap.canvas`** (корень репо) — тот же граф в Obsidian-canvas («ResearchGraph»),
-  визуальный близнец `decision-tree.md`. **Синк `decision-tree.md` ↔ `ResearchMap.canvas`
-  (нода-в-ноду, статусы, стрелки) — по процедуре скилла `research-map`** (там же — правила
-  ведения графа и каноническая таблица статусов). PNG (`render_canvas.py`) — НЕ
-  автоматически, только по явному запросу.
+- **`ResearchMap.canvas`** (корень репо) — граф развилок в Obsidian-canvas, **единственный
+  источник истины структуры**. Актуализация (новые ноды/статусы/рёбра) — по процедуре
+  скилла `research-map` (там же — правила ведения и каноническая таблица статусов). PNG
+  (`render_canvas.py`) — НЕ автоматически, только по явному запросу.
 - **`obsidian/`** — вики-вульт (Home.md-индекс + заметки по категориям: architecture,
   mappings, tests, problems, prototypes, research). Дублирует дизайн-состояние из памяти
   в связном виде. Сверять СТАТУСЫ (frontmatter `status:` + теги `#active`/`#open`/
@@ -61,7 +59,7 @@ description: Ручная консолидация проектной памят
 
 ### 1. Orient
 - Прочитать целиком: `memory/current.md`, `memory/decisions.md`, `memory/questions.md`,
-  `memory/decision-tree.md`, `obsidian/Home.md`.
+  `obsidian/Home.md`.
 - Прочитать `memory/.dream-state.json` (`last_commit`, `date`). Нет файла → первый
   запуск: полная верификация (signal = все `log/`-файлы + код).
 
@@ -83,9 +81,9 @@ description: Ручная консолидация проектной памят
 - **`questions.md`:** полностью закрытые треды → `archive/questions-resolved.md`,
   счётчик обновить; `[OPEN]` оставить.
 - **`decisions.md`:** только индекс/даты/указатели (см. «Специфика»). Rationale не трогать.
-- **`decision-tree.md` ↔ `ResearchMap.canvas`:** синк нода-в-ноду —
-  **по процедуре скилла `research-map`** (правила ведения, каноническая таблица статусов,
-  чеклист паритета — там). PNG не рендерим в составе синка — только по явному запросу.
+- **`ResearchMap.canvas`:** проверить, что статусы нод соответствуют последним принятым
+  решениям из `decisions.md`/`log/`; обновить при расхождении — **по процедуре скилла
+  `research-map`**. PNG не рендерим в составе синка — только по явному запросу.
 - **`obsidian/`:** статусы заметок и Home.md-таблицы под текущее состояние; устаревшие
   «не реализовано»/«in-progress» → актуальные; проверить `[[ссылки]]` на битость.
 - Относительные даты («недавно», «на прошлой неделе») → абсолютные везде.
