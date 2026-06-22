@@ -16,3 +16,4 @@ Consult on demand, NOT at session start:
 - Propose before changing; offer devil's-advocate critique; decide one thing at a time.
 - Keep changes small and verifiable; the prototype should always run.
 - Collaborator works primarily in Russian; English is fine too.
+- Git commit messages are always in English (even though discussion is in Russian).
