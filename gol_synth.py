@@ -77,11 +77,11 @@ from patterns import PATTERNS
 # ──────────────────────────────────────────────────────────────────────────────
 GRID_W, GRID_H = 52, 30
 CELL = 20
-# Toolbar: main button row (40px) + note-division button row (18px) + status/vol
-# row (~38px) + engine-tab strip (24px) + padding.  Raised from 148 to 236 to
-# host the synth-wide ADSR ENVELOPE block (header + 4 sliders) below the engine
-# knobs on the right side without overlapping the engine-tab strip.
-TOOLBAR_H = 236
+# Toolbar: main button row (40px) + note-div row (18px) + status row (~38px) +
+# engine-knob panel (Laplace 6×22px, right col: ADSR 4×22px + vol/level) +
+# engine-tab strip (24px) + gaps.  Right col ends at by+178; tabs at -24 from
+# bottom → 178 + 20 gap + 24 tab = 222 → round up to 230.
+TOOLBAR_H = 230
 PIANO_H = 96
 FPS = 60
 
@@ -355,6 +355,7 @@ def analyse(grid, f0, engine_id, params):
     fn = ENGINE_BY_ID[engine_id]['fn']
     kwargs = dict(params)
     kwargs['n'] = int(min(kwargs.get('n', N_PARTIALS_DEFAULT), MAX_MODES_PER_OBJ))
+    _fullshape = bool(kwargs.get('fullshape', False))
 
     objs = []
     for lab in range(1, n + 1):
@@ -370,7 +371,7 @@ def analyse(grid, f0, engine_id, params):
         c0, c1 = int(xs.min()), int(xs.max())
         sub = np.zeros((r1 - r0 + 1, c1 - c0 + 1), np.uint8)
         sub[ys - r0, xs - c0] = 1
-        patch = extract(sub, PATCH_SIZE)
+        patch = sub if _fullshape else extract(sub, PATCH_SIZE)
 
         cx = xs.mean() / max(GRID_W - 1, 1)   # stereo pan [0..1]
 
@@ -1033,8 +1034,14 @@ def main():
 
     legend_x = 12
     _pat_btn = pygame.Rect(_bpm_x + _bpm_widget_w + 8, by, 96, 40)
-    vol_track = pygame.Rect(W - VOL_W - 24, info_y + 14, VOL_W, 8)
-    meter_track = pygame.Rect(vol_track.left, by + 4, VOL_W, 10)  # level/clip meter
+    # Right column (former sidebar area): ADSR → level meter → vol slider.
+    _rc_x        = W + 8                          # label left edge
+    _RC_LABEL_W  = 24                             # width of label area
+    _rc_track_x  = _rc_x + _RC_LABEL_W + 4       # track left = W + 36
+    _RC_TRACK_W  = 100                            # track width (value label at W+142, 50px to edge)
+    _vol_section_y = by + 108                     # starts below 4 ADSR rows + gap
+    meter_track  = pygame.Rect(_rc_track_x, _vol_section_y + 13, _RC_TRACK_W, 10)
+    vol_track    = pygame.Rect(_rc_track_x, _vol_section_y + 62, _RC_TRACK_W, 8)
 
     # Note-division buttons  (one compact row below main buttons)
     _DIV_BTN_H = 18
@@ -1069,10 +1076,9 @@ def main():
     _ctrl_x  = _pat_btn.right + 16
     _ctrl_y0 = by + 2
     _CTRL_ROW_H = 22
-    # ADSR block sits below up to 4 engine knobs (max is Laplace: part/spread/
-    # alpha/shape) -> header + 4 sliders at a FIXED y, regardless of engine count.
-    _ENV_HDR_Y = _ctrl_y0 + 4 * _CTRL_ROW_H + 6
-    _ENV_Y0    = _ENV_HDR_Y + 18
+    # ADSR is in the right column; ENV header and sliders start at _ctrl_y0.
+    _ENV_HDR_RC_Y = _ctrl_y0
+    _ENV_RC_Y0    = _ctrl_y0 + 18
     ctrls = []
 
     def _fmt_for(integer, is_ms):
@@ -1091,9 +1097,10 @@ def main():
             ctrls.append(dict(
                 id=arg, label=lbl, lo=lo, hi=hi, integer=integer, scope='engine',
                 block='engine', fmt=_fmt_for(integer, False),
+                label_x=_ctrl_x,
                 track=pygame.Rect(_ctrl_x + CTRL_LABEL_W,
                                   _ctrl_y0 + row * _CTRL_ROW_H, CTRL_TRACK_W, 8)))
-        # ADSR envelope (synth-wide).  is_ms: A/D/R are durations, S is a 0..1 level.
+        # ADSR envelope in the right column (synth-wide; A/D/R are durations, S level).
         env_specs = [
             ('attack_ms',  'A', ATTACK_MS_MIN,  ATTACK_MS_MAX,  True),
             ('decay_ms',   'D', DECAY_MS_MIN,   DECAY_MS_MAX,   True),
@@ -1104,8 +1111,9 @@ def main():
             ctrls.append(dict(
                 id=arg, label=lbl, lo=lo, hi=hi, integer=False, scope='synth',
                 block='env', fmt=_fmt_for(False, is_ms),
-                track=pygame.Rect(_ctrl_x + CTRL_LABEL_W,
-                                  _ENV_Y0 + i * _CTRL_ROW_H, CTRL_TRACK_W, 8)))
+                label_x=_rc_x,
+                track=pygame.Rect(_rc_track_x,
+                                  _ENV_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)))
 
     rebuild_ctrls()
 
@@ -1124,7 +1132,7 @@ def main():
             _iy += _SB_ITEM_H + 2
     _sb_content_h = _iy
     _sb_scroll = 0
-    _sb_scroll_min = min(0, H - _sb_content_h)
+    _sb_scroll_min = min(0, GRID_H * CELL - _sb_content_h)
 
     piano_top = GRID_H * CELL + TOOLBAR_H
     white_keys, black_keys = _make_piano(state['kb_base'], piano_top, W)
@@ -1278,7 +1286,7 @@ def main():
                     state['div_idx'] = max(0, state['div_idx'] - 1)
 
             elif e.type == pygame.MOUSEBUTTONDOWN:
-                if state['sidebar_open'] and e.pos[0] >= W and e.button == 1:
+                if state['sidebar_open'] and e.pos[0] >= W and e.pos[1] < GRID_H * CELL and e.button == 1:
                     for item in _sb_items:
                         if item['rect'].move(0, _sb_scroll).collidepoint(e.pos):
                             drag.update(active=True, cells=item['cells'],
@@ -1302,8 +1310,6 @@ def main():
                                 rebuild_ctrls()   # swap knob panel to new engine
                         elif _pat_btn.collidepoint(e.pos):
                             state['sidebar_open'] = not state['sidebar_open']
-                            nw = W + (SIDEBAR_W if state['sidebar_open'] else 0)
-                            screen = pygame.display.set_mode((nw, H))
                         elif bpm_track.inflate(0, 16).collidepoint(e.pos):
                             dragging_bpm = True
                             set_bpm(e.pos[0])
@@ -1355,7 +1361,8 @@ def main():
                     set_ctrl(ctrl_by_id(dragging_ctrl), e.pos[0])
 
             elif e.type == pygame.MOUSEWHEEL:
-                if state['sidebar_open'] and pygame.mouse.get_pos()[0] >= W:
+                if (state['sidebar_open'] and pygame.mouse.get_pos()[0] >= W
+                        and pygame.mouse.get_pos()[1] < GRID_H * CELL):
                     _sb_scroll = max(_sb_scroll_min, min(0, _sb_scroll + e.y * 20))
 
         # GOL advance — strict BPM-aligned timing via perf_counter deadline.
@@ -1496,9 +1503,9 @@ def main():
         kbd_surf = small.render(f"kbd:{note_name(state['kb_base'])}", True, C_DIM)
         screen.blit(kbd_surf, (sx + mode_surf.get_width() + 10, info_y + 21))
 
-        # info row: volume
+        # info row: volume (right column, below level meter)
         screen.blit(small.render(f"vol {int(state['vol'] * 100)}%", True, C_DIM),
-                    (vol_track.left, info_y + 1))
+                    (_rc_x, _vol_section_y + 47))
         pygame.draw.rect(screen, C_BTN, vol_track, border_radius=4)
         fw = int(vol_track.width * state['vol'])
         pygame.draw.rect(screen, C_ACCENT,
@@ -1508,17 +1515,16 @@ def main():
         if not audio_ok:
             screen.blit(small.render("audio disabled", True, C_DIM), (W - 110, 6))
 
-        # knobs: active engine's attributes (top) + the ADSR ENV block (below).
-        # A separator + "ENV" header set the envelope apart from the engine knobs.
-        _env_right = _ctrl_x + CTRL_LABEL_W + CTRL_TRACK_W + 44
-        pygame.draw.line(screen, C_EDGE, (_ctrl_x, _ENV_HDR_Y),
-                         (_env_right, _ENV_HDR_Y))
-        screen.blit(small.render("ENV", True, C_DIM), (_ctrl_x, _ENV_HDR_Y + 2))
+        # ENV header in the right column, above the ADSR sliders.
+        _env_rc_right = _rc_track_x + _RC_TRACK_W + 44
+        pygame.draw.line(screen, C_EDGE, (_rc_x, _ENV_HDR_RC_Y),
+                         (_env_rc_right, _ENV_HDR_RC_Y))
+        screen.blit(small.render("ENV", True, C_DIM), (_rc_x, _ENV_HDR_RC_Y + 2))
         for c in ctrls:
             tr = c['track']
             val = ctrl_value(c)
             screen.blit(small.render(c['label'], True, C_DIM),
-                        (tr.left - CTRL_LABEL_W, tr.centery - 7))
+                        (c['label_x'], tr.centery - 7))
             pygame.draw.rect(screen, C_BTN, tr, border_radius=4)
             frac = float(np.clip((val - c['lo']) / (c['hi'] - c['lo']), 0, 1))
             cw = int(tr.width * frac)
@@ -1535,7 +1541,7 @@ def main():
         db = 20.0 * np.log10(pk + 1e-9)
         clipping = meter['clip'] or pk >= 1.0
         screen.blit(small.render("level", True, C_DIM),
-                    (meter_track.left, meter_track.top - 13))
+                    (_rc_x, meter_track.top - 13))
         pygame.draw.rect(screen, C_BTN, meter_track, border_radius=3)
         fillw = int(meter_track.width * min(pk, 1.0))
         pygame.draw.rect(screen, (212, 76, 76) if clipping else C_ACCENT,
@@ -1571,12 +1577,12 @@ def main():
 
         # ── sidebar ─────────────────────────────────────────────────────────
         if state['sidebar_open']:
-            pygame.draw.rect(screen, C_PANEL, (W, 0, SIDEBAR_W, H))
-            pygame.draw.line(screen, C_EDGE, (W, 0), (W, H))
+            pygame.draw.rect(screen, C_PANEL, (W, 0, SIDEBAR_W, GRID_H * CELL))
+            pygame.draw.line(screen, C_EDGE, (W, 0), (W, GRID_H * CELL))
             ttl = font.render("Patterns", True, C_TXT)
             screen.blit(ttl, (W + (SIDEBAR_W - ttl.get_width()) // 2, 6))
             pygame.draw.line(screen, C_EDGE, (W + 2, 28), (W + SIDEBAR_W - 2, 28))
-            screen.set_clip(pygame.Rect(W, 30, SIDEBAR_W, H - 30))
+            screen.set_clip(pygame.Rect(W, 30, SIDEBAR_W, GRID_H * CELL - 30))
             item_idx = 0
             for _cat, pats in PATTERNS:
                 it0 = _sb_items[item_idx]
@@ -1597,7 +1603,7 @@ def main():
                                        sr.centery - ntxt.get_height() // 2))
             screen.set_clip(None)
             if _sb_scroll_min < 0:
-                vis = H - 30
+                vis = GRID_H * CELL - 30
                 thumb_h = max(18, vis * vis // _sb_content_h)
                 thumb_y = 30 + int(-_sb_scroll / -_sb_scroll_min * (vis - thumb_h))
                 pygame.draw.rect(screen, C_DIM,

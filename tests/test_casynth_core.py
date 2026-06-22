@@ -43,6 +43,26 @@ def _dense_patch():
     return np.ones((8, 8), np.uint8)
 
 
+def _tight_small_ell():
+    """Tight (3×3) bbox of an L-shape; fits well within 8×8."""
+    p = np.zeros((3, 3), np.uint8)
+    p[0, 0] = p[1, 0] = p[2, 0] = p[2, 1] = p[2, 2] = 1
+    return p
+
+
+def _large_ell_patch():
+    """L-shape in a 12×12 tight bbox; both arms extend beyond 8×8."""
+    p = np.zeros((12, 12), np.uint8)
+    p[:, 0] = 1    # vertical arm, col 0, rows 0-11
+    p[11, :] = 1   # horizontal arm, row 11, cols 0-11
+    return p
+
+
+def _huge_dense():
+    """Dense 20×20 block = 400 live cells > MAX_LAPLACIAN_NODES=256."""
+    return np.ones((20, 20), np.uint8)
+
+
 # ── Contract (all mappings) ───────────────────────────────────────────────────
 
 def test_contract_shapes_and_ranges():
@@ -265,6 +285,81 @@ def test_laplacian_harm_blend_monotonic():
     dist1 = np.abs(r1 - rnd)
     assert np.all(dist05 <= dist0 + 1e-9), "harm=0.5 moved ratios further from integer"
     assert np.all(dist1 <= dist05 + 1e-9), "harm=1.0 moved ratios further than harm=0.5"
+
+
+# ── fullshape mode (decisions.md 2026-06-22) ─────────────────────────────────
+
+def test_laplacian_fullshape_false_is_bitexact():
+    """A: fullshape=False (default) is bit-for-bit with the baseline call on all
+    existing fixtures -- no regression."""
+    for p in (_blinker_patch(), _ell_patch(), _dense_patch()):
+        f_base, a_base = c.map_laplacian(p, F0, 8)
+        f_fs, a_fs = c.map_laplacian(p, F0, 8, fullshape=False)
+        assert np.array_equal(f_base, f_fs) and np.array_equal(a_base, a_fs), \
+            "fullshape=False not bit-for-bit with default"
+
+
+def test_laplacian_fullshape_small_matches_crop():
+    """B: for a shape that fits within 8×8 the full-shape path yields the same
+    sorted spectrum as the historical extract+crop path.
+    Proves full-shape is 'stop cropping', not a new algorithm."""
+    for tight in (_tight_small_ell(), _blinker_patch()[:1, 2:5]):
+        crop = c.extract(tight, 8)
+        f_crop = np.sort(c.map_laplacian(crop, F0, 8)[0])
+        f_full = np.sort(c.map_laplacian(tight, F0, 8, fullshape=True)[0])
+        assert np.allclose(f_crop, f_full, atol=1e-6), \
+            f"fullshape on small shape differs from crop: {f_full} vs {f_crop}"
+
+
+def test_laplacian_fullshape_large_differs_from_crop():
+    """C: for a shape larger than 8×8 the full-shape spectrum differs from the
+    8×8 crop (proving the periphery is now audible)."""
+    p = _large_ell_patch()
+    crop = c.extract(p, 8)
+    f_crop = np.sort(c.map_laplacian(crop, F0, 8)[0])
+    f_full = np.sort(c.map_laplacian(p, F0, 8, fullshape=True)[0])
+    assert not np.allclose(f_crop, f_full, atol=1e-6), \
+        "fullshape on large shape should differ from 8×8 crop but did not"
+
+
+def test_laplacian_fullshape_invariant_to_rotation():
+    """D: sorted spectrum is invariant to rot/flip/zero-padding of the mask."""
+    p = _large_ell_patch()
+    f_base = np.sort(c.map_laplacian(p, F0, 8, fullshape=True)[0])
+    for name, q in [("rot90",  np.rot90(p)),
+                    ("rot180", np.rot90(p, 2)),
+                    ("fliplr", np.fliplr(p)),
+                    ("flipud", np.flipud(p))]:
+        fq = np.sort(c.map_laplacian(np.ascontiguousarray(q), F0, 8, fullshape=True)[0])
+        assert np.allclose(f_base, fq, atol=1e-6), \
+            f"fullshape not invariant under {name}"
+    padded = np.pad(p, 2, mode='constant')
+    fp = np.sort(c.map_laplacian(padded, F0, 8, fullshape=True)[0])
+    assert np.allclose(f_base, fp, atol=1e-6), "fullshape not invariant under zero-padding"
+
+
+def test_laplacian_fullshape_f0_anchor():
+    """E: lowest sounding partial = f0 in full-shape mode at any harm value."""
+    for p in (_tight_small_ell(), _large_ell_patch()):
+        for h in (0.0, 0.5, 1.0):
+            freqs, _ = c.map_laplacian(p, F0, 8, fullshape=True, harm=h)
+            nz = np.sort(freqs[freqs > 0])
+            assert len(nz) > 0, "fullshape produced silent output"
+            assert abs(nz[0] - F0) < 1e-6, \
+                f"fullshape f0 anchor failed at harm={h}: {nz[0]} != {F0}"
+
+
+def test_laplacian_fullshape_node_ceiling():
+    """F: dense 20×20 patch (400 nodes > MAX=256) does not crash and is
+    deterministic -- the node ceiling is enforced and reproducible."""
+    p = _huge_dense()
+    f1, a1 = c.map_laplacian(p, F0, 8, fullshape=True)
+    f2, a2 = c.map_laplacian(p, F0, 8, fullshape=True)
+    assert np.array_equal(f1, f2) and np.array_equal(a1, a2), \
+        "fullshape ceiling not deterministic"
+    assert np.all(np.isfinite(f1)) and np.all(np.isfinite(a1)), \
+        "fullshape ceiling produced non-finite output"
+    assert np.all(f1[f1 > 0] < GUARD), "fullshape ceiling freq above anti-alias guard"
 
 
 # ── FFT / Random characteristics ──────────────────────────────────────────────

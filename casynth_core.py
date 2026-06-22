@@ -38,6 +38,7 @@ from scipy.sparse.csgraph import laplacian as sparse_laplacian
 SR = 44100                 # audio sample rate (used only for the anti-alias guard)
 PATCH_SIZE = 8             # shape extraction window (PATCH_SIZE×PATCH_SIZE)
 N_PARTIALS_DEFAULT = 20    # default partial count (== gol_life_synth.K_MAX)
+MAX_LAPLACIAN_NODES = 256  # node ceiling for full-shape mode (eigh is O(V³))
 
 _GUARD = 0.45 * SR         # anti-alias guard frequency (Hz)
 
@@ -165,28 +166,39 @@ def _select_modes(n_modes, n, spread):
 
 
 def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.0,
-                  harm=0.0):
+                  harm=0.0, fullshape=False):
     """Graph Laplacian eigenvalues -> inharmonic partial frequencies via sqrt(lambda).
     Lowest selected mode is normalized to f0; amplitudes follow 1/i**alpha rolloff.
 
-    spread : 0.0 = n lowest modes (dark); 1.0 = modes decimated across the whole
-             spectrum (bright upper resonances).  Lowest selected mode is always
-             f0 (pitch anchored to the carrier -- see decisions.md 2026-06-16).
-    alpha  : amplitude rolloff exponent 1/i**alpha.  alpha=1 -> historical 1/i;
-             alpha->0 -> flat / brighter; alpha>1 -> steeper / darker.
-    shape  : 0.0 = rolloff only (bit-for-bit historical); 1.0 = amplitudes from
-             |<e, phi_k>| projection of edge-excitation onto each eigenvector.
-             Linear blend at intermediate values; frequencies are never touched.
-             (decisions.md 2026-06-18 -- Step B.)
-    harm   : 0.0 = inharmonic metal (bit-for-bit); 1.0 = fully quantised to the
-             nearest integer harmonic of f0.  Linear blend: each mode's frequency
-             ratio r_k = freq_k/f0 is pulled toward round(r_k) by `harm`.
-             The shape (which harmonics are occupied) comes from the Laplacian --
-             NOT reassigned to 1..n.  Amplitudes are never touched.
-             (decisions.md 2026-06-21.)
+    spread    : 0.0 = n lowest modes (dark); 1.0 = modes decimated across the whole
+                spectrum (bright upper resonances).  Lowest selected mode is always
+                f0 (pitch anchored to the carrier -- see decisions.md 2026-06-16).
+    alpha     : amplitude rolloff exponent 1/i**alpha.  alpha=1 -> historical 1/i;
+                alpha->0 -> flat / brighter; alpha>1 -> steeper / darker.
+    shape     : 0.0 = rolloff only (bit-for-bit historical); 1.0 = amplitudes from
+                |<e, phi_k>| projection of edge-excitation onto each eigenvector.
+                Linear blend at intermediate values; frequencies are never touched.
+                (decisions.md 2026-06-18 -- Step B.)
+    harm      : 0.0 = inharmonic metal (bit-for-bit); 1.0 = fully quantised to the
+                nearest integer harmonic of f0.  Linear blend: each mode's frequency
+                ratio r_k = freq_k/f0 is pulled toward round(r_k) by `harm`.
+                The shape (which harmonics are occupied) comes from the Laplacian --
+                NOT reassigned to 1..n.  Amplitudes are never touched.
+                (decisions.md 2026-06-21.)
+    fullshape : False (default) = caller passes an 8×8 extract patch; behaviour is
+                bit-for-bit historical.  True = caller passes the full object bbox
+                (arbitrary size); a node ceiling of MAX_LAPLACIAN_NODES is enforced
+                by deterministic lattice decimation so eigh stays tractable.
+                (decisions.md 2026-06-22.)
 
-    Defaults (spread=0, alpha=1, shape=0, harm=0) reproduce the original output
-    bit-for-bit."""
+    Defaults (spread=0, alpha=1, shape=0, harm=0, fullshape=False) reproduce the
+    original output bit-for-bit."""
+    if fullshape:
+        cnt_pre = int((patch > 0).sum())
+        if cnt_pre > MAX_LAPLACIAN_NODES:
+            step = int(np.ceil(np.sqrt(cnt_pre / MAX_LAPLACIAN_NODES)))
+            patch = patch[::step, ::step]
+
     live = list(map(tuple, np.argwhere(patch > 0)))
     cnt = len(live)
     if cnt < 2:
@@ -314,11 +326,12 @@ def map_granulo(patch, f0, n=N_PARTIALS_DEFAULT):
 # The harmonic mappings expose only the partial count; Laplacian adds spread/alpha.
 ENGINES = [
     dict(id='laplacian', label='Laplace', fn=map_laplacian, params=[
-        ('n',      'part',   1,   20,  True,  12),
-        ('spread', 'spread', 0.0, 1.0, False, 0.0),
-        ('alpha',  'alpha',  0.0, 2.0, False, 1.0),
-        ('shape',  'shape',  0.0, 1.0, False, 0.0),
-        ('harm',   'harm',   0.0, 1.0, False, 0.0)]),
+        ('n',         'part',   1,   20,  True,  12),
+        ('spread',    'spread', 0.0, 1.0, False, 0.0),
+        ('alpha',     'alpha',  0.0, 2.0, False, 1.0),
+        ('shape',     'shape',  0.0, 1.0, False, 0.0),
+        ('harm',      'harm',   0.0, 1.0, False, 0.0),
+        ('fullshape', 'full',   0,   1,   True,  1)]),
     dict(id='fft2d',   label='FFT',     fn=map_fft2d,   params=[('n', 'part', 1, 20, True, 16)]),
     dict(id='walsh',   label='Walsh',   fn=map_walsh,   params=[('n', 'part', 1, 20, True, 16)]),
     dict(id='random',  label='Random',  fn=map_random,  params=[('n', 'part', 1, 20, True, 16)]),
