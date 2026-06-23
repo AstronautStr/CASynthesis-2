@@ -66,6 +66,47 @@ def _ctrl_value(state, c):
     return state[c['id']]
 
 
+def _draw_spectrum(screen, small, rect, voices, color, f0_hz):
+    """Engine mode bars: a vertical line per partial (log frequency on X) with
+    height = its amplitude (raw engine output, BEFORE the ADSR/tail envelope --
+    the shape's spectral fingerprint).  Each voice's bars take its field-object
+    colour, tying the spectrum to the shape that produced it.  Read-only."""
+    pygame.draw.rect(screen, C_BG, rect)
+    pygame.draw.rect(screen, C_EDGE, rect, 1)
+    top_y, base_y = rect.top + 2, rect.bottom - 2
+    usable_h = base_y - top_y
+    x0, w = rect.left + 1, rect.width - 2
+    lo = np.log10(SPEC_F_MIN)
+    span = np.log10(SPEC_F_MAX) - lo
+
+    def fx(freq):
+        lf = np.log10(min(max(freq, SPEC_F_MIN), SPEC_F_MAX))
+        return int(x0 + (lf - lo) / span * w)
+
+    # decade gridlines + ticks
+    for gf, lbl in ((100.0, "100"), (1000.0, "1k"), (10000.0, "10k")):
+        gx = fx(gf)
+        pygame.draw.line(screen, C_GRID, (gx, top_y), (gx, base_y))
+        screen.blit(small.render(lbl, True, C_DIM), (gx + 2, rect.top + 1))
+
+    # carrier f0 anchor (subtle -- shows where the pitch is anchored)
+    if f0_hz > 0.0:
+        fxa = fx(f0_hz)
+        pygame.draw.line(screen, C_EDGE, (fxa, top_y), (fxa, base_y))
+
+    # per-voice mode bars (coloured by field object)
+    for v in voices:
+        col = color.get(v['label_idx'], C_DIM)
+        for f, a in zip(v['freqs'], v['amps']):
+            f, a = float(f), float(a)
+            if f <= 0.0 or a <= 0.0:
+                continue
+            bh = int(min(a, 1.0) * usable_h)
+            if bh > 0:
+                bx = fx(f)
+                pygame.draw.line(screen, col, (bx, base_y), (bx, base_y - bh))
+
+
 def draw_frame(screen, fonts, state, lay, rt):
     """Paint one frame.  `lay` = static layout geometry (SimpleNamespace built once
     in main()); `rt` = per-frame runtime values (SimpleNamespace).  Does NOT flip
@@ -245,6 +286,10 @@ def draw_frame(screen, fonts, state, lay, rt):
     mlbl = (f"CLIP +{db:.1f}dB" if clipping else f"{db:.0f}dB")
     msurf = small.render(mlbl, True, (235, 96, 96) if clipping else C_DIM)
     screen.blit(msurf, (meter_track.right - msurf.get_width(), meter_track.bottom + 1))
+
+    # ── spectrum strip: engine mode bars (read-only viz of voices) ─────────
+    _draw_spectrum(screen, small, lay.spec_rect, voices, color,
+                   midi_to_freq(state['note']))
 
     # ── MIDI device bar (above engine tabs) ───────────────────────────────
     if MIDI_AVAILABLE:

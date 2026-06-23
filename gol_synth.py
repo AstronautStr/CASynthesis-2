@@ -375,6 +375,14 @@ def main():
     _sb_scroll = 0
     _sb_scroll_min = min(0, GRID_H * CELL - _sb_content_h)
 
+    # Spectrum strip: engine mode bars (voices' freqs/amps) in the empty toolbar
+    # area below the engine-knob column.  Sized to clear the tallest knob panel
+    # (Laplace: 6 rows) so the box stays put when the engine switches.  Read-only
+    # viz -> no knob, no session-log path.
+    _spec_rect = pygame.Rect(_ctrl_x, by + 140,
+                             (W - 8) - _ctrl_x,
+                             (GRID_H * CELL + TOOLBAR_H - 4) - (by + 140))
+
     piano_top = GRID_H * CELL + TOOLBAR_H
     white_keys, black_keys = _make_piano(state['kb_base'], piano_top, W)
 
@@ -396,7 +404,8 @@ def main():
         rc_track_w=_RC_TRACK_W, env_hdr_rc_y=_ENV_HDR_RC_Y, ctrls=ctrls,
         meter_track=meter_track, midi_btn=_midi_btn, midi_btn_w=_MIDI_BTN_W,
         midi_dd_ith=_MIDI_DD_ITH, engine_tabs=engine_tabs, sb_items=_sb_items,
-        sb_content_h=_sb_content_h, sb_scroll_min=_sb_scroll_min)
+        sb_content_h=_sb_content_h, sb_scroll_min=_sb_scroll_min,
+        spec_rect=_spec_rect)
 
     def cell_at(mx, my):
         if 0 <= my < GRID_H * CELL and 0 <= mx < GRID_W * CELL:

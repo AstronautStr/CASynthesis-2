@@ -188,6 +188,13 @@ SUSTAIN_DEFAULT    = 1.0
 SUSTAIN_MIN        = 0.0
 SUSTAIN_MAX        = 1.0
 
+# Spectrum strip (read-only viz: engine mode bars in the toolbar).  Log-frequency
+# X axis spans the full audio band so the pattern shifts right as the note rises
+# and stays put as topology changes -- a stable reference.  Pure display range,
+# no effect on sound.
+SPEC_F_MIN = 20.0
+SPEC_F_MAX = 20000.0
+
 # keyboard piano
 NOTE_DEFAULT = 48         # C3
 KB_BASE_MIN  = 24         # C1
@@ -252,6 +259,7 @@ __all__ = [
     'ATTACK_MS_DEFAULT', 'ATTACK_MS_MIN', 'ATTACK_MS_MAX',
     'DECAY_MS_DEFAULT', 'DECAY_MS_MIN', 'DECAY_MS_MAX',
     'SUSTAIN_DEFAULT', 'SUSTAIN_MIN', 'SUSTAIN_MAX',
+    'SPEC_F_MIN', 'SPEC_F_MAX',
     'NOTE_DEFAULT', 'KB_BASE_MIN', 'KB_BASE_MAX',
     'C_BG', 'C_GRID', 'C_PANEL', 'C_EDGE', 'C_TXT', 'C_DIM', 'C_BTN', 'C_BTN_HOT',
     'C_ACCENT', 'C_CAPPED', 'C_WHITE', 'C_WHITE_ON', 'C_BLACK', 'C_BLACK_ON',
