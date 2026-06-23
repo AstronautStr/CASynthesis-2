@@ -813,6 +813,9 @@ def _dump_session(rec, prefix="_session"):
     # the render thread -> onset_time = col0 / SR.  Authoritative for jitter measurement.
     midi_onsets = (np.array(rec.get('midi_onsets', []), dtype=float)
                    if rec.get('midi_onsets') else np.zeros((0, 3)))
+    # midi_in: device-arrival timing (perf_counter, note, gate) -- ground-truth input.
+    midi_in_log = (np.array(rec.get('midi_in', []), dtype=float)
+                   if rec.get('midi_in') else np.zeros((0, 3)))
     np.savez_compressed(f"{base}.npz", frames=frames, gens=gens, grids=grids,
                         notes=notes, sr=SR, chunk_s=CHUNK_S,
                         bpm=rec.get('bpm', BPM_DEFAULT),
@@ -823,7 +826,7 @@ def _dump_session(rec, prefix="_session"):
                         replay=replay, replay_grids=replay_grids,
                         replay_engines=replay_engines,
                         replay_controls=replay_controls,
-                        midi_onsets=midi_onsets)
+                        midi_onsets=midi_onsets, midi_in=midi_in_log)
     # frames columns: [dt_ms, gen, n_voices, n_rendered, underrun]
     n_hitch = int((frames[:, 0] > CHUNK_S * 1000).sum()) if len(frames) else 0
     print(f"[session saved] {base}.wav ({len(rec['chunks'])} chunks) + {base}.npz "
@@ -1081,6 +1084,11 @@ def main():
                    # (read side: scratchpad analyse script).  This is the read+write
                    # log path for the threaded render's note timing.
                    midi_onsets=[],
+                   # midi_in: device-arrival timestamps (perf_counter, note, gate)
+                   # from the MIDI thread -- ground-truth INPUT timing, independent
+                   # of rendering.  Comparing its IOIs to midi_onsets' IOIs separates
+                   # input jitter (USB-MIDI / arp / swing) from render jitter.
+                   midi_in=[],
                    bpm=BPM_DEFAULT, div_idx=DIV_DEFAULT)
         print("[CASYNTH_RECORD on] capturing audio + field + all knobs; "
               "quit (Esc) to save")
@@ -1398,7 +1406,12 @@ def main():
                             state['gate'] = True
                         else:
                             state['gate'] = False
-                    # clock/sysex/other: ignore
+                    else:
+                        continue   # clock/sysex/other: not a note event
+                    if rec is not None:
+                        # Ground-truth input timing, stamped the instant we read it.
+                        rec['midi_in'].append((time.perf_counter(),
+                                               int(state['note']), bool(state['gate'])))
             time.sleep(0.001)
 
     _threads = []
