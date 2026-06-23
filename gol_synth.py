@@ -949,13 +949,15 @@ class MidiInput:
         except Exception:
             return []
 
-    def open(self, name):
+    def open(self, name, callback=None):
         self.close()
         if name is None or not MIDI_AVAILABLE:
             return
         with self._lock:
             try:
-                self.port = mido.open_input(name)
+                # callback mode: rtmidi delivers each message on its own thread the
+                # instant it arrives (no polling latency, no GIL-starved poll loop).
+                self.port = mido.open_input(name, callback=callback)
                 self.port_name = name
             except Exception as exc:
                 print(f"[MIDI] cannot open {name!r}: {exc}")
@@ -1386,40 +1388,36 @@ def main():
             last_note, last_gate = note, gate
             cum += len(buf)
 
-    def _midi_loop():
-        # Continuous device poll (off the frame loop) with last-note priority --
-        # the logic that used to run once per frame in the main loop.
-        while audio_ctl['alive']:
-            if MIDI_AVAILABLE:
-                for msg in midi_in.poll():
-                    if msg.type == 'note_on' and msg.velocity > 0:
-                        if msg.note not in state['midi_held']:
-                            state['midi_held'].append(msg.note)
-                        state['note'] = msg.note
-                        state['gate'] = True
-                    elif msg.type == 'note_off' or (msg.type == 'note_on'
-                                                    and msg.velocity == 0):
-                        if msg.note in state['midi_held']:
-                            state['midi_held'].remove(msg.note)
-                        if state['midi_held']:
-                            state['note'] = state['midi_held'][-1]
-                            state['gate'] = True
-                        else:
-                            state['gate'] = False
-                    else:
-                        continue   # clock/sysex/other: not a note event
-                    if rec is not None:
-                        # Ground-truth input timing, stamped the instant we read it.
-                        rec['midi_in'].append((time.perf_counter(),
-                                               int(state['note']), bool(state['gate'])))
-            time.sleep(0.001)
+    def _on_midi_message(msg):
+        # Called from rtmidi's own thread the instant a message arrives (callback
+        # mode -> no poll latency, no GIL-starved poll loop).  Last-note priority;
+        # updates the shared live note/gate that the render thread samples.
+        if msg.type == 'note_on' and msg.velocity > 0:
+            if msg.note not in state['midi_held']:
+                state['midi_held'].append(msg.note)
+            state['note'] = msg.note
+            state['gate'] = True
+        elif msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
+            if msg.note in state['midi_held']:
+                state['midi_held'].remove(msg.note)
+            if state['midi_held']:
+                state['note'] = state['midi_held'][-1]
+                state['gate'] = True
+            else:
+                state['gate'] = False
+        else:
+            return   # clock/sysex/other: not a note event
+        if rec is not None:
+            # Ground-truth input timing, stamped the instant rtmidi hands it over.
+            rec['midi_in'].append((time.perf_counter(),
+                                   int(state['note']), bool(state['gate'])))
 
     _threads = []
     if audio_ok:
         _t = threading.Thread(target=_render_loop, daemon=True, name='render')
         _t.start(); _threads.append(_t)
-    _tm = threading.Thread(target=_midi_loop, daemon=True, name='midi')
-    _tm.start(); _threads.append(_tm)
+    # MIDI input is delivered by rtmidi's callback (set when a device is opened);
+    # there is no MIDI poll thread.
 
     running = True
     while running:
@@ -1479,7 +1477,7 @@ def main():
                                 midi_in.close()
                                 state['midi_port'] = None
                             else:
-                                midi_in.open(port)
+                                midi_in.open(port, _on_midi_message)
                                 state['midi_port'] = midi_in.port_name
                             break
                     _midi_dropdown_open = False
@@ -1565,8 +1563,8 @@ def main():
                         and pygame.mouse.get_pos()[1] < GRID_H * CELL):
                     _sb_scroll = max(_sb_scroll_min, min(0, _sb_scroll + e.y * 20))
 
-        # MIDI device input is polled on the dedicated MIDI thread (_midi_loop),
-        # not here -- that decouples note timing from the 60 fps frame rate.  The
+        # MIDI device input arrives via rtmidi's callback (_on_midi_message), not
+        # here -- that decouples note timing from the 60 fps frame rate.  The
         # on-screen piano / computer keyboard still set state['note']/gate above.
 
         # GOL advance — strict BPM-aligned timing via perf_counter deadline.
@@ -1857,6 +1855,9 @@ def main():
     audio_ctl['alive'] = False
     for _th in _threads:
         _th.join(timeout=1.0)
+    # Close MIDI BEFORE dumping so the rtmidi callback can't append to rec['midi_in']
+    # while _dump_session reads it.
+    midi_in.close()
     if stream is not None:
         stream.stop()
         stream.close()
@@ -1864,7 +1865,6 @@ def main():
     if rec is not None:
         _dump_session(rec)
 
-    midi_in.close()
     pygame.quit()
 
 
