@@ -62,6 +62,7 @@ import os
 import time
 import colorsys
 import queue as _queue
+import threading
 import numpy as np
 import pygame
 try:
@@ -120,26 +121,24 @@ NOTE_DIVS = [
 DIV_DEFAULT = 2           # index into NOTE_DIVS → 1/4 (quarter note)
 MAX_VOICES = 24          # max connected objects to sonify
 
-CHUNK_S = 0.02           # audio render chunk length (seconds)
-# A NOTE ONSET can only take effect on a chunk boundary (a new chunk rendered with
-# the new voices), so CHUNK_S is also the quantisation grid for MIDI note timing.
-# At the old 90 ms a steady hardware arpeggiator (~225 ms eighths) snapped each
-# onset to the nearest 90 ms multiple -> the even eighths rendered as an audible
-# 180/270 ms wobble (±45 ms jitter, confirmed on session _20260623_173927).  20 ms
-# keeps that quantisation under one frame while staying a click-safe crossfade
-# length (the 1-chunk mode crossfade is now 20 ms; ADSR/release are ms-derived and
-# auto-rescale).  Residual jitter is then the per-frame MIDI poll (~18 ms); shrink
-# further / decouple the poll only if that proves audible.
-# Audio is rendered AHEAD into a ring buffer drained by a sounddevice callback on
-# the audio thread (see main()).  The look-ahead absorbs frame-loop jitter so a
-# slow frame shrinks the buffer instead of gapping playback (the cause of the live
-# clicks: a session probe showed 36 mixer underruns on normal frames under the old
-# pygame play/queue model).  It is added latency, so size it by WALL TIME, not a
-# fixed chunk count, so it stays constant when CHUNK_S changes: ~180 ms cushion was
-# ample at the old chunk size (frames are very steady, max ~43 ms).  Total output
-# latency = this buffer + PortAudio's own latency (we request 'low' below).
-AUDIO_LOOKAHEAD_MS = 180
-AUDIO_LOOKAHEAD_CHUNKS = max(2, round(AUDIO_LOOKAHEAD_MS / 1000.0 / CHUNK_S))
+CHUNK_S = 0.008          # audio render sub-chunk length (seconds) = MIDI timing grid
+# A NOTE ONSET can only take effect on a render-chunk boundary, so CHUNK_S is the
+# quantisation grid for MIDI note timing.  History: 90 ms snapped a steady hardware
+# arpeggiator (~225 ms eighths) to an audible 180/270 ms wobble (±45 ms); 20 ms cut
+# that but left the per-FRAME MIDI poll (~18 ms) as the floor (sixteenths still
+# floated).  The fix (see main()) moves audio rendering and MIDI polling OFF the
+# 60 fps frame loop onto dedicated threads, so the grid is now CHUNK_S locked to the
+# playback clock -- frame-independent.  8 ms keeps the 1-chunk mode crossfade
+# click-safe while giving a ~±8 ms timing grid; shrink only if CPU allows (the
+# render thread runs pool.update + render_chunk per sub-chunk -> more Python-loop
+# work per second).  ADSR/release/evict are ms-derived and auto-rescale.
+# A dedicated RENDER thread renders sub-chunks just-in-time into a small ring buffer
+# drained by the sounddevice callback (which only copies int16 -- no heavy Python in
+# the RT path).  The ring is small (jitter is one sub-chunk regardless of its depth;
+# depth is only constant latency + slack to absorb a main-thread GIL hold).  Size it
+# by WALL TIME so it stays constant if CHUNK_S changes.
+AUDIO_LOOKAHEAD_MS = 40
+AUDIO_LOOKAHEAD_CHUNKS = max(3, round(AUDIO_LOOKAHEAD_MS / 1000.0 / CHUNK_S))
 # Headroom: up to MAX_VOICES objects, each up to MAX_MODES_PER_OBJ partials, plus
 # front+back overlap during cross-fades -> the summed signal can peak well above
 # 1.0 and hard-clip (audible distortion).  Measured raw peak on a dense field is
@@ -810,6 +809,10 @@ def _dump_session(rec, prefix="_session"):
     replay_grids = (np.stack(rec['replay_grids']).astype(np.uint8)
                     if rec.get('replay_grids')
                     else np.zeros((0, GRID_H, GRID_W), np.uint8))
+    # midi_onsets: sample-accurate note-timing log (cum_samples, note, gate) from
+    # the render thread -> onset_time = col0 / SR.  Authoritative for jitter measurement.
+    midi_onsets = (np.array(rec.get('midi_onsets', []), dtype=float)
+                   if rec.get('midi_onsets') else np.zeros((0, 3)))
     np.savez_compressed(f"{base}.npz", frames=frames, gens=gens, grids=grids,
                         notes=notes, sr=SR, chunk_s=CHUNK_S,
                         bpm=rec.get('bpm', BPM_DEFAULT),
@@ -819,12 +822,13 @@ def _dump_session(rec, prefix="_session"):
                         underruns=rec['underruns'],
                         replay=replay, replay_grids=replay_grids,
                         replay_engines=replay_engines,
-                        replay_controls=replay_controls)
+                        replay_controls=replay_controls,
+                        midi_onsets=midi_onsets)
     # frames columns: [dt_ms, gen, n_voices, n_rendered, underrun]
     n_hitch = int((frames[:, 0] > CHUNK_S * 1000).sum()) if len(frames) else 0
     print(f"[session saved] {base}.wav ({len(rec['chunks'])} chunks) + {base}.npz "
-          f"({len(rec['steps'])} steps, {len(replay)} replay frames)  "
-          f"underruns={rec['underruns']}  frames>{int(CHUNK_S*1000)}ms={n_hitch}")
+          f"({len(rec['steps'])} steps, {len(midi_onsets)} midi onsets)  "
+          f"underruns={rec['underruns']}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -930,6 +934,9 @@ class MidiInput:
     def __init__(self):
         self.port = None
         self.port_name = None
+        # open()/close() run on the main thread (device dropdown); poll() runs on
+        # the dedicated MIDI thread.  A lock keeps a close mid-poll from racing.
+        self._lock = threading.Lock()
 
     def ports(self):
         if not MIDI_AVAILABLE:
@@ -943,31 +950,34 @@ class MidiInput:
         self.close()
         if name is None or not MIDI_AVAILABLE:
             return
-        try:
-            self.port = mido.open_input(name)
-            self.port_name = name
-        except Exception as exc:
-            print(f"[MIDI] cannot open {name!r}: {exc}")
-            self.port = None
-            self.port_name = None
+        with self._lock:
+            try:
+                self.port = mido.open_input(name)
+                self.port_name = name
+            except Exception as exc:
+                print(f"[MIDI] cannot open {name!r}: {exc}")
+                self.port = None
+                self.port_name = None
 
     def close(self):
-        if self.port is not None:
-            try:
-                self.port.close()
-            except Exception:
-                pass
-            self.port = None
-            self.port_name = None
+        with self._lock:
+            if self.port is not None:
+                try:
+                    self.port.close()
+                except Exception:
+                    pass
+                self.port = None
+                self.port_name = None
 
     def poll(self):
         """Return all pending messages without blocking."""
-        if self.port is None:
-            return []
-        try:
-            return list(self.port.iter_pending())
-        except Exception:
-            return []
+        with self._lock:
+            if self.port is None:
+                return []
+            try:
+                return list(self.port.iter_pending())
+            except Exception:
+                return []
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1065,6 +1075,12 @@ def main():
         rec = dict(chunks=[], frames=[], steps=[], underruns=0,
                    replay=[], replay_grids=[], replay_engines=[],
                    replay_controls=[],
+                   # midi_onsets: AUTHORITATIVE sample-accurate timing log written by
+                   # the render thread -- (cum_samples, note, gate) on every change.
+                   # onset_time = cum_samples / SR exactly -> measures jitter directly
+                   # (read side: scratchpad analyse script).  This is the read+write
+                   # log path for the threaded render's note timing.
+                   midi_onsets=[],
                    bpm=BPM_DEFAULT, div_idx=DIV_DEFAULT)
         print("[CASYNTH_RECORD on] capturing audio + field + all knobs; "
               "quit (Esc) to save")
@@ -1295,48 +1311,102 @@ def main():
                 return m
         return None
 
-    gain_prev_box = [MASTER_GAIN * state['vol']]   # master gain of the last chunk
+    # ── Audio render thread + MIDI input thread (decoupled from the 60 fps loop) ──
+    # The MAIN thread publishes the current render spec (voices computed at base_f0
+    # + the live knob values); the RENDER thread renders sub-chunks just-in-time,
+    # rescaling each voice's freqs to the LIVE MIDI note (so a note change between
+    # frames is applied within one sub-chunk, not a frame) and applying the live
+    # gate; the MIDI thread polls the device continuously.  This takes the MIDI poll
+    # and the look-ahead off the timing path -> onsets quantise to one CHUNK_S
+    # sub-chunk locked to the playback clock, not to the frame rate.
+    render_spec = {'cur': None}        # atomic publish point (single ref swap)
+    audio_ctl   = {'alive': True}      # threads exit when False
+    # Cache voices rescaled to the live note so an unchanged (spec, note) -- the
+    # common case (live note == the note the spec was built at) -- does not
+    # re-allocate every sub-chunk.
+    _rescale = {'key': None, 'voices': None}
 
-    def feed_audio(voices):
-        if not audio_ok:
-            return 0, 0
-        # Top the ring buffer up to AUDIO_LOOKAHEAD_CHUNKS of look-ahead.
-        # pool.update is advanced once PER CHUNK rendered (not per frame), so the
-        # release-tail countdown counts chunks and is not coupled to the frame rate.
-        n_rendered = 0
-        # Release-tail length in chunks, derived live from the knob (decoupled
-        # from the crossfade attack, which stays one chunk).
-        release_chunks = max(1, round(state['release_ms'] / 1000.0 / CHUNK_S))
-        # ADSR onset shaping, derived live from the knobs (chunk-quantised like
-        # release).  sustain is a level, not a time.
-        attack_chunks = max(1, round(state['attack_ms'] / 1000.0 / CHUNK_S))
-        decay_chunks  = max(1, round(state['decay_ms']  / 1000.0 / CHUNK_S))
-        sustain       = float(state['sustain'])
-        gain = MASTER_GAIN * state['vol']      # pre-clip master gain (chunk target)
-        frame_peak = 0.0
-        frame_clip = 0
-        while audio_q.qsize() < AUDIO_LOOKAHEAD_CHUNKS:
-            pool.update(voices, phase, amp_cur, pan_cur, release_chunks,
+    def _live_voices(spec, note):
+        """`spec` voices with freqs rescaled to the live MIDI note's f0.  freqs are
+        linear in f0 for every engine (Laplace f0·√λ/√λ0, harmonic f0·k) so this is
+        exact; amps/pan are f0-independent and untouched."""
+        base_f0 = spec['base_f0']
+        ratio = (midi_to_freq(note) / base_f0) if base_f0 > 0 else 1.0
+        if abs(ratio - 1.0) < 1e-9:
+            return spec['voices']
+        key = (id(spec), note)
+        if _rescale['key'] != key:
+            _rescale['voices'] = [dict(v, freqs=v['freqs'] * ratio)
+                                  for v in spec['voices']]
+            _rescale['key'] = key
+        return _rescale['voices']
+
+    def _render_loop():
+        gain_prev = MASTER_GAIN * state['vol']
+        cum = 0                        # cumulative output samples (onset timestamps)
+        last_note, last_gate = state['note'], bool(state['gate'])
+        while audio_ctl['alive']:
+            if audio_q.qsize() >= AUDIO_LOOKAHEAD_CHUNKS:
+                time.sleep(0.001)      # ring full -> idle briefly
+                continue
+            spec = render_spec['cur']
+            note = state['note']
+            gate = bool(state['gate'])
+            # Live knob-derived chunk counts (ms-based -> grid-independent).
+            release_chunks = max(1, round(state['release_ms'] / 1000.0 / CHUNK_S))
+            attack_chunks  = max(1, round(state['attack_ms']  / 1000.0 / CHUNK_S))
+            decay_chunks   = max(1, round(state['decay_ms']   / 1000.0 / CHUNK_S))
+            sustain        = float(state['sustain'])
+            gain = MASTER_GAIN * state['vol']
+            voices_in = (_live_voices(spec, note) if (spec is not None and gate)
+                         else [])
+            pool.update(voices_in, phase, amp_cur, pan_cur, release_chunks,
                         attack_chunks, decay_chunks, sustain)
             buf, peak, n_clip = render_chunk_laplacian(phase, amp_cur, pan_cur,
                                                        pool.amp_tgt, pool.pan_tgt,
                                                        pool.freq_slots, 2,
-                                                       gain_prev_box[0], gain)
-            gain_prev_box[0] = gain            # glide from here next chunk
+                                                       gain_prev, gain)
+            gain_prev = gain
             audio_q.put(buf)
-            n_rendered += 1
-            frame_peak = max(frame_peak, peak)
-            frame_clip += n_clip
+            meter['peak'] = max(peak, meter['peak'] * METER_DECAY)
+            meter['clip'] = n_clip > 0
             if rec is not None:
                 rec['chunks'].append(buf)
-        # Peak-hold with decay so the meter is readable; clip flag is per-frame.
-        meter['peak'] = max(frame_peak, meter['peak'] * METER_DECAY)
-        meter['clip'] = frame_clip > 0
-        ur_delta = _ur['n'] - _ur['prev']      # underruns since last frame
-        _ur['prev'] = _ur['n']
-        if rec is not None:
-            rec['underruns'] = _ur['n']
-        return n_rendered, ur_delta
+                if note != last_note or gate != last_gate:
+                    rec['midi_onsets'].append((cum, int(note), bool(gate)))
+                rec['underruns'] = _ur['n']
+            last_note, last_gate = note, gate
+            cum += len(buf)
+
+    def _midi_loop():
+        # Continuous device poll (off the frame loop) with last-note priority --
+        # the logic that used to run once per frame in the main loop.
+        while audio_ctl['alive']:
+            if MIDI_AVAILABLE:
+                for msg in midi_in.poll():
+                    if msg.type == 'note_on' and msg.velocity > 0:
+                        if msg.note not in state['midi_held']:
+                            state['midi_held'].append(msg.note)
+                        state['note'] = msg.note
+                        state['gate'] = True
+                    elif msg.type == 'note_off' or (msg.type == 'note_on'
+                                                    and msg.velocity == 0):
+                        if msg.note in state['midi_held']:
+                            state['midi_held'].remove(msg.note)
+                        if state['midi_held']:
+                            state['note'] = state['midi_held'][-1]
+                            state['gate'] = True
+                        else:
+                            state['gate'] = False
+                    # clock/sysex/other: ignore
+            time.sleep(0.001)
+
+    _threads = []
+    if audio_ok:
+        _t = threading.Thread(target=_render_loop, daemon=True, name='render')
+        _t.start(); _threads.append(_t)
+    _tm = threading.Thread(target=_midi_loop, daemon=True, name='midi')
+    _tm.start(); _threads.append(_tm)
 
     running = True
     while running:
@@ -1482,23 +1552,9 @@ def main():
                         and pygame.mouse.get_pos()[1] < GRID_H * CELL):
                     _sb_scroll = max(_sb_scroll_min, min(0, _sb_scroll + e.y * 20))
 
-        # MIDI input — poll pending messages (non-blocking, once per frame).
-        if MIDI_AVAILABLE:
-            for msg in midi_in.poll():
-                if msg.type == 'note_on' and msg.velocity > 0:
-                    if msg.note not in state['midi_held']:
-                        state['midi_held'].append(msg.note)
-                    state['note'] = msg.note
-                    state['gate'] = True
-                elif msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
-                    if msg.note in state['midi_held']:
-                        state['midi_held'].remove(msg.note)
-                    if state['midi_held']:
-                        state['note'] = state['midi_held'][-1]
-                        state['gate'] = True
-                    else:
-                        state['gate'] = False
-                # clock/sysex/other: ignore silently
+        # MIDI device input is polled on the dedicated MIDI thread (_midi_loop),
+        # not here -- that decouples note timing from the 60 fps frame rate.  The
+        # on-screen piano / computer keyboard still set state['note']/gate above.
 
         # GOL advance — strict BPM-aligned timing via perf_counter deadline.
         # next_step_time advances by exactly one interval each step, so the step
@@ -1521,41 +1577,35 @@ def main():
                 state['next_step_time'] = now + interval
 
         _ep = state['engine_params'][state['engine']]
-        labels, voices, color = analyse(grid, f0(), state['engine'], _ep)
-        n_rendered, ur_delta = feed_audio(voices if state['gate'] else [])
+        base_f0 = f0()
+        labels, voices, color = analyse(grid, base_f0, state['engine'], _ep)
+        # Publish an immutable render spec for the render thread (atomic ref swap).
+        # The render thread rescales these voices to the LIVE MIDI note and applies
+        # the live gate, so note timing follows the device, not this frame.
+        render_spec['cur'] = {'voices': voices, 'base_f0': base_f0}
+        ur_delta = _ur['n'] - _ur['prev']
+        _ur['prev'] = _ur['n']
         if rec is not None:
             rec['frames'].append((round(dt * 1000.0, 2), state['gen'],
-                                  len(voices), n_rendered, ur_delta))
-            # Faithful-replay log: capture inputs ONLY for frames that actually
-            # rendered chunks (frames with n_rendered=0 produce no audio and would
-            # just bloat the grid log).  Values are constant within a frame, so
-            # replaying pool.update/render n_rendered times reproduces the engine
-            # output chunk-for-chunk.
-            if n_rendered > 0:
-                # Legacy fixed-width matrix (laplacian-probe contract; do not drop
-                # columns).  spread/alpha default for engines that lack them.
-                rec['replay'].append((n_rendered, int(state['note']),
-                                      float(_ep.get('spread', 0.0)),
-                                      float(_ep.get('alpha', 1.0)),
-                                      float(state['release_ms']), float(state['vol']),
-                                      int(_ep.get('n', N_PARTIALS_DEFAULT))))
-                # AUTHORITATIVE per-frame control snapshot: EVERY synth control so
-                # any bug is reproducible from the recording and a fix validated.
-                # Copy the whole engine_params dict -> captures every engine knob
-                # (incl. shape and any knob added later) with no per-knob edits here.
-                rec['replay_controls'].append(dict(
-                    n_rendered=int(n_rendered),
-                    engine=state['engine'],
-                    note=int(state['note']),
-                    gate=bool(state['gate']),
-                    vol=float(state['vol']),
-                    attack_ms=float(state['attack_ms']),
-                    decay_ms=float(state['decay_ms']),
-                    sustain=float(state['sustain']),
-                    release_ms=float(state['release_ms']),
-                    engine_params=dict(_ep)))
-                rec['replay_engines'].append(state['engine'])
-                rec['replay_grids'].append(grid.copy())
+                                  len(voices), 0, ur_delta))
+            # Per-frame control snapshot -- CONTEXT for the session (engine/knob
+            # timeline).  Audio is no longer rendered per frame, so n_rendered=0; the
+            # AUTHORITATIVE sample-accurate note timing is rec['midi_onsets'] written
+            # by the render thread.  (Faithful per-frame audio replay is superseded
+            # by the threaded render -- see memory/log/2026-06-23-midi-timing-jitter.)
+            rec['replay_controls'].append(dict(
+                n_rendered=0,
+                engine=state['engine'],
+                note=int(state['note']),
+                gate=bool(state['gate']),
+                vol=float(state['vol']),
+                attack_ms=float(state['attack_ms']),
+                decay_ms=float(state['decay_ms']),
+                sustain=float(state['sustain']),
+                release_ms=float(state['release_ms']),
+                engine_params=dict(_ep)))
+            rec['replay_engines'].append(state['engine'])
+            rec['replay_grids'].append(grid.copy())
 
         # ── draw field ──────────────────────────────────────────────────────
         screen.fill(C_BG)
@@ -1789,13 +1839,19 @@ def main():
 
         pygame.display.flip()
 
+    # Stop the render/MIDI threads and the audio stream BEFORE dumping the session,
+    # so the render thread is no longer appending to rec['chunks'] when we read it.
+    audio_ctl['alive'] = False
+    for _th in _threads:
+        _th.join(timeout=1.0)
+    if stream is not None:
+        stream.stop()
+        stream.close()
+
     if rec is not None:
         _dump_session(rec)
 
     midi_in.close()
-    if stream is not None:
-        stream.stop()
-        stream.close()
     pygame.quit()
 
 
