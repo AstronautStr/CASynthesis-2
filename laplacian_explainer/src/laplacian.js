@@ -7,7 +7,7 @@ function selectModes(nModes, n, spread){
   const sel = [];
   for(let i=0;i<n;i++){
     const consec = i;
-    const spreadIdx = (nModes-1) * (i/(n-1));
+    const spreadIdx = (nModes-1) * (i/((n-1)||1)); // n=1 → 0, как np.linspace(0,nModes-1,1)
     let raw = (1-spread)*consec + spread*spreadIdx;
     sel.push(Math.round(raw));
   }
