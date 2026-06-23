@@ -141,6 +141,83 @@
     отвязывая низшую моду от ноты. Покрути их в песочнице ниже и услышь разницу.</p>
   </div>
 
+  <!-- ============================ КРАЕВОЕ ВОЗБУЖДЕНИЕ ============================ -->
+  <h2>Часть 1.5 · Краевое возбуждение <span class="mono">e</span> → формозависимые амплитуды (<span class="tag-lap">shape</span>)</h2>
+  <p class="sub">Откуда берутся <b>громкости</b> мод, когда <code>shape&gt;0</code>. Стержень: форма
+  «звучит своей границей». Удар по форме — это вектор <span class="mono">e</span>
+  (<b>краевое возбуждение</b>): <span class="mono">e_i = deg_i</span> = число живых 8-соседей клетки =
+  диагональ <span class="mono">L</span>. Однородная внутренность (<span class="mono">deg=8</span>) нема —
+  она перпендикулярна звучащим модам; звучит <b>разница степеней на кромке</b>. Громкость моды =
+  насколько удар <span class="mono">e</span> перекрывается с её фигурой <span class="mono">φ_k</span>:
+  <span class="mono">|⟨e,φ_k⟩|</span>.</p>
+
+  <div class="card">
+    <div class="row">
+      <span class="legend">загрузить форму:</span>
+      <button class="exp" data-form="block">Блок 3×4</button>
+      <button class="exp" data-form="snake">Змейка (12)</button>
+      <button class="exp" data-form="string">Струна 1×8</button>
+      <button class="exp" data-form="blinker">Blinker</button>
+      <button class="exp" data-form="blinkerp">Blinker+1</button>
+    </div>
+    <p class="hint">«Блок» и «Змейка» — равная масса (12 клеток), разная граница → разный паттерн
+    возбуждения (пара для панели A). «Струна» — герой панелей B+C (моды-гармоники с узлами).
+    «Blinker» / «Blinker+1» — пара для панели D (симметрия глушит моду).</p>
+    <div class="row" style="margin-top:6px">
+      <span class="legend">выбери звучащую моду (для панелей B · C · D):</span>
+    </div>
+    <canvas id="exEig" width="640" height="92" style="width:100%;max-width:640px"></canvas>
+  </div>
+
+  <div class="grid2">
+    <!-- Панель A -->
+    <div class="card">
+      <h3 style="margin-top:0">A · Форма звучит границей</h3>
+      <div class="row"><button id="exDef">deg ↔ дефицит (8−deg)</button></div>
+      <canvas id="exA" width="300" height="200" style="margin-top:8px"></canvas>
+      <p class="hint" id="exAcap"></p>
+    </div>
+    <!-- Панель B -->
+    <div class="card">
+      <h3 style="margin-top:0">B · У моды есть ФОРМА (фигура Хладни)</h3>
+      <div class="row"><button id="exSolo" class="primary">▶ мода solo</button></div>
+      <canvas id="exB" width="300" height="200" style="margin-top:8px"></canvas>
+      <p class="hint" id="exBcap"></p>
+    </div>
+  </div>
+
+  <!-- Панель C -->
+  <div class="card">
+    <h3 style="margin-top:0">C · Громкость = перекрытие удара <span class="mono">e</span> с модой <span class="mono">φ_k</span></h3>
+    <div class="row" style="align-items:flex-end;gap:14px">
+      <div><p class="legend" style="text-align:center;margin:0 0 4px">удар e</p>
+        <canvas id="exCe" width="150" height="130"></canvas></div>
+      <div style="font-size:22px;color:var(--mut);padding-bottom:50px">×</div>
+      <div><p class="legend" style="text-align:center;margin:0 0 4px">мода φ_k</p>
+        <canvas id="exCphi" width="150" height="130"></canvas></div>
+      <div style="font-size:22px;color:var(--mut);padding-bottom:50px">=</div>
+      <div><p class="legend" style="text-align:center;margin:0 0 4px">e·φ (поклеточно)</p>
+        <canvas id="exCprod" width="150" height="130"></canvas></div>
+      <div style="margin-left:auto"><p class="legend" style="text-align:center;margin:0 0 4px">столбик моды</p>
+        <canvas id="exCbars" width="220" height="130"></canvas></div>
+    </div>
+    <label style="display:block;font-size:13px;color:var(--mut);margin:12px 0 2px">shape —
+      blend rolloff <span class="mono">1/iᵅ</span> → проекция <span class="mono">|⟨e,φ⟩|</span>:
+      <span class="mono" id="exShapev">0.00</span></label>
+    <input id="exShape" type="range" min="0" max="1" step="0.01" value="0" style="max-width:420px">
+    <p class="hint" id="exCcap"></p>
+  </div>
+
+  <!-- Панель D -->
+  <div class="card">
+    <h3 style="margin-top:0">D · Почему симметрия глушит моду</h3>
+    <p class="hint" id="exDcap"></p>
+    <p class="hint"><b>Математически проверяемо:</b> для <b>Blinker</b> удар
+    <span class="mono">e=[1,2,1]</span> симметричен, а низшая мода (λ=1) антисимметрична
+    <span class="mono">φ≈[+,0,−]</span> → <span class="mono">⟨e,φ⟩ = +0− = 0</span> → столбик ноль.
+    Сломай симметрию (<b>Blinker+1</b>) — та же мода оживает.</p>
+  </div>
+
   <!-- ============================ ПЕСОЧНИЦА ============================ -->
   <h2>Часть 2 · Песочница (рисуй · смотри · слушай)</h2>
   <p class="sub">Кликай по клеткам (или зажми и веди), чтобы рисовать форму. Все значения справа
@@ -238,11 +315,13 @@
 </div>
 
 <!-- Скрипты грузятся в порядке зависимостей (классические <script>, общая глобальная область):
-     params → linalg → laplacian → render → audio → app. app.js в конце вызывает recompute(). -->
+     params → linalg → laplacian → render → excitation → audio → app.
+     app.js в конце вызывает recompute(); excitation.js — exRecompute() (своё состояние). -->
 <script src="src/params.js"></script>
 <script src="src/linalg.js"></script>
 <script src="src/laplacian.js"></script>
 <script src="src/render.js"></script>
+<script src="src/excitation.js"></script>
 <script src="src/audio.js"></script>
 <script src="src/app.js"></script>
 </body>
