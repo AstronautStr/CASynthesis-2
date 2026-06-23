@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CASynth — Laplacian: теория + интерактив</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Laplacian-маппинг: <span style="color:var(--lap)">форма → спектр → звук</span></h1>
+  <p class="sub">Обучающая инфографика + интерактивная песочница для проекта CASynth.
+  Цель — теоретическая база и эмпирическая интуиция по тому, как форма объекта Game of Life
+  превращается в металлический тембр.</p>
+  <p><span class="pill">теория ниже ↓</span><span class="pill">песочница ещё ниже ↓↓</span>
+  <span class="pill">всё считается тем же алгоритмом, что и в синте (<code>casynth_core.map_laplacian</code>)</span></p>
+
+  <!-- ============================ ИНФОГРАФИКА ============================ -->
+  <h2>Часть 1 · Как это работает (конвейер)</h2>
+
+  <div class="card">
+    <svg viewBox="0 0 1180 120" width="100%" height="120" aria-label="pipeline">
+      <!-- boxes -->
+      <g font-size="12">
+        <rect x="6"   y="30" width="150" height="60" rx="8" fill="#1e222b" stroke="#2b313c"/>
+        <text x="81" y="55" text-anchor="middle">Форма</text>
+        <text x="81" y="73" text-anchor="middle" class="mut">клетки on/off</text>
+
+        <rect x="196" y="30" width="150" height="60" rx="8" fill="#1e222b" stroke="#2b313c"/>
+        <text x="271" y="55" text-anchor="middle">Граф</text>
+        <text x="271" y="73" text-anchor="middle" class="mut">узлы+рёбра (8-связ.)</text>
+
+        <rect x="386" y="30" width="160" height="60" rx="8" fill="#1e222b" stroke="#2b313c"/>
+        <text x="466" y="55" text-anchor="middle">Лапласиан L=D−A</text>
+        <text x="466" y="73" text-anchor="middle" class="mut">матрица n×n</text>
+
+        <rect x="586" y="30" width="160" height="60" rx="8" fill="#1e222b" stroke="#2b313c"/>
+        <text x="666" y="50" text-anchor="middle">Собств. значения λ</text>
+        <text x="666" y="68" text-anchor="middle" class="mut">→ частоты √λ</text>
+
+        <rect x="786" y="30" width="170" height="60" rx="8" fill="#241f0a" stroke="#5a4a10"/>
+        <text x="871" y="50" text-anchor="middle" style="fill:var(--lap)">Нормировка → f0</text>
+        <text x="871" y="68" text-anchor="middle" class="mut">низшая мода = нота</text>
+
+        <rect x="996" y="30" width="178" height="60" rx="8" fill="#1e222b" stroke="#2b313c"/>
+        <text x="1085" y="50" text-anchor="middle">Партиалы (freqs,amps)</text>
+        <text x="1085" y="68" text-anchor="middle" class="mut">аддитивный синтез</text>
+      </g>
+      <g stroke="#5a6172" stroke-width="2" fill="none" marker-end="url(#ar)">
+        <path d="M156 60 H196"/><path d="M346 60 H386"/><path d="M546 60 H586"/>
+        <path d="M746 60 H786"/><path d="M956 60 H996"/>
+      </g>
+      <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0 0 L6 3 L0 6 z" fill="#5a6172"/></marker></defs>
+    </svg>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Шаг 1–2 · Форма становится графом</h3>
+      <div class="step"><div class="n">1</div><div>
+        Каждая <b>живая клетка</b> — это <b>узел</b> графа. Между двумя узлами есть <b>ребро</b>,
+        если клетки — соседи по <b>8 направлениям</b> (включая диагонали — та же связность, что
+        в самом автомате).</div></div>
+      <div class="step"><div class="n">2</div><div>
+        Получается «сетка пружин» формы. Дальше нас интересует не картинка, а то,
+        <b>как эта сетка вибрирует</b>.</div></div>
+      <p class="hint">Инвариантность: сдвиг / поворот / отражение формы дают <b>тот же граф</b> →
+      тот же звук. А вот добавление клетки-перемычки меняет связность → <b>другой граф</b> →
+      это уже «событие смены топологии» (слышно как смену набора резонансов).</p>
+    </div>
+
+    <div class="card">
+      <h3>Шаг 3 · Лапласиан <span class="mono">L = D − A</span></h3>
+      <p class="muted" style="margin-top:0">Маленький пример — «blinker», 3 клетки в ряд
+      <span class="mono">●●●</span>. Средняя соседствует с двумя, крайние — с одной:</p>
+      <svg viewBox="0 0 520 150" width="100%" height="150">
+        <text x="0"  y="20" class="mut">A (смежность)</text>
+        <text x="200" y="20" class="mut">D (степени)</text>
+        <text x="360" y="20" class="mut">L = D − A</text>
+        <g font-family="var(--mono)" font-size="14">
+          <text x="0" y="55">[0 1 0]</text><text x="0" y="80">[1 0 1]</text><text x="0" y="105">[0 1 0]</text>
+          <text x="200" y="55">[1 0 0]</text><text x="200" y="80">[0 2 0]</text><text x="200" y="105">[0 0 1]</text>
+          <text x="360" y="55" style="fill:var(--lap)">[ 1 −1  0]</text>
+          <text x="360" y="80" style="fill:var(--lap)">[−1  2 −1]</text>
+          <text x="360" y="105" style="fill:var(--lap)">[ 0 −1  1]</text>
+        </g>
+        <text x="0" y="140" class="mut" font-size="12">диагональ = степень узла · вне диагонали −1 = ребро</text>
+      </svg>
+    </div>
+
+    <div class="card">
+      <h3>Шаг 4 · Собственные значения = частоты мод</h3>
+      <p style="margin-top:0">У blinker'а <span class="mono">L</span> имеет собственные значения
+      <span class="mono" style="color:var(--lap)">λ = {0, 1, 3}</span>. Физическая аналогия —
+      это <b>квадраты собственных частот</b> вибрирующей мембраны/сетки пружин, поэтому
+      частота моды ∝ <b>√λ</b>:</p>
+      <p class="mono" style="font-size:15px">√λ = {0, 1, √3 ≈ 1.732}</p>
+      <p class="muted">• Нулевая мода (λ=0) — это «вся форма качается как целое», без внутренней
+      вибрации. Число нулевых λ = <b>числу компонент связности</b> (две отдельные фигуры → две нулевые моды).
+      Нулевые моды звука не дают — их отбрасываем.</p>
+    </div>
+
+    <div class="card">
+      <h3>Шаг 5 · Привязка к ноте + амплитуды</h3>
+      <div class="step"><div class="n">5</div><div>
+        <b>Низшую ненулевую</b> моду нормируем к частоте сыгранной ноты <code>f0</code>
+        (карьерная нота с пианино). Остальные масштабируются <b>пропорционально</b>.
+        Для blinker'а: <span class="mono">f0</span> и <span class="mono" style="color:var(--lap)">√3·f0</span>.</div></div>
+      <div class="warn">
+        <b>Почему металл.</b> Отношение <span class="mono">√3 ≈ 1.732</span> — <b>не целое</b>.
+        У струны/трубы партиалы кратны f0 (1, 2, 3… — «органный» гармонический ряд). Здесь
+        частоты <b>инхармоничны</b> → ухо слышит это как металл/колокол/гонг.
+      </div>
+      <p class="hint" style="margin-top:10px"><b>Честная оговорка (важно для интуиции):</b>
+      форма задаёт <b>набор ЧАСТОТ</b>. Громкости же берутся фиксированным спадом
+      <span class="mono">1/i<sup>α</sup></span> <b>по рангу</b> моды, а не из формы. Сделать
+      амплитуды формозависимыми (через собственные <i>векторы</i>) — отложенная идея «B» в рисёрче.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Зачем это вообще — и где подвох на больших полях</h3>
+    <p style="margin-top:0">Вопрос «<i>Can one hear the shape of a drum?</i>» (Марк Кац, 1966):
+    спектр собственных значений кодирует <b>геометрию</b> — площадь (закон Вейля), периметр,
+    число дырок. Поэтому Laplace-тембр «принадлежит» форме: разные формы звучат по-разному
+    <b>органично</b>, а не по произвольному коду.</p>
+    <p>Но у этого есть оборотная сторона, которую мы услышали на живом большом поле:
+    <b>низшие</b> моды большого графа кодируют в основном <b>размер/площадь</b>, а не детали
+    контура (и они сжаты у нуля → звук тёмный и однородный). Мы сейчас берём именно низ спектра —
+    отсюда диагноз «тёмно/одинаково». Рычаги <span class="tag-lap">A: открыть верхние моды</span>
+    и <span class="tag-lap">D: мягче спад</span> — попытка достать яркие верхние резонансы, не
+    отвязывая низшую моду от ноты. Покрути их в песочнице ниже и услышь разницу.</p>
+  </div>
+
+  <!-- ============================ ПЕСОЧНИЦА ============================ -->
+  <h2>Часть 2 · Песочница (рисуй · смотри · слушай)</h2>
+  <p class="sub">Кликай по клеткам (или зажми и веди), чтобы рисовать форму. Все значения справа
+  пересчитываются мгновенно — это ровно те числа, что уходят в синтез. Нажми
+  <b>▶ Звук</b>, чтобы услышать спектр формы.</p>
+
+  <div class="play">
+    <!-- LEFT: grid + controls -->
+    <div>
+      <div class="card" style="padding:12px">
+        <canvas id="grid" width="336" height="336"></canvas>
+        <p class="legend" id="gridhint">Сетка 8×8 = окно извлечения формы (PATCH_SIZE). Рисуй здесь.</p>
+        <div class="row" style="margin-top:6px">
+          <button id="clear">Очистить</button>
+          <button id="random">Случайно</button>
+          <select id="preset">
+            <option value="">— пресеты —</option>
+            <option value="blinker">Blinker (3 в ряд)</option>
+            <option value="block">Block (2×2)</option>
+            <option value="beacon">Beacon</option>
+            <option value="toad">Toad</option>
+            <option value="lshape">L-уголок</option>
+            <option value="ring">Кольцо (дырка)</option>
+            <option value="two">Две фигуры (2 компоненты)</option>
+            <option value="diag">Диагональ</option>
+            <option value="plus">Плюс</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card controls" style="padding:14px">
+        <h3 style="margin-top:0">Параметры синтеза</h3>
+        <label>Карьерная нота f0: <span class="mono" id="f0v">220</span> Гц</label>
+        <input id="f0" type="range" min="55" max="880" step="1" value="220">
+        <label>Число партиалов n: <span class="mono" id="nv">12</span></label>
+        <input id="n" type="range" min="1" max="20" step="1" value="12">
+        <label>spread (0 = низ спектра · 1 = по всему спектру) <span class="tag-lap">рычаг A</span>:
+          <span class="mono" id="spreadv">0.00</span></label>
+        <input id="spread" type="range" min="0" max="1" step="0.01" value="0">
+        <label>α — экспонента спада 1/i<sup>α</sup> <span class="tag-lap">рычаг D</span>:
+          <span class="mono" id="alphav">1.00</span></label>
+        <input id="alpha" type="range" min="0" max="2.5" step="0.05" value="1">
+        <label>shape — формозав. амплитуды (0 = rolloff · 1 = проекция) <span class="tag-lap">ручка B</span>:
+          <span class="mono" id="shapev">0.00</span></label>
+        <input id="shape" type="range" min="0" max="1" step="0.01" value="0">
+        <div class="row" style="margin-top:12px">
+          <button id="play" class="primary">▶ Звук</button>
+          <span class="legend">громкость авто-нормирована, без клиппинга</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: computation -->
+    <div>
+      <div class="card">
+        <h3 style="margin-top:0">Конвейер вычисления (живой)</h3>
+        <div class="kv" id="pipe"></div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <h3 style="margin-top:0">Граф формы</h3>
+          <canvas id="graph" width="300" height="240"></canvas>
+          <p class="hint" id="graphhint"></p>
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">Собственные значения λ
+            <span class="legend">(клик → вкл/выкл ; вектор моды — на сетке)</span></h3>
+          <canvas id="eig" width="300" height="240"></canvas>
+          <p class="hint" id="eighint">Серый = нулевые моды (компоненты связности). Жёлтый = звучащие.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Итоговый спектр партиалов
+          <span class="legend">— что реально уходит в синтез</span></h3>
+        <canvas id="spec" width="640" height="200"></canvas>
+        <p class="hint">Жёлтые линии — наши инхармонические партиалы (высота = частота, толщина/яркость = амплитуда).
+        Бледные засечки внизу — гармонический ряд f0·k (1,2,3…) для сравнения: видно, что наши частоты
+        в него <b>не</b> попадают → инхармоничность → металл.</p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Таблица значений</h3>
+        <div id="table"></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="sub" style="margin-top:30px">Связано: дерево решений проекта — <code>ResearchMap.canvas</code>;
+  обоснования — <code>memory/decisions.md</code> (привязка к несущей, рычаги A/B/C/D);
+  профиль приёма — <code>obsidian/mappings/Laplacian.md</code>. Алгоритм этой страницы 1:1
+  повторяет <code>casynth_core.map_laplacian</code> (8-связность, √λ, низшая мода=f0, спад 1/i<sup>α</sup>,
+  spread-выбор мод).</p>
+</div>
+
+<!-- Скрипты грузятся в порядке зависимостей (классические <script>, общая глобальная область):
+     params → linalg → laplacian → render → audio → app. app.js в конце вызывает recompute(). -->
+<script src="src/params.js"></script>
+<script src="src/linalg.js"></script>
+<script src="src/laplacian.js"></script>
+<script src="src/render.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/app.js"></script>
+</body>
+</html>
