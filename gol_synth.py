@@ -52,7 +52,7 @@ CONTROLS  (identical to gol_life_synth.py)
   Esc ........... quit
 
 RUN
-    pip install pygame-ce numpy scipy sounddevice
+    pip install pygame-ce numpy scipy sounddevice mido python-rtmidi
     python gol_synth.py
     # headless:
     SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy python gol_synth.py
@@ -68,6 +68,12 @@ try:
     import sounddevice as sd
 except Exception:          # optional; audio is just disabled if unavailable
     sd = None
+try:
+    import mido
+    MIDI_AVAILABLE = True
+except ImportError:
+    mido = None
+    MIDI_AVAILABLE = False
 from scipy import ndimage
 from casynth_core import extract, ENGINES, ENGINE_BY_ID
 from patterns import PATTERNS
@@ -79,14 +85,15 @@ GRID_W, GRID_H = 52, 30
 CELL = 20
 # Toolbar: main button row (40px) + note-div row (18px) + status row (~38px) +
 # engine-knob panel (Laplace 6×22px, right col: ADSR 4×22px + vol/level) +
-# engine-tab strip (24px) + gaps.
+# MIDI device bar (20px) + engine-tab strip (20px) + gaps.
 # Height is determined by the ADSR+meter+vol column:
 #   _vol_section_y = by+96; vol_track bottom = by+96+62+8 = by+166;
-#   tabs at by+170 (4px gap), tab height 20, gap 4 → bar bottom = by+194
-#   TOOLBAR_H = 8 + 194 = 202.
+#   MIDI bar at by+170 (4px gap), height 20 → bottom by+190;
+#   tabs at by+194 (4px gap), tab height 20, gap 4 → bar bottom = by+218
+#   TOOLBAR_H = 8 + 218 = 226.
 # (The envelope/vol block is NOT excluded -- it is compacted to sit right after
 # the ADSR R-track so the bar height is governed by the vol slider, not air.)
-TOOLBAR_H = 202
+TOOLBAR_H = 226
 PIANO_H = 96
 FPS = 60
 
@@ -857,13 +864,15 @@ def replay_session(ts, prefix="_session"):
         grid = grids[i]
         f0 = midi_to_freq(int(c["note"]))
         _, voices, _ = analyse(grid, f0, c["engine"], dict(c["engine_params"]))
+        gate = bool(c.get("gate", True))   # default True for sessions recorded pre-MIDI
+        voices_for_replay = voices if gate else []
         release_chunks = max(1, round(float(c["release_ms"]) / 1000.0 / CHUNK_S))
         attack_chunks  = max(1, round(float(c["attack_ms"])  / 1000.0 / CHUNK_S))
         decay_chunks   = max(1, round(float(c["decay_ms"])   / 1000.0 / CHUNK_S))
         sustain        = float(c["sustain"])
         gain = master_gain * float(c["vol"])
         for _ in range(int(c["n_rendered"])):
-            pool.update(voices, phase, amp_cur, pan_cur, release_chunks,
+            pool.update(voices_for_replay, phase, amp_cur, pan_cur, release_chunks,
                         attack_chunks, decay_chunks, sustain)
             buf, pk, nc = render_chunk_laplacian(phase, amp_cur, pan_cur,
                                                  pool.amp_tgt, pool.pan_tgt,
@@ -899,6 +908,56 @@ def _replay_cli(ts, prefix="_session"):
                   f"(len ref={len(ref)} replay={len(audio)})")
     else:
         print(f"[fidelity] no recorded {rec_wav} to compare against")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MIDI INPUT
+# ──────────────────────────────────────────────────────────────────────────────
+
+class MidiInput:
+    """Non-blocking MIDI input: enumerate ports, open one, poll messages."""
+
+    def __init__(self):
+        self.port = None
+        self.port_name = None
+
+    def ports(self):
+        if not MIDI_AVAILABLE:
+            return []
+        try:
+            return mido.get_input_names()
+        except Exception:
+            return []
+
+    def open(self, name):
+        self.close()
+        if name is None or not MIDI_AVAILABLE:
+            return
+        try:
+            self.port = mido.open_input(name)
+            self.port_name = name
+        except Exception as exc:
+            print(f"[MIDI] cannot open {name!r}: {exc}")
+            self.port = None
+            self.port_name = None
+
+    def close(self):
+        if self.port is not None:
+            try:
+                self.port.close()
+            except Exception:
+                pass
+            self.port = None
+            self.port_name = None
+
+    def poll(self):
+        """Return all pending messages without blocking."""
+        if self.port is None:
+            return []
+        try:
+            return list(self.port.iter_pending())
+        except Exception:
+            return []
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1016,7 +1075,15 @@ def main():
         attack_ms=ATTACK_MS_DEFAULT,
         decay_ms=DECAY_MS_DEFAULT,
         sustain=SUSTAIN_DEFAULT,
+        # MIDI gate: True = voices active; False = all slots in release (note-off).
+        # Keyboard/mouse piano always set gate=True (latch). MIDI note-off sets False.
+        gate=True,
+        midi_held=[],   # stack of currently held MIDI notes (last-note priority)
+        midi_port=None, # name of currently open MIDI port
     )
+
+    midi_in = MidiInput()
+    _midi_dropdown_open = False
 
     # toolbar layout
     by     = GRID_H * CELL + 8
@@ -1058,6 +1125,12 @@ def main():
         div_buttons.append(dict(idx=_di, label=_dlbl,
                                 rect=pygame.Rect(_dx, div_y, _dw, _DIV_BTN_H)))
         _dx += _dw + _DIV_BTN_GAP
+
+    # ── MIDI device selector bar (above engine tabs) ─────────────────────────
+    _midi_bar_y  = GRID_H * CELL + TOOLBAR_H - 48   # 4px below controls end
+    _MIDI_BTN_W  = 260
+    _MIDI_DD_ITH = 18   # dropdown item height
+    _midi_btn    = pygame.Rect(12, _midi_bar_y, _MIDI_BTN_W, 20)
 
     # ── Engine selector: a row of TABS in the toolbar's bottom strip ──────────
     # Built from the shared engine registry (casynth_core.ENGINES); a click
@@ -1259,12 +1332,25 @@ def main():
     while running:
         dt = clock.tick(FPS) / 1000.0
 
+        # Precompute MIDI dropdown items + hit-rects (used in events and draw).
+        if _midi_dropdown_open and MIDI_AVAILABLE:
+            _midi_dd_items = [None] + midi_in.ports()
+        else:
+            _midi_dd_items = []
+        _midi_dd_rects = [
+            pygame.Rect(_midi_btn.left + 2,
+                        _midi_btn.bottom + 2 + di * _MIDI_DD_ITH,
+                        _MIDI_BTN_W - 4, _MIDI_DD_ITH)
+            for di in range(len(_midi_dd_items))
+        ]
+
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 running = False
             elif e.type == pygame.KEYDOWN:
                 if e.key in _KB_PIANO:
                     state['note'] = state['kb_base'] + _KB_PIANO[e.key]
+                    state['gate'] = True
                 elif e.key == pygame.K_z:
                     state['kb_base'] = max(KB_BASE_MIN, state['kb_base'] - 12)
                     white_keys, black_keys = _make_piano(state['kb_base'], piano_top, W)
@@ -1291,7 +1377,20 @@ def main():
                     state['div_idx'] = max(0, state['div_idx'] - 1)
 
             elif e.type == pygame.MOUSEBUTTONDOWN:
-                if state['sidebar_open'] and e.pos[0] >= W and e.pos[1] < GRID_H * CELL and e.button == 1:
+                if _midi_dropdown_open:
+                    # Any click closes the dropdown; item click also selects.
+                    for di, item_rect in enumerate(_midi_dd_rects):
+                        if item_rect.collidepoint(e.pos):
+                            port = _midi_dd_items[di]
+                            if port is None:
+                                midi_in.close()
+                                state['midi_port'] = None
+                            else:
+                                midi_in.open(port)
+                                state['midi_port'] = midi_in.port_name
+                            break
+                    _midi_dropdown_open = False
+                elif state['sidebar_open'] and e.pos[0] >= W and e.pos[1] < GRID_H * CELL and e.button == 1:
                     for item in _sb_items:
                         if item['rect'].move(0, _sb_scroll).collidepoint(e.pos):
                             drag.update(active=True, cells=item['cells'],
@@ -1306,10 +1405,13 @@ def main():
                         m = hit_piano(e.pos)
                         if m is not None:
                             state['note'] = m
+                            state['gate'] = True
                     else:
                         tab_hit = next((t for t in engine_tabs
                                         if t['rect'].collidepoint(e.pos)), None)
-                        if tab_hit is not None:
+                        if MIDI_AVAILABLE and _midi_btn.collidepoint(e.pos):
+                            _midi_dropdown_open = not _midi_dropdown_open
+                        elif tab_hit is not None:
                             if tab_hit['id'] != state['engine']:
                                 state['engine'] = tab_hit['id']
                                 rebuild_ctrls()   # swap knob panel to new engine
@@ -1370,6 +1472,24 @@ def main():
                         and pygame.mouse.get_pos()[1] < GRID_H * CELL):
                     _sb_scroll = max(_sb_scroll_min, min(0, _sb_scroll + e.y * 20))
 
+        # MIDI input — poll pending messages (non-blocking, once per frame).
+        if MIDI_AVAILABLE:
+            for msg in midi_in.poll():
+                if msg.type == 'note_on' and msg.velocity > 0:
+                    if msg.note not in state['midi_held']:
+                        state['midi_held'].append(msg.note)
+                    state['note'] = msg.note
+                    state['gate'] = True
+                elif msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
+                    if msg.note in state['midi_held']:
+                        state['midi_held'].remove(msg.note)
+                    if state['midi_held']:
+                        state['note'] = state['midi_held'][-1]
+                        state['gate'] = True
+                    else:
+                        state['gate'] = False
+                # clock/sysex/other: ignore silently
+
         # GOL advance — strict BPM-aligned timing via perf_counter deadline.
         # next_step_time advances by exactly one interval each step, so the step
         # sequence lands on a perfect periodic grid regardless of frame-time jitter
@@ -1392,7 +1512,7 @@ def main():
 
         _ep = state['engine_params'][state['engine']]
         labels, voices, color = analyse(grid, f0(), state['engine'], _ep)
-        n_rendered, ur_delta = feed_audio(voices)
+        n_rendered, ur_delta = feed_audio(voices if state['gate'] else [])
         if rec is not None:
             rec['frames'].append((round(dt * 1000.0, 2), state['gen'],
                                   len(voices), n_rendered, ur_delta))
@@ -1417,6 +1537,7 @@ def main():
                     n_rendered=int(n_rendered),
                     engine=state['engine'],
                     note=int(state['note']),
+                    gate=bool(state['gate']),
                     vol=float(state['vol']),
                     attack_ms=float(state['attack_ms']),
                     decay_ms=float(state['decay_ms']),
@@ -1558,6 +1679,22 @@ def main():
         msurf = small.render(mlbl, True, (235, 96, 96) if clipping else C_DIM)
         screen.blit(msurf, (meter_track.right - msurf.get_width(), meter_track.bottom + 1))
 
+        # ── MIDI device bar (above engine tabs) ───────────────────────────────
+        if MIDI_AVAILABLE:
+            hot_midi = _midi_btn.collidepoint(mouse)
+            pygame.draw.rect(screen, C_BTN_HOT if hot_midi else C_BTN,
+                             _midi_btn, border_radius=3)
+            dot_col = (80, 200, 120) if midi_in.port is not None else C_DIM
+            pygame.draw.circle(screen, dot_col,
+                               (_midi_btn.left + 8, _midi_btn.centery), 4)
+            _port_disp = midi_in.port_name or "—"
+            if len(_port_disp) > 30:
+                _port_disp = _port_disp[:29] + "…"
+            _midi_lbl = small.render(f"MIDI: {_port_disp}  ▾", True, C_TXT)
+            screen.blit(_midi_lbl,
+                        (_midi_btn.left + 18,
+                         _midi_btn.centery - _midi_lbl.get_height() // 2))
+
         # ── engine selector tabs (bottom strip of the toolbar) ────────────────
         for t in engine_tabs:
             active = (t['id'] == state['engine'])
@@ -1619,11 +1756,33 @@ def main():
             dlbl = small.render(drag['name'], True, C_ACCENT)
             screen.blit(dlbl, (mx + 14, my - dlbl.get_height() // 2))
 
+        # ── MIDI dropdown overlay (drawn last so it floats above everything) ──
+        if _midi_dropdown_open and MIDI_AVAILABLE and _midi_dd_items:
+            _dd_rect = pygame.Rect(_midi_btn.left,
+                                   _midi_btn.bottom + 1,
+                                   _MIDI_BTN_W,
+                                   len(_midi_dd_items) * _MIDI_DD_ITH + 4)
+            pygame.draw.rect(screen, C_PANEL, _dd_rect, border_radius=4)
+            pygame.draw.rect(screen, C_EDGE, _dd_rect, 1, border_radius=4)
+            for di, (item_rect, port) in enumerate(zip(_midi_dd_rects, _midi_dd_items)):
+                hot_dd = item_rect.collidepoint(mouse)
+                if hot_dd:
+                    pygame.draw.rect(screen, C_BTN_HOT, item_rect, border_radius=3)
+                disp = port or "— (none)"
+                if len(disp) > 34:
+                    disp = disp[:33] + "…"
+                selected = (port == midi_in.port_name) or (port is None and midi_in.port is None)
+                _dlbl = small.render(disp, True, C_ACCENT if selected else C_TXT)
+                screen.blit(_dlbl,
+                            (item_rect.left + 4,
+                             item_rect.centery - _dlbl.get_height() // 2))
+
         pygame.display.flip()
 
     if rec is not None:
         _dump_session(rec)
 
+    midi_in.close()
     if stream is not None:
         stream.stop()
         stream.close()
