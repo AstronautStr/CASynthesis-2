@@ -120,16 +120,26 @@ NOTE_DIVS = [
 DIV_DEFAULT = 2           # index into NOTE_DIVS → 1/4 (quarter note)
 MAX_VOICES = 24          # max connected objects to sonify
 
-CHUNK_S = 0.09           # audio render chunk length (seconds)
+CHUNK_S = 0.02           # audio render chunk length (seconds)
+# A NOTE ONSET can only take effect on a chunk boundary (a new chunk rendered with
+# the new voices), so CHUNK_S is also the quantisation grid for MIDI note timing.
+# At the old 90 ms a steady hardware arpeggiator (~225 ms eighths) snapped each
+# onset to the nearest 90 ms multiple -> the even eighths rendered as an audible
+# 180/270 ms wobble (±45 ms jitter, confirmed on session _20260623_173927).  20 ms
+# keeps that quantisation under one frame while staying a click-safe crossfade
+# length (the 1-chunk mode crossfade is now 20 ms; ADSR/release are ms-derived and
+# auto-rescale).  Residual jitter is then the per-frame MIDI poll (~18 ms); shrink
+# further / decouple the poll only if that proves audible.
 # Audio is rendered AHEAD into a ring buffer drained by a sounddevice callback on
-# the audio thread (see main()).  This many chunks of look-ahead absorb frame-loop
-# jitter so a slow frame shrinks the buffer instead of gapping playback (the cause
-# of the live clicks: a session probe showed 36 mixer underruns on normal frames
-# under the old pygame play/queue model).  Look-ahead is also added latency, so
-# keep it small: measured frames are very steady (max ~23 ms) so 2 chunks
-# (~180 ms cushion) is ample.  Total output latency = this buffer + PortAudio's
-# own latency (we request 'low' below).
-AUDIO_LOOKAHEAD_CHUNKS = 2
+# the audio thread (see main()).  The look-ahead absorbs frame-loop jitter so a
+# slow frame shrinks the buffer instead of gapping playback (the cause of the live
+# clicks: a session probe showed 36 mixer underruns on normal frames under the old
+# pygame play/queue model).  It is added latency, so size it by WALL TIME, not a
+# fixed chunk count, so it stays constant when CHUNK_S changes: ~180 ms cushion was
+# ample at the old chunk size (frames are very steady, max ~43 ms).  Total output
+# latency = this buffer + PortAudio's own latency (we request 'low' below).
+AUDIO_LOOKAHEAD_MS = 180
+AUDIO_LOOKAHEAD_CHUNKS = max(2, round(AUDIO_LOOKAHEAD_MS / 1000.0 / CHUNK_S))
 # Headroom: up to MAX_VOICES objects, each up to MAX_MODES_PER_OBJ partials, plus
 # front+back overlap during cross-fades -> the summed signal can peak well above
 # 1.0 and hard-clip (audible distortion).  Measured raw peak on a dense field is
