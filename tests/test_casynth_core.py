@@ -17,6 +17,12 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import casynth_core as c
+import casynth_engine as eng
+from casynth_engine import _crop_like_extract
+from casynth_session import _exc_for_frames
+from casynth_tuning import (pair_dissonance, dissonance_curve,
+                             scale_minima, snap_ratio,
+                             TUNE_CURVE_STEPS, TUNE_SKIP_BELOW)
 
 F0 = 261.0
 GUARD = 0.45 * c.SR
@@ -436,6 +442,751 @@ def test_extract_size_and_centering():
     ys, xs = np.where(patch > 0)
     # centroid should sit near the patch centre (window centred on mass centroid)
     assert 2 <= ys.mean() <= 5 and 2 <= xs.mean() <= 5, "extract not centred"
+
+
+# ── events_field (casynth_engine, decisions.md 2026-07-05) ───────────────────
+
+def _blinker_prev():
+    """3×3 blinker: horizontal phase {(1,0),(1,1),(1,2)}."""
+    g = np.zeros((3, 3), np.uint8)
+    g[1, 0] = g[1, 1] = g[1, 2] = 1
+    return g
+
+
+def _blinker_new():
+    """3×3 blinker: vertical phase {(0,1),(1,1),(2,1)}."""
+    g = np.zeros((3, 3), np.uint8)
+    g[0, 1] = g[1, 1] = g[2, 1] = 1
+    return g
+
+
+def test_events_field_blinker():
+    """Criterion F: exact values for the blinker horizontal→vertical transition.
+
+    births {(0,1),(2,1)} → 1.0; wound edge from deaths {(1,0),(1,2)} covers all
+    three live cells → each gets W_WOUND=0.7.
+    Expected: (0,1)=1.7, (1,1)=0.7, (2,1)=1.7  (sums by linear superposition).
+    """
+    prev = _blinker_prev()
+    new  = _blinker_new()
+    exc  = eng.events_field(prev, new)
+
+    assert exc.shape == (3, 3), f"wrong shape {exc.shape}"
+    assert abs(exc[0, 1] - 1.7) < 1e-9, f"(0,1) should be 1.7, got {exc[0,1]}"
+    assert abs(exc[1, 1] - 0.7) < 1e-9, f"(1,1) should be 0.7, got {exc[1,1]}"
+    assert abs(exc[2, 1] - 1.7) < 1e-9, f"(2,1) should be 1.7, got {exc[2,1]}"
+    # Cells with no events should be 0
+    assert abs(exc[0, 0]) < 1e-9 and abs(exc[0, 2]) < 1e-9, "non-event cells non-zero"
+    assert abs(exc[2, 0]) < 1e-9 and abs(exc[2, 2]) < 1e-9, "non-event cells non-zero"
+
+
+def test_events_field_empty():
+    """No births and no deaths -> all-zero output; no crash."""
+    g = _blinker_prev()
+    exc = eng.events_field(g, g)
+    assert np.all(exc == 0.0), "static field should produce zero exc"
+
+
+def test_events_field_birth_only():
+    """Only births (prev empty) -> birth cells = 1.0, no wound."""
+    prev = np.zeros((5, 5), np.uint8)
+    new  = np.zeros((5, 5), np.uint8)
+    new[2, 2] = 1
+    exc = eng.events_field(prev, new)
+    assert abs(exc[2, 2] - 1.0) < 1e-9
+    assert exc.sum() == 1.0  # only that cell
+
+
+def test_events_field_wound_only():
+    """Only deaths: no births -> wound cells = W_WOUND, death cells=0 (not alive)."""
+    prev = np.zeros((5, 5), np.uint8)
+    prev[2, 2] = 1
+    new  = np.zeros((5, 5), np.uint8)
+    exc = eng.events_field(prev, new)
+    assert abs(exc[2, 2]) < 1e-9, "dead cell should not be wound (not live-in-new)"
+    assert exc.sum() < 1e-9, "no live cells in new -> no wound cells possible"
+
+
+# ── dyn parameter (decisions.md 2026-07-05) ───────────────────────────────────
+
+def _make_exc_for(patch, scale=1.0):
+    """Create a simple non-zero exc array aligned with patch (arbitrary values)."""
+    exc = np.zeros_like(patch, dtype=float)
+    live = np.argwhere(patch > 0)
+    for k, (r, c) in enumerate(live):
+        exc[r, c] = (k + 1) * scale   # 1,2,3,... at live cells
+    return exc
+
+
+def test_laplacian_dyn_zero_bitexact():
+    """Criterion A: dyn=0 (with or without exc) is bit-for-bit with the baseline."""
+    for p in (_ell_patch(), _dense_patch()):
+        f_base, a_base = c.map_laplacian(p, F0, 8, shape=0.5)
+        exc = _make_exc_for(p)
+        # Explicit dyn=0, exc provided -> must not change output
+        f_dyn0, a_dyn0 = c.map_laplacian(p, F0, 8, shape=0.5, dyn=0.0, exc=exc)
+        assert np.array_equal(f_base, f_dyn0) and np.array_equal(a_base, a_dyn0), \
+            "dyn=0 with exc is not bit-for-bit with baseline"
+        # Also: dyn=0 without exc
+        f_dyn0b, a_dyn0b = c.map_laplacian(p, F0, 8, shape=0.5, dyn=0.0)
+        assert np.array_equal(f_base, f_dyn0b) and np.array_equal(a_base, a_dyn0b), \
+            "dyn=0 no-exc is not bit-for-bit with baseline"
+
+
+def test_laplacian_dyn_fallback_no_exc():
+    """Criterion B: dyn=1 with exc=None -> same amps as dyn=0 (deg path, atol 1e-9)."""
+    for p in (_ell_patch(), _dense_patch()):
+        _, a_deg  = c.map_laplacian(p, F0, 8, shape=0.7, dyn=0.0)
+        _, a_fall = c.map_laplacian(p, F0, 8, shape=0.7, dyn=1.0, exc=None)
+        assert np.allclose(a_deg, a_fall, atol=1e-9), \
+            f"dyn=1 exc=None not equal to deg path: max diff {np.abs(a_deg-a_fall).max()}"
+
+
+def test_laplacian_dyn_fallback_zero_exc():
+    """Criterion B: dyn=1 with exc≡0 -> same amps as dyn=0 (deg path, atol 1e-9).
+    Unit-normalisation of the deg vector cancels through max-normalisation of
+    the projections, giving the same relative amplitudes."""
+    for p in (_ell_patch(), _dense_patch()):
+        exc_zero = np.zeros_like(p, dtype=float)
+        _, a_deg  = c.map_laplacian(p, F0, 8, shape=0.7, dyn=0.0)
+        _, a_fall = c.map_laplacian(p, F0, 8, shape=0.7, dyn=1.0, exc=exc_zero)
+        assert np.allclose(a_deg, a_fall, atol=1e-9), \
+            f"dyn=1 exc≡0 not equal to deg path: max diff {np.abs(a_deg-a_fall).max()}"
+
+
+def test_laplacian_dyn_scale_invariant():
+    """Criterion D: exc and 5·exc produce identical amplitudes (unit-norm cancels scale)."""
+    p = _ell_patch()
+    exc = _make_exc_for(p, scale=1.0)
+    exc5 = exc * 5.0
+    _, a1 = c.map_laplacian(p, F0, 8, shape=0.8, dyn=0.6, exc=exc)
+    _, a5 = c.map_laplacian(p, F0, 8, shape=0.8, dyn=0.6, exc=exc5)
+    assert np.allclose(a1, a5, atol=1e-9), \
+        f"dyn scale invariance failed: max diff {np.abs(a1-a5).max()}"
+
+
+def test_laplacian_dyn_does_not_affect_freqs():
+    """dyn only affects amplitudes; frequencies are unchanged at any dyn value."""
+    p = _ell_patch()
+    exc = _make_exc_for(p)
+    f0_res, _ = c.map_laplacian(p, F0, 8, shape=0.5, dyn=0.0)
+    f1_res, _ = c.map_laplacian(p, F0, 8, shape=0.5, dyn=1.0, exc=exc)
+    assert np.allclose(f0_res, f1_res, atol=1e-6), \
+        f"dyn changed frequencies: {f0_res} vs {f1_res}"
+
+
+def test_laplacian_dyn_symmetry_antisymmetric_mode():
+    """Criterion C: dyn modulates which eigenmodes are audible based on excitation.
+
+    Uses the blinker (P3 path graph): nodes A-B-C, deg = [1,2,1].
+    lambda=1 eigenvector phi = [1,0,-1]/sqrt(2) is anti-symmetric.
+    lambda=3 eigenvector psi = [1,-2,1]/sqrt(6) is symmetric.
+
+    With dyn=0 (deg excitation): <deg, phi> = 0 -> lambda=1 mode is SILENT,
+    lambda=3 mode is LOUD.  This is already tested in test_laplacian_shape_blinker_exact_amplitudes.
+
+    Key dyn invariant: asymmetric exc opens the anti-symmetric lambda=1 mode
+    that was silent under dyn=0 deg.  amps ordering FLIPS:
+      dyn=0: amps = [0, 1.0] (lambda=1 silent, lambda=3 loud)
+      dyn=1, exc=[1,0,0]: amps = [max, <max] (lambda=1 now loudest)
+
+    Note: symmetric exc = [w,w,w] is proportional to the DC mode (orthogonal
+    to all sounding lambda>0 modes), so mx_proj=0 triggers the rolloff fallback --
+    this is tested separately in test_laplacian_dyn_fallback_zero_exc."""
+    blinker = _blinker_patch()
+
+    # dyn=0: lambda=1 mode (amps[0]) should be silent
+    _, a_deg = c.map_laplacian(blinker, F0, 8, shape=1.0, dyn=0.0)
+    assert abs(a_deg[0]) < 1e-6, \
+        f"dyn=0 deg path should silence lambda=1 mode, got a[0]={a_deg[0]}"
+    assert abs(a_deg[1] - 1.0) < 1e-6, \
+        f"dyn=0 deg path: lambda=3 mode should be loudest, got a[1]={a_deg[1]}"
+
+    # Asymmetric exc: only the left cell excited
+    # e_ev=[1,0,0]: <e,phi>= 1/sqrt(2) != 0 -> lambda=1 now audible
+    exc_asym = np.zeros_like(blinker, dtype=float)
+    exc_asym[3, 2] = 1.0          # only the left node (node index 0 in row-major)
+    _, a_asym = c.map_laplacian(blinker, F0, 8, shape=1.0, dyn=1.0, exc=exc_asym)
+    # lambda=1 mode should now be the loudest (amps[0] = 1.0 by normalization)
+    assert a_asym[0] > 0.5, \
+        f"asymmetric exc should open lambda=1 mode, got a[0]={a_asym[0]}"
+    # And the amps ordering flips: lambda=1 louder than lambda=3
+    assert a_asym[0] > a_asym[1], \
+        f"amps ordering should flip: a[0]={a_asym[0]} should > a[1]={a_asym[1]}"
+
+
+def test_laplacian_dyn_alignment_rotation():
+    """Criterion E: (mask, exc) rotated/reflected TOGETHER -> same sorted amps.
+    Tests both fullshape=True and fullshape=False paths."""
+    p = _ell_patch()
+    exc = _make_exc_for(p)
+
+    for fullshape in (False, True):
+        _, a_base = c.map_laplacian(p, F0, 8, shape=0.8, dyn=0.7,
+                                    exc=exc, fullshape=fullshape)
+        a_sorted = np.sort(a_base)
+
+        for name, (q, eq) in [
+                ("rot90",  (np.rot90(p),    np.rot90(exc))),
+                ("rot180", (np.rot90(p, 2), np.rot90(exc, 2))),
+                ("fliplr", (np.fliplr(p),   np.fliplr(exc))),
+                ("flipud", (np.flipud(p),   np.flipud(exc)))]:
+            _, a_q = c.map_laplacian(np.ascontiguousarray(q), F0, 8,
+                                     shape=0.8, dyn=0.7,
+                                     exc=np.ascontiguousarray(eq),
+                                     fullshape=fullshape)
+            assert np.allclose(a_sorted, np.sort(a_q), atol=1e-6), \
+                f"dyn alignment not invariant under {name} (fullshape={fullshape})"
+
+
+def test_laplacian_dyn_alignment_fullshape_large():
+    """Criterion E (fullshape, large shape > MAX_LAPLACIAN_NODES path):
+    decimation [::step,::step] is applied to BOTH patch and exc simultaneously.
+
+    Tests the IMPLEMENTATION invariant: manual pre-decimation with the same step
+    gives a bit-for-bit identical result to letting map_laplacian do it internally.
+    This proves that exc stays geometrically aligned with patch after decimation
+    (decisions.md 2026-07-05, geometric alignment requirement).
+
+    Note: rotation invariance of ARBITRARY exc on a dense block cannot hold after
+    lattice decimation (rot90(X)[::s,::s] != rot90(X[::s,::s]) for non-constant X);
+    the invariant tested here is implementation consistency, not rotation covariance."""
+    import math
+    p = _huge_dense()   # 20×20 = 400 > MAX_LAPLACIAN_NODES=256 -> step=ceil(sqrt(400/256))=2
+    rng = np.random.default_rng(7)
+    exc_full = rng.random(p.shape) * p   # random exc only on live cells
+
+    # Compute the same step the function would use
+    cnt_pre = int((p > 0).sum())  # 400
+    step = int(math.ceil(math.sqrt(cnt_pre / c.MAX_LAPLACIAN_NODES)))  # 2
+
+    # Pre-decimate manually (same as what map_laplacian does internally)
+    p_dec   = np.ascontiguousarray(p[::step, ::step])
+    exc_dec = np.ascontiguousarray(exc_full[::step, ::step])
+
+    # Auto-decimate path: pass full-size inputs, fullshape=True -> internal decimation
+    _, a_auto = c.map_laplacian(np.ascontiguousarray(p), F0, 8,
+                                shape=0.6, dyn=0.5,
+                                exc=np.ascontiguousarray(exc_full),
+                                fullshape=True)
+    # Manual-decimate path: pass pre-decimated inputs
+    # (p_dec has <= MAX_LAPLACIAN_NODES nodes so no re-decimation; fullshape=True still ok)
+    _, a_manual = c.map_laplacian(p_dec, F0, 8,
+                                  shape=0.6, dyn=0.5,
+                                  exc=exc_dec,
+                                  fullshape=True)
+    assert np.allclose(a_auto, a_manual, atol=1e-9), \
+        f"auto-decimate != manual-decimate: max diff {np.abs(a_auto - a_manual).max()}"
+
+
+def test_laplacian_dyn_analyse_no_leak():
+    """Criterion E (analyse level): exc on object B's cells that fall INSIDE object A's
+    bounding box must NOT affect object A's voice (masking by sub is correct).
+
+    Setup: A is a large L-shape (8 cells, bbox rows [5,10] × cols [5,7]).  B is a
+    3-cell vertical bar (8,7)-(10,7) — inside A's bbox but 8-disconnected from A
+    (minimum column gap = 2, beyond 8-neighbour range).  exc is non-zero only on B's
+    top cell (asymmetric: A sees zero exc everywhere; B sees asymmetric exc).
+
+    Masking works because: exc_bbox_A = exc[A_bbox] * sub_A.  Sub_A is 0 at B's cell
+    positions (B's cells are not A's cells) so B's excitation is zeroed.  This is a
+    structural guarantee of the implementation; the test locks it against refactoring.
+
+    Verified properties:
+    - A's amps (larger object, sorted first) UNCHANGED vs no-exc case (atol 1e-9).
+    - B's amps CHANGED vs no-exc case (asymmetric exc opens the anti-symmetric mode).
+    """
+    # A: 8-cell L-shape.  Vertical arm rows [5,10] col 5; horizontal top (5,6),(5,7).
+    # Bbox: rows [5,10], cols [5,7].  8 cells, listed for clarity:
+    A_cells = [(5,5),(6,5),(7,5),(8,5),(9,5),(10,5),(5,6),(5,7)]
+    # B: 3-cell vertical bar inside A's bbox, 8-disconnected (col gap = 2 from A).
+    # Column distance from A's leftmost B-adjacent cell (8,5) to (8,7) is 2 > 1.
+    B_cells = [(8,7),(9,7),(10,7)]
+
+    grid = np.zeros((eng.GRID_H, eng.GRID_W), np.uint8)
+    for r, c in A_cells:
+        grid[r, c] = 1
+    for r, c in B_cells:
+        grid[r, c] = 1
+
+    # exc: only B's top cell has a non-zero value (asymmetric -> affects mode ratios).
+    exc_b_only = np.zeros_like(grid, dtype=float)
+    exc_b_only[8, 7] = 10.0   # B's topmost cell only; A's cells all zero
+
+    f0_hz = 261.0
+    params_dyn = {'n': 8, 'spread': 0.0, 'alpha': 1.0,
+                  'shape': 0.8, 'harm': 0.0, 'fullshape': False, 'dyn': 0.5}
+
+    _, voices_no_exc, _ = eng.analyse(grid, f0_hz, 'laplacian',
+                                       dict(params_dyn), exc=None)
+    _, voices_exc_b,  _ = eng.analyse(grid, f0_hz, 'laplacian',
+                                       dict(params_dyn), exc=exc_b_only)
+
+    assert len(voices_no_exc) == 2 and len(voices_exc_b) == 2, \
+        "expected exactly 2 voices"
+    # A has 8 cells, B has 3 → A is voices[0] (sorted by area descending).
+    a_A_no  = voices_no_exc[0]['amps']
+    a_A_exc = voices_exc_b[0]['amps']
+    a_B_no  = voices_no_exc[1]['amps']
+    a_B_exc = voices_exc_b[1]['amps']
+
+    # A must be unaffected (its exc_bbox is zero-masked by sub_A at B's positions).
+    assert np.allclose(a_A_no, a_A_exc, atol=1e-9), \
+        f"A's amps changed despite exc being only on B: max diff " \
+        f"{np.abs(a_A_no - a_A_exc).max():.2e}"
+
+    # B must change (asymmetric exc opens the anti-symmetric mode on B's P3 graph).
+    assert not np.allclose(a_B_no, a_B_exc, atol=1e-4), \
+        f"B's amps unchanged despite large asymmetric exc; " \
+        f"max diff {np.abs(a_B_no - a_B_exc).max():.2e}"
+
+
+def test_laplacian_dyn_symmetric_pair_real_projection():
+    """FIX-C (criterion C part 2): symmetric pair exc {endpoints only} silences the
+    anti-symmetric mode via real projection (mx_proj > 0 → NO rollback fallback).
+
+    Blinker = P3: nodes (3,2),(3,3),(3,4); phi_1=[1,0,-1]/sqrt(2) anti-symmetric.
+    exc = endpoints only: e_ev = [1, 0, 1] → e_hat_ev = [1,0,1]/sqrt(2).
+
+    Projection:
+      <e_hat_ev, phi_1> = (1*1 + 0*0 + 1*(-1))/2 = 0         → amps[0] = 0
+      <e_hat_ev, phi_2> = (1+0+1)/(sqrt(2)*sqrt(6)) = 1/sqrt(3) → amps[1] = 1.0
+    mx_proj = 1/sqrt(3) > 0 → this is NOT the rollback path. amps[:2] = [0, 1.0].
+    """
+    blinker = _blinker_patch()
+    exc_sym_pair = np.zeros_like(blinker, dtype=float)
+    exc_sym_pair[3, 2] = 1.0   # endpoint node 0
+    exc_sym_pair[3, 4] = 1.0   # endpoint node 2; center (3,3) = 0
+    _, a = c.map_laplacian(blinker, F0, 8, shape=1.0, dyn=1.0, exc=exc_sym_pair)
+    assert abs(a[0]) < 1e-9, \
+        f"symmetric pair exc must silence lambda=1 mode (real projection, not fallback): " \
+        f"a[0]={a[0]:.6f}"
+    assert abs(a[1] - 1.0) < 1e-9, \
+        f"symmetric pair exc: lambda=3 mode should be loudest (1.0): a[1]={a[1]:.6f}"
+
+
+def test_laplacian_dyn_uniform_exc_rollback():
+    """FIX-C: uniform exc [w,w,w] on blinker is proportional to DC mode phi_0 =
+    [1,1,1]/sqrt(3), which is ORTHOGONAL to all sounding modes (lambda>0).
+    All projections = 0 → mx_proj = 0 → ROLLBACK to rolloff (NOT the same as deg path).
+
+    Numeric check: amps[:2] = rolloff = [1.0, 0.5] (alpha=1, 2 modes).
+    This is DISTINCT from the symmetric pair case (which has mx_proj > 0)
+    and from dyn=0 (which gives amps[:2]=[0, 1.0] via deg projection).
+    """
+    blinker = _blinker_patch()
+    exc_uniform = np.zeros_like(blinker, dtype=float)
+    exc_uniform[3, 2] = exc_uniform[3, 3] = exc_uniform[3, 4] = 1.0
+    _, a_uni = c.map_laplacian(blinker, F0, 8, shape=1.0, dyn=1.0, exc=exc_uniform)
+    # All sounding projections are 0 → fallback to rolloff
+    assert abs(a_uni[0] - 1.0) < 1e-9, \
+        f"uniform exc -> rollback -> amps[0]=1.0 (rolloff), got {a_uni[0]:.6f}"
+    assert abs(a_uni[1] - 0.5) < 1e-9, \
+        f"uniform exc -> rollback -> amps[1]=0.5 (rolloff 1/2), got {a_uni[1]:.6f}"
+
+    # Uniform-exc rollback differs from dyn=0 (deg path gives amps=[0,1])
+    _, a_deg = c.map_laplacian(blinker, F0, 8, shape=1.0, dyn=0.0)
+    assert not np.allclose(a_uni, a_deg, atol=1e-6), \
+        "uniform rollback and deg path should differ on P3"
+
+
+# ── _crop_like_extract↔extract parity (FIX-D) ────────────────────────────────
+
+def test_crop_like_extract_matches_extract():
+    """FIX-D: _crop_like_extract(exc, sub) and extract(sub) use the SAME centroid
+    and window, so each live cell in extract(sub) maps back to the correct exc value.
+
+    For shapes that fit entirely within the PATCH_SIZE window:
+      _crop_like_extract(exc, sub)[extract(sub)>0] == exc[sub>0]
+    (row-major order of boolean indexing is preserved by identical window geometry).
+
+    This is the geometric alignment invariant that makes exc[patch>0] correct after
+    passing _crop_like_extract output through map_laplacian (decisions.md 2026-07-05).
+    """
+    PATCH_SIZE = c.PATCH_SIZE
+
+    for sub in (_blinker_patch(), _ell_patch()):
+        # Assign unique float values to each live cell (index 1, 2, 3, ...)
+        exc = np.zeros_like(sub, dtype=float)
+        for k, (r, co) in enumerate(np.argwhere(sub > 0)):
+            exc[r, co] = float(k + 1)
+
+        patch_extracted = c.extract(sub, PATCH_SIZE)
+        exc_cropped     = _crop_like_extract(exc, sub, PATCH_SIZE)
+
+        # Boolean-index both in row-major order; values must match element-by-element
+        vals_from_cropped = exc_cropped[patch_extracted > 0]
+        vals_from_exc     = exc[sub > 0]
+        assert np.allclose(vals_from_cropped, vals_from_exc, atol=1e-12), \
+            f"_crop_like_extract mismatch on {sub.sum()}-cell shape: " \
+            f"{vals_from_cropped} vs {vals_from_exc}"
+
+
+# ── _exc_for_frames live-cycle parity (FIX-B) ────────────────────────────────
+
+def test_exc_for_frames_live_cycle_parity():
+    """FIX-B: _exc_for_frames with step_prevs (FIX-A schema) reproduces the EXACT
+    exc_field the live synth would have computed, including:
+      1. Button-triggered step recorded with true prev (not just auto-steps).
+      2. First step: true initial grid used as prev (not zeros).
+      3. Manual edit between steps: the edited grid is the true prev for the next step.
+
+    Also verifies that the legacy path (step_prevs=None) DIFFERS for scenarios 1-3,
+    proving the legacy fallback was inaccurate for those cases.
+    """
+    rng = np.random.default_rng(42)
+
+    # Simulate a session with 3 steps and manual edits
+    g0 = (rng.random((eng.GRID_H, eng.GRID_W)) < 0.3).astype(np.uint8)  # initial draw
+    grid_1   = eng.step(g0)
+    # Manual edit between steps 1 and 2: flip a few cells
+    grid_1e = grid_1.copy()
+    grid_1e[5, 5:10] ^= 1       # toggle some cells (edit)
+    grid_2   = eng.step(grid_1e)
+    # Random fill between steps 2 and 3
+    grid_r   = (rng.random((eng.GRID_H, eng.GRID_W)) < 0.25).astype(np.uint8)
+    grid_3   = eng.step(grid_r)
+
+    step_gens  = np.array([1, 2, 3], dtype=int)
+    step_grids = np.stack([grid_1, grid_2, grid_3]).astype(np.uint8)
+    step_prevs = np.stack([g0, grid_1e, grid_r]).astype(np.uint8)
+    # 5 frames: two at gen 1, one at gen 2, two at gen 3
+    frame_gens = np.array([1, 1, 2, 3, 3], dtype=int)
+
+    # Expected exc for each frame (direct live-cycle computation)
+    exc_gen1 = eng.events_field(g0,      grid_1)   # true prev = g0
+    exc_gen2 = eng.events_field(grid_1e, grid_2)   # true prev = edited grid
+    exc_gen3 = eng.events_field(grid_r,  grid_3)   # true prev = random grid
+    expected = [exc_gen1, exc_gen1, exc_gen2, exc_gen3, exc_gen3]
+
+    # New path (FIX-A step_prevs)
+    result = _exc_for_frames(step_gens, step_grids, step_prevs, frame_gens)
+    assert len(result) == len(frame_gens), "wrong number of frames in result"
+    for i, (got, want) in enumerate(zip(result, expected)):
+        assert got is not None, f"frame {i} exc is None unexpectedly"
+        assert np.allclose(got, want, atol=1e-12), \
+            f"frame {i} (gen={frame_gens[i]}): max diff {np.abs(got-want).max():.2e}"
+
+    # Legacy path (step_prevs=None) gives DIFFERENT results for frames at gen 1 and gen 2
+    legacy = _exc_for_frames(step_gens, step_grids, None, frame_gens)
+    # Gen 1: legacy uses zeros as prev (step_idx=0 → zeros); new path uses g0
+    legacy_exc_gen1 = eng.events_field(np.zeros_like(g0), grid_1)
+    assert np.allclose(legacy[0], legacy_exc_gen1, atol=1e-12), \
+        "legacy path for gen 1 should use zeros as prev"
+    # When g0 has live cells that survive, legacy gen-1 exc differs from new path
+    assert not np.allclose(legacy[0], result[0], atol=1e-9), \
+        "legacy and new path should differ for first step when g0 has surviving cells"
+    # Gen 2: legacy uses grid_1 as prev (not grid_1e)
+    legacy_exc_gen2 = eng.events_field(grid_1, grid_2)
+    assert np.allclose(legacy[2], legacy_exc_gen2, atol=1e-12), \
+        "legacy path for gen 2 should use preceding step grid (grid_1) as prev"
+    # Legacy and new path differ for gen 2 when grid_1 ≠ grid_1e
+    assert not np.allclose(legacy[2], result[2], atol=1e-9), \
+        "legacy and new paths should differ for gen 2 when grid was edited between steps"
+
+
+def test_exc_for_frames_clear_scenario():
+    """FIX-F: serial-path handles clear() (state['gen'] resets to 0 → non-monotonic gens).
+
+    After clear() the user draws a new field and steps again.  step_gens becomes
+    non-monotonic (e.g. [1,2,1,2]).  np.searchsorted on a non-sorted array silently
+    returns wrong indices → gen-path corrupts exc reconstruction for the pre-clear
+    half.  Serial-path (frames col 5 = n_steps_done at frame time) is unambiguous:
+
+      serial=2 → k=1 → events_field(grid_1, grid_2)   [pre-clear]
+      serial=4 → k=3 → events_field(grid_3, grid_4)   [post-clear]
+
+    Also verifies that gen-path diverges (documents WHY serial is required).
+    """
+    rng = np.random.default_rng(99)
+
+    # Before clear: 2 steps at gen=1, gen=2
+    g0     = (rng.random((eng.GRID_H, eng.GRID_W)) < 0.3).astype(np.uint8)
+    grid_1 = eng.step(g0)        # serial=1, gen=1
+    grid_2 = eng.step(grid_1)    # serial=2, gen=2
+
+    # clear() → state['gen']=0; user draws new field, 2 more steps at gen=1,2
+    g0p    = (rng.random((eng.GRID_H, eng.GRID_W)) < 0.3).astype(np.uint8)
+    grid_3 = eng.step(g0p)       # serial=3, gen=1 (same gen numbers!)
+    grid_4 = eng.step(grid_3)    # serial=4, gen=2
+
+    step_gens  = np.array([1, 2, 1, 2], dtype=int)      # non-monotonic!
+    step_grids = np.stack([grid_1, grid_2, grid_3, grid_4]).astype(np.uint8)
+    step_prevs = np.stack([g0, grid_1, g0p, grid_3]).astype(np.uint8)
+
+    # All 4 frames happen to be at gen=2 → gen-path cannot distinguish the halves.
+    # frame_serials correctly discriminates pre-clear (serial=2) and post-clear (serial=4).
+    frame_gens    = np.array([2, 2, 2, 2], dtype=int)
+    frame_serials = np.array([2, 2, 4, 4], dtype=int)
+
+    exc_pre  = eng.events_field(grid_1, grid_2)   # k=1: pre-clear second step
+    exc_post = eng.events_field(grid_3, grid_4)   # k=3: post-clear second step
+    expected = [exc_pre, exc_pre, exc_post, exc_post]
+
+    # Serial-path: exact reconstruction for both pre- and post-clear frames
+    result = _exc_for_frames(step_gens, step_grids, step_prevs,
+                             frame_gens, frame_serials=frame_serials)
+    assert len(result) == 4
+    for i, (got, want) in enumerate(zip(result, expected)):
+        assert got is not None, f"serial-path: frame {i} exc is None"
+        assert np.allclose(got, want, atol=1e-12), \
+            f"serial-path: frame {i} max diff {np.abs(got - want).max():.2e}"
+
+    # Gen-path: searchsorted([1,2,1,2], 2, side='right')-1 = 3 for ALL frames
+    # → pre-clear frames get exc_post instead of exc_pre (silently wrong).
+    legacy = _exc_for_frames(step_gens, step_grids, step_prevs, frame_gens)
+    assert not np.allclose(legacy[0], result[0], atol=1e-9), \
+        "gen-path should give wrong exc for pre-clear frames on non-monotonic step_gens"
+
+
+def test_laplacian_dyn_registry_integrity():
+    """dyn param in Laplacian registry: spec valid, default in [lo, hi]."""
+    lap = c.ENGINE_BY_ID['laplacian']
+    dyn_spec = next((p for p in lap['params'] if p[0] == 'dyn'), None)
+    assert dyn_spec is not None, "laplacian registry missing 'dyn' param"
+    arg, label, lo, hi, integer, default = dyn_spec
+    assert lo <= default <= hi, f"dyn default {default} outside [{lo},{hi}]"
+    assert not integer, "dyn should be float (not integer)"
+    assert lo == 0.0 and hi == 1.0, f"dyn range should be [0,1], got [{lo},{hi}]"
+
+    # Calling with all defaults (dyn=0.0) must be bit-for-bit with no-dyn call
+    kwargs_full = {p[0]: p[5] for p in lap['params']}
+    f_full, a_full = lap['fn'](_ell_patch(), F0, **kwargs_full)
+    kwargs_nodyn = {p[0]: p[5] for p in lap['params'] if p[0] != 'dyn'}
+    f_nd, a_nd = lap['fn'](_ell_patch(), F0, **kwargs_nodyn)
+    assert np.array_equal(f_full, f_nd) and np.array_equal(a_full, a_nd), \
+        "registry defaults with dyn=0 not bit-for-bit with omitted-dyn call"
+
+
+# ── Sethares / casynth_tuning tests ──────────────────────────────────────────
+
+def _t_tetromino_spectrum(f0=261.0):
+    """T-tetromino (2x3) spectrum via map_laplacian(fullshape=True).
+    Eigenvalues {0,2,4,4} → 3 sounding modes [f0, f0*sqrt(2), f0*sqrt(2)].
+    Returns (freqs, amps) for the non-zero partials only."""
+    t_tet = np.zeros((2, 3), np.uint8)
+    t_tet[0, 1] = 1
+    t_tet[1, 0] = t_tet[1, 1] = t_tet[1, 2] = 1
+    freqs, amps = c.map_laplacian(t_tet, f0, n=6, fullshape=True)
+    mask = amps > 0
+    return freqs[mask][:3], amps[mask][:3]
+
+
+def test_tune_pair_dissonance_js_parity():
+    """Criterion B: pair_dissonance matches JS linalg.js:130-134 exactly.
+
+    Tests both the formula constants (0.24/0.021/19/3.5/5.75) and the
+    min/abs pattern against a hand-computed reference that duplicates the
+    JS formulation literally.  Zero-df returns 0, commutative.
+    """
+    # Hand-computed reference (duplicates JS formula, same constants)
+    f1, a1, f2, a2 = 220.0, 1.0, 330.0, 1.0
+    fmin = min(f1, f2); df = abs(f2 - f1)
+    s = 0.24 / (0.021 * fmin + 19)
+    expected = min(a1, a2) * (np.exp(-3.5 * s * df) - np.exp(-5.75 * s * df))
+    got = pair_dissonance(f1, a1, f2, a2)
+    assert abs(got - expected) < 1e-15, \
+        f"JS parity: expected {expected!r} got {got!r}"
+
+    # Unison pair: df=0 → exp(0)-exp(0)=0
+    d_unison = pair_dissonance(440.0, 0.7, 440.0, 0.7)
+    assert abs(d_unison) < 1e-15, f"unison pair not zero: {d_unison}"
+
+    # Commutative: (f1,a1,f2,a2) == (f2,a2,f1,a1)
+    assert abs(pair_dissonance(220.0, 0.5, 880.0, 0.8)
+               - pair_dissonance(880.0, 0.8, 220.0, 0.5)) < 1e-15, \
+        "pair_dissonance not commutative"
+
+    # Amplitude scaling: min(a1,a2) factor; d(f1, 0.5, f2, 1.0) == 0.5 * d(f1, 1.0, f2, 1.0)
+    d1 = pair_dissonance(300.0, 0.5, 500.0, 1.0)
+    d2 = pair_dissonance(300.0, 1.0, 500.0, 1.0)
+    assert abs(d1 - 0.5 * d2) < 1e-15, \
+        f"amplitude-min scaling: d*0.5={0.5*d2:.12g} got {d1:.12g}"
+
+
+def test_tune_dissonance_curve_harmonic_sanity():
+    """Criterion C: dissonance_curve of a 6-partial harmonic spectrum has local
+    minima within 5 cents of the JI octave (1200c), fifth (702c), and fourth (498c).
+
+    Uses the standard Sethares demo spectrum: freqs=f0*[1..6], amps=0.88**k.
+    """
+    f0 = 261.0
+    freqs = f0 * np.arange(1, 7, dtype=float)
+    amps  = 0.88 ** np.arange(6, dtype=float)
+    ratios, curve = dissonance_curve(freqs, amps)
+    mins = scale_minima(curve, ratios)
+    assert len(mins) > 0, "no minima found in harmonic dissonance curve"
+    cents = 1200.0 * np.log2(mins)
+
+    for target, name in ((1200.0, "octave"), (702.0, "fifth"), (498.0, "fourth")):
+        nearest = float(min(cents, key=lambda c_: abs(c_ - target)))
+        assert abs(nearest - target) < 5.0, \
+            f"no minimum within 5c of {name} ({target}c): nearest={nearest:.2f}c"
+
+    # Curve shape: values at grid boundaries (r=1.0, r=2.1) exceed interior minimum
+    assert curve.min() < curve[0], "curve min should be below left boundary"
+
+
+def test_tune_dissonance_curve_t_tetromino_regression():
+    """Criterion C (regression anchor): T-tetromino dissonance curve has exactly
+    one minimum near 600c (sqrt(2) ratio), anchored to 600.49c +/-0.5c.
+
+    T-tetromino Laplacian eigenvalues: {0, 2, 4, 4}.
+    Sounding modes: [f0, f0*sqrt(2), f0*sqrt(2)] (first non-zero lambda = 2).
+    The dominant cross-pair (f0*sqrt(2), r*f0) vanishes at r=sqrt(2) (unison),
+    creating a consonance pocket near 600 cents.
+
+    Regression anchor: 600.4918c (computed 2026-07-06 with TUNE_CURVE_STEPS=1300).
+    Any change to the formula constants, curve resolution, or eigenvalue computation
+    that moves this value by more than 0.5c will fail this test.
+    """
+    T_TET_MIN_CENTS_ANCHOR = 600.4918   # exact anchor, do not change without review
+    T_TET_TOLERANCE        = 0.5        # cents
+
+    ft, at = _t_tetromino_spectrum(f0=261.0)
+    assert len(ft) == 3, f"expected 3 T-tet sounding modes, got {len(ft)}"
+
+    ratios, curve = dissonance_curve(ft, at)
+    mins = scale_minima(curve, ratios)
+    assert len(mins) > 0, "no minima in T-tetromino dissonance curve"
+
+    cents = 1200.0 * np.log2(mins)
+    nearest_600 = float(min(cents, key=lambda c_: abs(c_ - 600.0)))
+    assert abs(nearest_600 - T_TET_MIN_CENTS_ANCHOR) < T_TET_TOLERANCE, \
+        (f"T-tetromino minimum: expected {T_TET_MIN_CENTS_ANCHOR:.4f}c "
+         f"(anchor), got {nearest_600:.4f}c "
+         f"(diff {abs(nearest_600-T_TET_MIN_CENTS_ANCHOR):.4f}c > "
+         f"{T_TET_TOLERANCE}c tolerance)")
+
+
+def test_tune_snap_ratio_exact():
+    """Criterion D: tune=1 snaps r_raw exactly to the nearest minimum."""
+    minima = np.array([1.2599, 1.5, 1.6818])  # major third, fifth, minor sixth
+    for r_raw in (1.26, 1.4, 1.6, 1.65):
+        r_snapped = snap_ratio(r_raw, minima, 1.0)
+        # Must equal one of the minima exactly (within float tolerance)
+        dists = np.abs(minima - r_snapped)
+        assert dists.min() < 1e-12, \
+            f"snap(r={r_raw}, tune=1) = {r_snapped} not equal to any minimum"
+
+    # When r_raw is already AT a minimum, snap leaves it unchanged
+    for r_min in minima:
+        assert abs(snap_ratio(float(r_min), minima, 1.0) - float(r_min)) < 1e-12, \
+            f"snap of exact minimum {r_min} not idempotent"
+
+
+def test_tune_snap_ratio_midpoint():
+    """Criterion D: tune=0.5 gives geometric midpoint in cent space.
+
+    r_snapped = r_raw * (r_nearest / r_raw)^0.5 = sqrt(r_raw * r_nearest)
+    In cents: c_snapped = (c_raw + c_nearest) / 2  (arithmetic midpoint in cents).
+    """
+    minima  = np.array([1.5])  # one minimum (fifth, ~702c)
+    r_raw   = 1.26             # major third ~400c
+    r_snap  = snap_ratio(r_raw, minima, 0.5)
+    # Geometric mean (= midpoint in log/cent space)
+    expected = r_raw * (1.5 / r_raw) ** 0.5
+    assert abs(r_snap - expected) < 1e-12, \
+        f"snap(0.5) midpoint: expected {expected:.12g} got {r_snap:.12g}"
+
+    # In cents: half-way between ~400c and 702c → ~551c
+    cents_snap     = 1200.0 * np.log2(r_snap)
+    cents_raw      = 1200.0 * np.log2(r_raw)
+    cents_nearest  = 1200.0 * np.log2(1.5)
+    cents_expected = (cents_raw + cents_nearest) / 2.0
+    assert abs(cents_snap - cents_expected) < 0.001, \
+        f"snap(0.5) cent midpoint: expected {cents_expected:.4f} got {cents_snap:.4f}"
+
+
+def test_tune_snap_ratio_monotone():
+    """Criterion D: increasing tune monotonically approaches the minimum.
+
+    For a fixed r_raw and a single minimum, snap should move strictly closer
+    to the minimum as tune increases from 0 to 1.
+    """
+    minima = np.array([1.5])
+    r_raw  = 1.26
+    cents_raw  = 1200.0 * np.log2(r_raw)
+    cents_min  = 1200.0 * np.log2(1.5)
+    tune_vals  = [0.0, 0.25, 0.5, 0.75, 1.0]
+    snapped    = [1200.0 * np.log2(snap_ratio(r_raw, minima, t)) for t in tune_vals]
+
+    # All snapped values must lie between raw and minimum (inclusive)
+    lo, hi = min(cents_raw, cents_min), max(cents_raw, cents_min)
+    for t, c_ in zip(tune_vals, snapped):
+        assert lo - 1e-9 <= c_ <= hi + 1e-9, \
+            f"tune={t}: snap {c_:.4f}c outside [{lo:.2f}, {hi:.2f}]c"
+
+    # Strict monotone: each step is closer to the minimum than the previous
+    dist_to_min = [abs(c_ - cents_min) for c_ in snapped]
+    for i in range(1, len(dist_to_min)):
+        assert dist_to_min[i] <= dist_to_min[i - 1] + 1e-9, \
+            f"not monotone: dist at tune={tune_vals[i]} ({dist_to_min[i]:.6f}) " \
+            f"> dist at tune={tune_vals[i-1]} ({dist_to_min[i-1]:.6f})"
+
+
+def test_tune_snap_ratio_octave_fold():
+    """Criterion E: octave fold maps multi-octave intervals to their interval class.
+
+    r_raw=3.0 (octave+fifth): k=1, fold to 1.5, snap to fifth, undo → 3.0.
+    r_raw=0.75 (fourth below): k=-1, fold to 1.5 (fourth above), snap, undo → 0.75.
+    r_raw=2.0 (exact octave): k=1, r_folded=1.0 < TUNE_SKIP_BELOW → no snap, return 2.0.
+    """
+    minima = np.array([1.5])   # only minimum is the fifth
+
+    # Octave + fifth snaps to twice the fifth (interval class: fifth)
+    r_oct_fifth = snap_ratio(3.0, minima, 1.0)
+    assert abs(r_oct_fifth - 3.0) < 1e-12, \
+        f"r=3.0 (oct+fifth) should snap to 3.0 (fifth*2), got {r_oct_fifth}"
+
+    # Fourth below = 2/3 ≈ 0.667, folds to 4/3 but only [1.5] min available
+    # Actually r_raw=0.75 = 3/4: k=-1, r_folded=1.5, snaps to 1.5, undo = 0.75
+    r_fourth_down = snap_ratio(0.75, minima, 1.0)
+    assert abs(r_fourth_down - 0.75) < 1e-12, \
+        f"r=0.75 (fourth-below) should snap to 0.75 (fifth-below), got {r_fourth_down}"
+
+    # Exact octave: r_folded=1.0 < TUNE_SKIP_BELOW → guard fires, return 2.0 unchanged
+    r_exact_oct = snap_ratio(2.0, minima, 1.0)
+    assert abs(r_exact_oct - 2.0) < 1e-12, \
+        f"r=2.0 (exact octave) should be returned unchanged, got {r_exact_oct}"
+
+    # Three octaves + fifth: r=12.0 → k=3, r_folded=1.5, snap to 1.5*8=12.0
+    r_multi = snap_ratio(12.0, minima, 1.0)
+    assert abs(r_multi - 12.0) < 1e-10, \
+        f"r=12.0 (3oct+fifth) should snap to 12.0, got {r_multi}"
+
+
+def test_tune_snap_ratio_transparent():
+    """Criterion F: no snap when tune=0 or minima is empty."""
+    minima = np.array([1.3, 1.5, 1.68])
+    for r in (1.1, 1.26, 1.5, 1.7, 2.05):
+        # tune=0: transparent regardless of minima
+        assert abs(snap_ratio(r, minima, 0.0) - r) < 1e-15, \
+            f"tune=0 not transparent at r={r}"
+        # empty minima: transparent regardless of tune
+        assert abs(snap_ratio(r, np.array([]), 1.0) - r) < 1e-15, \
+            f"empty minima not transparent at r={r}"
+
+
+def test_tune_zero_bitexact():
+    """Criterion A: tune=0 → snap_ratio returns r_raw exactly (bit-level).
+
+    This is the unit-level guarantee that underlies the full audio bit-exact
+    criterion A: when tune=0, _live_voices falls back to midi_to_freq(note)
+    and no dissonance computation occurs.  The snap function is the gate.
+    """
+    import math
+    test_ratios = [0.5, 1.0, 1.26, 1.5, 1.99, 2.0, 3.14159, 4.0]
+    minima = np.array([1.1, 1.25, 1.5, 1.7, 2.0])
+    for r in test_ratios:
+        got = snap_ratio(r, minima, 0.0)
+        # float-identical: same bits, not just close
+        assert got == r, \
+            f"tune=0 snap changed r={r} to {got} (expected bit-exact equality)"
+        # Also test with empty minima (should be same code path)
+        got_empty = snap_ratio(r, np.array([]), 0.0)
+        assert got_empty == r, \
+            f"tune=0 empty-minima snap changed r={r} to {got_empty}"
 
 
 # ── Runner (works without pytest) ─────────────────────────────────────────────

@@ -16,16 +16,17 @@ import numpy as np
 GRID_W, GRID_H = 52, 30
 CELL = 20
 # Toolbar: main button row (40px) + note-div row (18px) + status row (~38px) +
-# engine-knob panel (Laplace 6×22px, right col: ADSR 4×22px + vol/level) +
+# engine-knob panel (Laplace 6×22px, right col: ADSR+Tune 5×22px + vol/level) +
 # MIDI device bar (20px) + engine-tab strip (20px) + gaps.
-# Height is determined by the ADSR+meter+vol column:
-#   _vol_section_y = by+96; vol_track bottom = by+96+62+8 = by+166;
-#   MIDI bar at by+170 (4px gap), height 20 → bottom by+190;
-#   tabs at by+194 (4px gap), tab height 20, gap 4 → bar bottom = by+218
-#   TOOLBAR_H = 8 + 218 = 226.
-# (The envelope/vol block is NOT excluded -- it is compacted to sit right after
-# the ADSR R-track so the bar height is governed by the vol slider, not air.)
-TOOLBAR_H = 226
+# Height is determined by the ADSR+Tune+meter+vol column:
+#   ENV knobs 5 rows (A/D/S/R/T) at _ENV_RC_Y0=by+20, rows 0-4, 22px each;
+#   T (tune) track ends at by+20+4*22+8 = by+116;
+#   _vol_section_y = by+118 (4px gap after T-track); vol_track bottom = by+118+62+8 = by+188;
+#   MIDI bar at by+192 (4px gap), height 20 → bottom by+212;
+#   tabs at by+216 (4px gap), tab height 20, gap 4 → bar bottom = by+240
+#   TOOLBAR_H = 8 + 240 = 248.
+# (Was 226 before the tune knob was added as a 5th ENV row 2026-07-06.)
+TOOLBAR_H = 248
 PIANO_H = 96
 FPS = 60
 

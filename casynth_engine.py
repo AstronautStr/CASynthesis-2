@@ -16,6 +16,11 @@ from scipy import ndimage
 from casynth_config import *
 from casynth_core import extract, ENGINE_BY_ID
 
+# ── Dynamic excitation constants ──────────────────────────────────────────────
+# Weight applied to live 8-neighbours of dead cells (wound edge) in events_field.
+# 1.0 is used for births; wound edge is softer (decisions.md 2026-07-05).
+W_WOUND = 0.7
+
 
 def midi_to_freq(n):
     return 440.0 * 2 ** ((n - 69) / 12.0)
@@ -37,6 +42,57 @@ def step(grid):
     return ((n == 3) | ((grid == 1) & (n == 2))).astype(np.uint8)
 
 
+def events_field(prev, new):
+    """Excitation field for the GOL transition prev → new (decisions.md 2026-07-05).
+
+    Returns a float array with the same shape as prev/new:
+      - births  (new & ~prev)                       : +1.0 each
+      - wound edge (live-in-new 8-neighbours of any death) : +W_WOUND once per cell
+    Contributions are ADDITIVE: a cell that is both a birth and a wound edge
+    (e.g. the classic blinker step) accumulates 1.0 + W_WOUND = 1.7.
+
+    Uses toroidal (wrap) boundary to match the GOL step convention.
+    The single source of truth for the live synth AND session replay.
+    """
+    prev_b = prev.astype(bool)
+    new_b  = new.astype(bool)
+    births = new_b & ~prev_b
+    deaths = prev_b & ~new_b
+    result = np.zeros(new.shape, dtype=float)
+    result[births] += 1.0
+    if deaths.any():
+        # Spread death signal by 1 cell in all 8 directions (wrap), then mask
+        # by live-in-new: any live cell adjacent to at least one death gets W_WOUND.
+        death_spread = ndimage.convolve(deaths.astype(np.uint8), _S8, mode='wrap')
+        result[((death_spread > 0) & new_b)] += W_WOUND
+    return result
+
+
+def _crop_like_extract(data, template, size=PATCH_SIZE):
+    """Extract a size×size float window from *data* using the centroid of
+    *template > 0* as the crop centre (mirrors the logic in casynth_core.extract,
+    but outputs float values from *data* instead of binary from *template*).
+
+    Used to geometrically align the exc array with the extract()-cropped patch
+    for the fullshape=False path in analyse() (decisions.md 2026-07-05, REQ dyn §5).
+    The centroid is computed from *template* (the object binary mask), NOT from
+    *data* (exc values) -- so zero-exc cells do not shift the window.
+    """
+    live = np.argwhere(template > 0)
+    if len(live) == 0:
+        return np.zeros((size, size))
+    rc = live.mean(axis=0).round().astype(int)
+    h = size // 2
+    result = np.zeros((size, size))
+    rows, cols = data.shape
+    for dr in range(-h, h):
+        for dc in range(-h, h):
+            r, c = int(rc[0]) + dr, int(rc[1]) + dc
+            if 0 <= r < rows and 0 <= c < cols:
+                result[dr + h, dc + h] = data[r, c]
+    return result
+
+
 # LAPLACIAN MAPPING  (extract / map_laplacian imported from casynth_core --
 # single source of truth shared with mapping_bench.py).  This prototype sounds
 # MAX_MODES_PER_OBJ partials per object; the bench uses K_MAX.  The mode count is
@@ -51,18 +107,23 @@ def hsv(h, v):
     return (int(r * 255), int(g * 255), int(b * 255))
 
 
-def analyse(grid, f0, engine_id, params):
+def analyse(grid, f0, engine_id, params, exc=None):
     """Segment the field into connected objects and compute voices via the
     SELECTED engine.
 
     engine_id : key into ENGINE_BY_ID -- picks the map_* function.
     params    : dict {arg: value} of that engine's live attributes (e.g.
-                {'n':12,'spread':0.0,'alpha':1.0} for Laplace, {'n':16} for the
-                harmonic engines).  'n' (partial count) is clamped to
-                MAX_MODES_PER_OBJ; the engine silences higher slots (they ring
-                out as tails).  Forwarded to the map_* as keyword args, so the
-                same audio pipeline serves every engine -- harmonic mappings just
-                return fixed f0*k freqs (no topology tails, only amp glide).
+                {'n':12,'spread':0.0,'alpha':1.0,'dyn':0.5} for Laplace,
+                {'n':16} for the harmonic engines).  'n' (partial count) is
+                clamped to MAX_MODES_PER_OBJ; the engine silences higher slots
+                (they ring out as tails).  Forwarded to the map_* as keyword
+                args, so the same audio pipeline serves every engine.
+    exc       : optional float H×W excitation field (events_field output); None
+                means no dynamic excitation (dyn path falls back to deg).
+                Per-object: masked to THIS object's cells so overlapping bboxes
+                don't leak neighbouring-object excitation (decisions.md 2026-07-05).
+                Forwarded as 'exc=' kwarg ONLY to engines that declare 'dyn' in
+                their params (harmonic engines never receive it).
 
     Returns:
         labels  : labelled grid (0 = background)
@@ -77,6 +138,9 @@ def analyse(grid, f0, engine_id, params):
     kwargs = dict(params)
     kwargs['n'] = int(min(kwargs.get('n', N_PARTIALS_DEFAULT), MAX_MODES_PER_OBJ))
     _fullshape = bool(kwargs.get('fullshape', False))
+    # Engines with 'dyn' in their params accept an 'exc' kwarg (precedent: fullshape).
+    # Harmonic engines (FFT/Walsh/Random/Granulo) must NOT receive exc.
+    _has_dyn = 'dyn' in kwargs
 
     objs = []
     for lab in range(1, n + 1):
@@ -96,7 +160,20 @@ def analyse(grid, f0, engine_id, params):
 
         cx = xs.mean() / max(GRID_W - 1, 1)   # stereo pan [0..1]
 
-        freqs, amps = fn(patch, f0, **kwargs)
+        # Build per-object exc slice and pass to the engine if it supports dyn.
+        # Masking by sub ensures cells of OTHER objects in overlapping bboxes
+        # do not contribute to THIS object's voice (decisions.md 2026-07-05 §5).
+        if _has_dyn and exc is not None:
+            exc_bbox = exc[r0:r1 + 1, c0:c1 + 1].astype(float) * sub
+            if _fullshape:
+                exc_for_fn = exc_bbox      # same shape as sub/patch; decimation in map_laplacian
+            else:
+                exc_for_fn = _crop_like_extract(exc_bbox, sub, PATCH_SIZE)
+            call_kwargs = {**kwargs, 'exc': exc_for_fn}
+        else:
+            call_kwargs = kwargs
+
+        freqs, amps = fn(patch, f0, **call_kwargs)
 
         # Colour: hue by object index (spread across spectrum), brightness by area
         hue = (idx / max(MAX_VOICES - 1, 1)) * 0.72

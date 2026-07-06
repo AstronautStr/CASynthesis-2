@@ -16,6 +16,7 @@ import pygame
 from casynth_config import *
 from casynth_engine import hsv, note_name, midi_to_freq
 from casynth_midi import MIDI_AVAILABLE
+from casynth_midifile import MIDIFILE_AVAILABLE
 from patterns import PATTERNS
 
 
@@ -131,6 +132,7 @@ def draw_frame(screen, fonts, state, lay, rt):
     ctrls          = lay.ctrls
     meter_track    = lay.meter_track
     _midi_btn      = lay.midi_btn
+    _mf_btn        = lay.mf_btn
     _MIDI_BTN_W    = lay.midi_btn_w
     _MIDI_DD_ITH   = lay.midi_dd_ith
     engine_tabs    = lay.engine_tabs
@@ -151,6 +153,7 @@ def draw_frame(screen, fonts, state, lay, rt):
     meter               = rt.meter
     audio_ok            = rt.audio_ok
     midi_in             = rt.midi_in
+    midifile            = rt.midifile
     _midi_dropdown_open = rt.midi_dropdown_open
     _midi_dd_items      = rt.midi_dd_items
     _midi_dd_rects      = rt.midi_dd_rects
@@ -306,6 +309,28 @@ def draw_frame(screen, fonts, state, lay, rt):
         screen.blit(_midi_lbl,
                     (_midi_btn.left + 18,
                      _midi_btn.centery - _midi_lbl.get_height() // 2))
+
+    # ── MIDI-file transport button (right of the device bar) ──────────────
+    if MIDIFILE_AVAILABLE:
+        hot_mf = _mf_btn.collidepoint(mouse)
+        playing = midifile.playing
+        pygame.draw.rect(screen, C_ACCENT if playing
+                         else (C_BTN_HOT if hot_mf else C_BTN),
+                         _mf_btn, border_radius=3)
+        if playing:
+            def _ms(s):
+                s = max(0, int(s)); return f"{s // 60}:{s % 60:02d}"
+            _mf_txt = f"■ {_ms(midifile.pos)}/{_ms(midifile.length)}"
+        elif midifile.name:
+            _mf_txt = f"▶ {midifile.name}"
+        else:
+            _mf_txt = "♪ Play MIDI file"
+        if len(_mf_txt) > 24:
+            _mf_txt = _mf_txt[:23] + "…"
+        _mf_lbl = small.render(_mf_txt, True, C_BG if playing else C_TXT)
+        screen.blit(_mf_lbl,
+                    (_mf_btn.left + 6,
+                     _mf_btn.centery - _mf_lbl.get_height() // 2))
 
     # ── engine selector tabs (bottom strip of the toolbar) ────────────────
     for t in engine_tabs:

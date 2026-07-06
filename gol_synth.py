@@ -76,10 +76,13 @@ from patterns import PATTERNS
 # Modularised subsystems (extracted from this monolith -- see casynth_*.py).
 from casynth_config import *                                   # noqa: F401,F403
 from casynth_engine import (midi_to_freq, note_name, step, hsv, analyse,
-                            render_chunk_laplacian, SlotPool)
+                            render_chunk_laplacian, SlotPool, events_field)
 from casynth_session import _dump_session, replay_session, _replay_cli
 from casynth_midi import MidiInput, MIDI_AVAILABLE
+from casynth_midifile import MidiFilePlayer, MIDIFILE_AVAILABLE
 from casynth_ui import _make_piano, pattern_preview_surf, draw_frame
+from casynth_tuning import (dissonance_curve, scale_minima, snap_ratio,
+                             TUNE_MAX_PARTIALS)
 
 
 _KB_PIANO = {
@@ -116,7 +119,7 @@ _KB_PIANO = {
 # MAIN
 # ──────────────────────────────────────────────────────────────────────────────
 
-def main():
+def main(autoplay_midi=None):
     os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')
     pygame.init()
 
@@ -186,6 +189,10 @@ def main():
     clock = pygame.time.Clock()
 
     grid = np.zeros((GRID_H, GRID_W), np.uint8)
+    # exc_field: per-generation event excitation (events_field output).
+    # Updated ONLY on step() (both auto and manual); held between steps.
+    # None until the first step -> analyse falls back to static deg (dyn path).
+    exc_field = None
 
     # Flat slot pool (audio engine state)
     pool = SlotPool()
@@ -238,6 +245,12 @@ def main():
         attack_ms=ATTACK_MS_DEFAULT,
         decay_ms=DECAY_MS_DEFAULT,
         sustain=SUSTAIN_DEFAULT,
+        # Sethares tuning: tune∈[0,1] magnets the note-on carrier toward the nearest
+        # dissonance minimum of the current colony spectrum (0 = transparent, bit-exact).
+        # tuned_f0: actual sounding carrier in Hz (snapped when tune>0); pre-seeded to
+        # the default note so the session log always has a valid float value.
+        tune=0.0,
+        tuned_f0=midi_to_freq(NOTE_DEFAULT),
         # MIDI gate: True = voices active; False = all slots in release (note-off).
         # Keyboard/mouse piano always set gate=True (latch). MIDI note-off sets False.
         gate=True,
@@ -247,6 +260,13 @@ def main():
 
     midi_in = MidiInput()
     _midi_dropdown_open = False
+
+    # ── MIDI-file player: reads a .mid and drives the carrier note over time ──
+    # Reuses the entire live-MIDI audio path (writes the same state['note']/gate
+    # the render thread samples).  Poly->mono reduction = HIGHEST held note
+    # (melody); the timbre still comes from the live CA field, not the file.
+    midifile = MidiFilePlayer()
+    _mf_held = []   # notes currently sounding from the file (for the max() pick)
 
     # toolbar layout
     by     = GRID_H * CELL + 8
@@ -274,7 +294,7 @@ def main():
     _RC_LABEL_W  = 24                             # width of label area
     _rc_track_x  = _rc_x + _RC_LABEL_W + 4       # track left = W + 36
     _RC_TRACK_W  = 100                            # track width (value label at W+142, 50px to edge)
-    _vol_section_y = by + 96                      # starts 4px below R-track (by+86+8+4)
+    _vol_section_y = by + 118                     # starts 4px below T(tune)-track (by+108+8+4)
     meter_track  = pygame.Rect(_rc_track_x, _vol_section_y + 13, _RC_TRACK_W, 10)
     vol_track    = pygame.Rect(_rc_track_x, _vol_section_y + 62, _RC_TRACK_W, 8)
 
@@ -294,6 +314,8 @@ def main():
     _MIDI_BTN_W  = 260
     _MIDI_DD_ITH = 18   # dropdown item height
     _midi_btn    = pygame.Rect(12, _midi_bar_y, _MIDI_BTN_W, 20)
+    # "Play MIDI file" toggle button, just right of the device selector.
+    _mf_btn      = pygame.Rect(_midi_btn.right + 8, _midi_bar_y, 168, 20)
 
     # ── Engine selector: a row of TABS in the toolbar's bottom strip ──────────
     # Built from the shared engine registry (casynth_core.ENGINES); a click
@@ -341,12 +363,13 @@ def main():
                 label_x=_ctrl_x,
                 track=pygame.Rect(_ctrl_x + CTRL_LABEL_W,
                                   _ctrl_y0 + row * _CTRL_ROW_H, CTRL_TRACK_W, 8)))
-        # ADSR envelope in the right column (synth-wide; A/D/R are durations, S level).
+        # ADSR + Tune in the right column (synth-wide; A/D/R are durations, S/T levels).
         env_specs = [
             ('attack_ms',  'A', ATTACK_MS_MIN,  ATTACK_MS_MAX,  True),
             ('decay_ms',   'D', DECAY_MS_MIN,   DECAY_MS_MAX,   True),
             ('sustain',    'S', SUSTAIN_MIN,    SUSTAIN_MAX,    False),
             ('release_ms', 'R', RELEASE_MS_MIN, RELEASE_MS_MAX, True),
+            ('tune',       'T', 0.0,            1.0,            False),
         ]
         for i, (arg, lbl, lo, hi, is_ms) in enumerate(env_specs):
             ctrls.append(dict(
@@ -376,12 +399,16 @@ def main():
     _sb_scroll_min = min(0, GRID_H * CELL - _sb_content_h)
 
     # Spectrum strip: engine mode bars (voices' freqs/amps) in the empty toolbar
-    # area below the engine-knob column.  Sized to clear the tallest knob panel
-    # (Laplace: 6 rows) so the box stays put when the engine switches.  Read-only
-    # viz -> no knob, no session-log path.
-    _spec_rect = pygame.Rect(_ctrl_x, by + 140,
+    # area below the engine-knob column.  Top is derived from the tallest engine
+    # panel (max params across ENGINES, e.g. Laplace's 7 rows incl. dyn) so it
+    # keeps clearing the knob column as engines grow params; hardcoding a row
+    # count here silently overlapped the last knob when Laplace grew past it
+    # (dyn added 2026-07-05).  Read-only viz -> no knob, no session-log path.
+    _max_engine_rows = max(len(_e['params']) for _e in ENGINES)
+    _spec_top = _ctrl_y0 + _max_engine_rows * _CTRL_ROW_H + 6
+    _spec_rect = pygame.Rect(_ctrl_x, _spec_top,
                              (W - 8) - _ctrl_x,
-                             (GRID_H * CELL + TOOLBAR_H - 4) - (by + 140))
+                             (GRID_H * CELL + TOOLBAR_H - 4) - _spec_top)
 
     piano_top = GRID_H * CELL + TOOLBAR_H
     white_keys, black_keys = _make_piano(state['kb_base'], piano_top, W)
@@ -403,6 +430,7 @@ def main():
         vol_section_y=_vol_section_y, vol_track=vol_track, rc_track_x=_rc_track_x,
         rc_track_w=_RC_TRACK_W, env_hdr_rc_y=_ENV_HDR_RC_Y, ctrls=ctrls,
         meter_track=meter_track, midi_btn=_midi_btn, midi_btn_w=_MIDI_BTN_W,
+        mf_btn=_mf_btn,
         midi_dd_ith=_MIDI_DD_ITH, engine_tabs=engine_tabs, sb_items=_sb_items,
         sb_content_h=_sb_content_h, sb_scroll_min=_sb_scroll_min,
         spec_rect=_spec_rect)
@@ -448,14 +476,22 @@ def main():
             state[c['id']] = val
 
     def do(bid):
-        nonlocal grid
+        nonlocal grid, exc_field
         if bid == "play":
             state['run'] = not state['run']
             if state['run']:
                 # Schedule first step one interval from now so the user hears the
                 # current generation first, then the clock starts ticking.
                 state['next_step_time'] = time.perf_counter() + _step_interval()
-        elif bid == "step":  grid = step(grid); state['gen'] += 1
+        elif bid == "step":
+            prev = grid.copy()
+            grid = step(grid)
+            exc_field = events_field(prev, grid)
+            state['gen'] += 1
+            # FIX-A: record button-triggered steps with true prev_grid so replay
+            # can reconstruct exc_field exactly (button steps were previously missing).
+            if rec is not None:
+                rec['steps'].append((state['gen'], grid.copy(), state['note'], prev))
         elif bid == "random":
             grid[:] = (np.random.random((GRID_H, GRID_W)) < RANDOM_DENSITY).astype(np.uint8)
         elif bid == "clear": grid[:] = 0; state['gen'] = 0
@@ -485,19 +521,90 @@ def main():
     _rescale = {'key': None, 'voices': None}
 
     def _live_voices(spec, note):
-        """`spec` voices with freqs rescaled to the live MIDI note's f0.  freqs are
-        linear in f0 for every engine (Laplace f0·√λ/√λ0, harmonic f0·k) so this is
-        exact; amps/pan are f0-independent and untouched."""
+        """`spec` voices with freqs rescaled to the actual sounding carrier f0.
+
+        When tune>0 and a snapped carrier is set, the sounding f0 is state['tuned_f0']
+        (which may differ from midi_to_freq(note)).  The cache key uses the target f0
+        (a float) so an unchanged (spec, tuned_f0) pair is a single allocation hit.
+        freqs are linear in f0 for every engine, so the rescale is exact; amps/pan
+        are f0-independent and untouched."""
         base_f0 = spec['base_f0']
-        ratio = (midi_to_freq(note) / base_f0) if base_f0 > 0 else 1.0
+        # Use tuned_f0 (Sethares-snapped) when tune>0 and we have a valid value.
+        tf = state['tuned_f0']
+        target_f0 = (tf if (state['tune'] > 0.0 and tf is not None and tf > 0.0)
+                     else midi_to_freq(note))
+        ratio = (target_f0 / base_f0) if base_f0 > 0 else 1.0
         if abs(ratio - 1.0) < 1e-9:
             return spec['voices']
-        key = (id(spec), note)
+        key = (id(spec), target_f0)
         if _rescale['key'] != key:
             _rescale['voices'] = [dict(v, freqs=v['freqs'] * ratio)
                                   for v in spec['voices']]
             _rescale['key'] = key
         return _rescale['voices']
+
+    # Note-on tracking for Sethares snap (per-frame polling in the main loop).
+    # Initialised to the default note so the first frame doesn't trigger snap
+    # (tuned_f0 is already pre-seeded to midi_to_freq(NOTE_DEFAULT) in state).
+    _last_note_for_snap = [state['note']]   # list wrapper for nonlocal-free mutation
+
+    def _snap_note_on(new_note):
+        """Compute state['tuned_f0'] for new_note via Sethares snap.
+
+        Called on every note-on from the main-loop poller (≤1 frame latency).
+        Reads render_spec['cur'] for the current colony spectrum (the previous
+        frame's analyse() result).  When tune=0 or no prior reference exists the
+        raw MIDI frequency is used (transparent / no snap).
+
+        The computation (dissonance_curve + scale_minima) takes ≈1–10 ms for
+        N≤24 partials with R=1300 steps — acceptable as a one-shot note-on cost.
+        """
+        f_raw = midi_to_freq(new_note)
+        tune  = state['tune']
+
+        if tune <= 0.0:
+            state['tuned_f0'] = f_raw        # no snap; keep reference fresh
+            return
+
+        prev_f0 = state['tuned_f0']
+        if prev_f0 is None or prev_f0 <= 0.0:
+            state['tuned_f0'] = f_raw        # first note: no prior reference
+            return
+
+        # Build colony spectrum: all live-voice partials rescaled to prev_f0.
+        spec = render_spec['cur']
+        if spec is None or not spec['voices']:
+            state['tuned_f0'] = f_raw
+            return
+
+        base_f0 = spec['base_f0']
+        rescale = (prev_f0 / base_f0) if base_f0 > 0.0 else 1.0
+        all_f, all_a = [], []
+        for voice in spec['voices']:
+            for f, a in zip(voice['freqs'], voice['amps']):
+                if a > 0.0:
+                    all_f.append(f * rescale)
+                    all_a.append(float(a))
+
+        if not all_f:
+            state['tuned_f0'] = f_raw
+            return
+
+        colony_f = np.array(all_f)
+        colony_a = np.array(all_a)
+
+        # Top TUNE_MAX_PARTIALS by amplitude
+        if len(colony_a) > TUNE_MAX_PARTIALS:
+            idx      = np.argpartition(colony_a, -TUNE_MAX_PARTIALS)[-TUNE_MAX_PARTIALS:]
+            colony_f = colony_f[idx]
+            colony_a = colony_a[idx]
+
+        # Compute dissonance curve, find minima, snap
+        ratios_arr, curve_vals = dissonance_curve(colony_f, colony_a)
+        minima                 = scale_minima(curve_vals, ratios_arr)
+        r_raw                  = f_raw / prev_f0
+        r_snapped              = snap_ratio(r_raw, minima, tune)
+        state['tuned_f0']      = prev_f0 * r_snapped
 
     def _render_loop():
         gain_prev = MASTER_GAIN * state['vol']
@@ -560,10 +667,79 @@ def main():
             rec['midi_in'].append((time.perf_counter(),
                                    int(state['note']), bool(state['gate'])))
 
+    def _on_midifile_note(note, on):
+        # Called from the MIDI-file player thread.  Poly->mono: the carrier
+        # follows the NEWEST onset (last-note priority), falling back to the
+        # highest still-held note on release -- so every struck note re-articulates
+        # (the engine re-triggers the ADSR attack on each carrier freq change), and
+        # the carrier never parks on a multi-second held note.  Writes the same
+        # shared note/gate the render thread samples -> reuses the live-MIDI path.
+        if on:
+            if note in _mf_held:
+                _mf_held.remove(note)
+            _mf_held.append(note)           # newest at the end
+            state['note'] = note            # last-note priority: jump to the onset
+            state['gate'] = True
+        else:
+            if note in _mf_held:
+                _mf_held.remove(note)
+            if _mf_held:
+                state['note'] = max(_mf_held)   # fall back to the highest held
+                state['gate'] = True
+            else:
+                state['gate'] = False
+        if rec is not None:
+            rec['midi_in'].append((time.perf_counter(),
+                                   int(state['note']), bool(state['gate'])))
+
+    def _start_midifile(path):
+        # Load + start.  The timbre needs a LIVE colony (an empty field is
+        # silent no matter the pitch), so if nothing is alive we seed a random
+        # field and start the simulation -- otherwise "play file" looks broken.
+        if not midifile.load(path):
+            return
+        if not grid.any():
+            do("random")
+        if not state['run']:
+            do("play")
+        _mf_held.clear()
+        midifile.start(_on_midifile_note)
+
+    def _pick_midifile():
+        # Native file dialog (tkinter, stdlib).  Runs on the main thread only.
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk(); root.withdraw()
+            root.attributes('-topmost', True)
+            path = filedialog.askopenfilename(
+                title="Open MIDI file",
+                filetypes=[("MIDI files", "*.mid *.midi"),
+                           ("All files", "*.*")])
+            root.destroy()
+            return path or None
+        except Exception as exc:
+            print(f"[MIDIFILE] file dialog unavailable: {exc}")
+            return None
+
+    def _toggle_midifile():
+        # One button: playing -> stop (gate off); idle -> pick a file and play.
+        if midifile.playing:
+            midifile.stop()
+            _mf_held.clear()
+            state['gate'] = False
+        else:
+            path = _pick_midifile()
+            if path:
+                _start_midifile(path)
+
     _threads = []
     if audio_ok:
         _t = threading.Thread(target=_render_loop, daemon=True, name='render')
         _t.start(); _threads.append(_t)
+    # CLI autoplay: `python gol_synth.py play <file.mid>` loads + starts at boot.
+    if autoplay_midi:
+        _start_midifile(autoplay_midi)
     # MIDI input is delivered by rtmidi's callback (set when a device is opened);
     # there is no MIDI poll thread.
 
@@ -652,7 +828,9 @@ def main():
                     else:
                         tab_hit = next((t for t in engine_tabs
                                         if t['rect'].collidepoint(e.pos)), None)
-                        if MIDI_AVAILABLE and _midi_btn.collidepoint(e.pos):
+                        if MIDIFILE_AVAILABLE and _mf_btn.collidepoint(e.pos):
+                            _toggle_midifile()
+                        elif MIDI_AVAILABLE and _midi_btn.collidepoint(e.pos):
                             _midi_dropdown_open = not _midi_dropdown_open
                         elif tab_hit is not None:
                             if tab_hit['id'] != state['engine']:
@@ -728,20 +906,41 @@ def main():
             now = time.perf_counter()
             n_steps = 0
             while now >= state['next_step_time'] and n_steps < 4:
+                prev_grid = grid.copy()
                 grid = step(grid)
+                exc_field = events_field(prev_grid, grid)
                 state['gen'] += 1
                 state['next_step_time'] += interval
                 n_steps += 1
                 if rec is not None:
-                    rec['steps'].append((state['gen'], grid.copy(), state['note']))
+                    # FIX-A: 4-tuple includes true prev_grid so replay can reconstruct
+                    # exc_field correctly (prev_grid already a copy from line above).
+                    rec['steps'].append((state['gen'], grid.copy(), state['note'],
+                                         prev_grid))
             # If the clock drifted far behind (e.g. OS pause), snap forward so we
             # don't spiral trying to catch up.
             if state['next_step_time'] < now - interval:
                 state['next_step_time'] = now + interval
 
+        # ── Sethares tuning snap (note-on detection, ≤1 frame latency) ──────────
+        # Compare note from this frame to last frame's note.  All three input paths
+        # (keyboard, screen piano, MIDI callback) write state['note'], so this poll
+        # catches them all with at most one frame of latency.
+        _curr_note = state['note']
+        if _curr_note != _last_note_for_snap[0]:
+            if bool(state['gate']):
+                _snap_note_on(_curr_note)
+            else:
+                # Note changed while gate is off (e.g. released MIDI key):
+                # update reference without snapping so the next note-on has a
+                # consistent previous carrier.
+                state['tuned_f0'] = midi_to_freq(_curr_note)
+            _last_note_for_snap[0] = _curr_note
+
         _ep = state['engine_params'][state['engine']]
         base_f0 = f0()
-        labels, voices, color = analyse(grid, base_f0, state['engine'], _ep)
+        labels, voices, color = analyse(grid, base_f0, state['engine'], _ep,
+                                        exc=exc_field)
         # Publish an immutable render spec for the render thread (atomic ref swap).
         # The render thread rescales these voices to the LIVE MIDI note and applies
         # the live gate, so note timing follows the device, not this frame.
@@ -749,13 +948,20 @@ def main():
         ur_delta = _ur['n'] - _ur['prev']
         _ur['prev'] = _ur['n']
         if rec is not None:
+            # columns: [dt_ms, gen, n_voices, n_rendered, underrun, n_steps_done]
+            # n_steps_done = len(rec['steps']) at this moment; used by replay to
+            # index step history directly (serial-path) so exc reconstruction is
+            # correct even when gen resets to 0 after clear() (FIX-F).
             rec['frames'].append((round(dt * 1000.0, 2), state['gen'],
-                                  len(voices), 0, ur_delta))
+                                  len(voices), 0, ur_delta, len(rec['steps'])))
             # Per-frame control snapshot -- CONTEXT for the session (engine/knob
             # timeline).  Audio is no longer rendered per frame, so n_rendered=0; the
             # AUTHORITATIVE sample-accurate note timing is rec['midi_onsets'] written
             # by the render thread.  (Faithful per-frame audio replay is superseded
             # by the threaded render -- see memory/log/2026-06-23-midi-timing-jitter.)
+            # tuned_f0 in log: actual sounding carrier Hz (snapped when tune>0).
+            # Old recordings without tuned_f0 fall back in replay to midi_to_freq(note).
+            _tf = state['tuned_f0']
             rec['replay_controls'].append(dict(
                 n_rendered=0,
                 engine=state['engine'],
@@ -766,7 +972,10 @@ def main():
                 decay_ms=float(state['decay_ms']),
                 sustain=float(state['sustain']),
                 release_ms=float(state['release_ms']),
-                engine_params=dict(_ep)))
+                engine_params=dict(_ep),
+                tune=float(state['tune']),
+                tuned_f0=(float(_tf) if (_tf is not None and _tf > 0.0)
+                          else float(midi_to_freq(state['note'])))))
             rec['replay_engines'].append(state['engine'])
             rec['replay_grids'].append(grid.copy())
 
@@ -776,7 +985,7 @@ def main():
             ghost=_ghost, white_keys=white_keys, black_keys=black_keys,
             sb_scroll=_sb_scroll, meter=meter, audio_ok=audio_ok, midi_in=midi_in,
             midi_dropdown_open=_midi_dropdown_open, midi_dd_items=_midi_dd_items,
-            midi_dd_rects=_midi_dd_rects)
+            midi_dd_rects=_midi_dd_rects, midifile=midifile)
         draw_frame(screen, (font, small), state, lay, rt)
         pygame.display.flip()
 
@@ -791,6 +1000,7 @@ def main():
         _th.join(timeout=1.0)
     # Close MIDI BEFORE dumping so the rtmidi callback can't append to rec['midi_in']
     # while _dump_session reads it.
+    midifile.stop()
     midi_in.close()
     if stream is not None:
         stream.stop()
@@ -806,5 +1016,7 @@ if __name__ == '__main__':
     import sys
     if len(sys.argv) >= 3 and sys.argv[1] == 'replay':
         _replay_cli(sys.argv[2])
+    elif len(sys.argv) >= 3 and sys.argv[1] == 'play':
+        main(autoplay_midi=sys.argv[2])
     else:
         main()

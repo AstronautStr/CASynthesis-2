@@ -166,7 +166,7 @@ def _select_modes(n_modes, n, spread):
 
 
 def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.0,
-                  harm=0.0, fullshape=False):
+                  harm=0.0, fullshape=False, dyn=0.0, exc=None):
     """Graph Laplacian eigenvalues -> inharmonic partial frequencies via sqrt(lambda).
     Lowest selected mode is normalized to f0; amplitudes follow 1/i**alpha rolloff.
 
@@ -190,14 +190,30 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=
                 (arbitrary size); a node ceiling of MAX_LAPLACIAN_NODES is enforced
                 by deterministic lattice decimation so eigh stays tractable.
                 (decisions.md 2026-06-22.)
+    dyn       : 0.0 (default, bit-for-bit) = static edge excitation e = diag(L).
+                > 0 = blend toward the per-generation events excitation supplied via
+                `exc`.  Both vectors are unit-normalised BEFORE blending so a sparse
+                event (2-3 cells) is not drowned by the full-boundary deg.
+                Active ONLY inside the shape>0 branch (amplitudes only, never
+                frequencies).  Fallback to deg when exc is None or ‖exc_vals‖≈0.
+                (decisions.md 2026-07-05.)
+    exc       : float array shaped like patch (after any fullshape decimation applies
+                to both patch and exc simultaneously), or None.  Values at live-cell
+                positions (patch > 0, row-major == argwhere order) are the per-node
+                dynamic excitation weights.  Passed by analyse() after masking the
+                object's own cells; harmonic engines never receive this kwarg.
 
-    Defaults (spread=0, alpha=1, shape=0, harm=0, fullshape=False) reproduce the
-    original output bit-for-bit."""
+    Defaults (spread=0, alpha=1, shape=0, harm=0, fullshape=False, dyn=0) reproduce
+    the original output bit-for-bit."""
     if fullshape:
         cnt_pre = int((patch > 0).sum())
         if cnt_pre > MAX_LAPLACIAN_NODES:
             step = int(np.ceil(np.sqrt(cnt_pre / MAX_LAPLACIAN_NODES)))
             patch = patch[::step, ::step]
+            # Geometric alignment: apply the SAME decimation to exc so that
+            # exc[patch>0] stays in sync with the graph-node order (row-major).
+            if exc is not None:
+                exc = exc[::step, ::step]
 
     live = list(map(tuple, np.argwhere(patch > 0)))
     cnt = len(live)
@@ -269,6 +285,25 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=
             # Edge excitation e_i = deg_i = diagonal of L (graph-intrinsic,
             # invariant to position/rotation/reflection -- decisions.md 2026-06-18).
             e = L.diagonal()
+
+            # Dynamic excitation blend (dyn > 0 and exc supplied by analyse()).
+            # Both vectors are unit-normalised BEFORE blending so a sparse event
+            # is not drowned by the full-boundary deg (decisions.md 2026-07-05).
+            # dyn=0 or exc=None -> this block is skipped entirely (bit-for-bit).
+            if dyn > 0.0 and exc is not None:
+                # e_ev: excitation values at each graph node (row-major order of
+                # argwhere(patch>0) == boolean-indexing order of exc[patch>0]).
+                e_ev = exc[patch > 0].astype(float)
+                norm_ev = float(np.linalg.norm(e_ev))
+                norm_deg = float(np.linalg.norm(e))
+                e_hat_deg = e / (norm_deg + 1e-12)
+                if norm_ev < 1e-9:
+                    # No events for this object -> fall back to static deg
+                    e = e_hat_deg
+                else:
+                    e_hat_ev = e_ev / norm_ev
+                    e = (1.0 - dyn) * e_hat_deg + dyn * e_hat_ev
+
             # Columns of vecs that survived both masks and the mode selection
             final_idx = survived_idx[sel]
             proj = np.array([abs(float(np.dot(e, vecs[:, j]))) for j in final_idx])
@@ -331,7 +366,8 @@ ENGINES = [
         ('alpha',     'alpha',  0.0, 2.0, False, 1.0),
         ('shape',     'shape',  0.0, 1.0, False, 0.0),
         ('harm',      'harm',   0.0, 1.0, False, 0.0),
-        ('fullshape', 'full',   0,   1,   True,  1)]),
+        ('fullshape', 'full',   0,   1,   True,  1),
+        ('dyn',       'dyn',    0.0, 1.0, False, 0.0)]),
     dict(id='fft2d',   label='FFT',     fn=map_fft2d,   params=[('n', 'part', 1, 20, True, 16)]),
     dict(id='walsh',   label='Walsh',   fn=map_walsh,   params=[('n', 'part', 1, 20, True, 16)]),
     dict(id='random',  label='Random',  fn=map_random,  params=[('n', 'part', 1, 20, True, 16)]),
