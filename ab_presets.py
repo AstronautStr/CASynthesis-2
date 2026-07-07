@@ -88,4 +88,16 @@ PRESETS = [
         B=dict(engine='laplacian', params=dict(shape=1.0),
                attack_ms=1, release_ms=800, sustain=1.0),
     ),
+    dict(
+        key='5', name='fix-amp-slew',
+        scene='beacon',
+        listen="ФИКС. Оба shape 1, A=1тик/R=1тик. A: amp_slew OFF (как сейчас) -> фундамент бипает. "
+               "B: amp_slew ON -> амплитуда фундамента плавно качается вместо гейта. Если B гладкий "
+               "и не бипает — вариант A работает, несём в синт.",
+        common=dict(note=48, speed=6.0),
+        A=dict(engine='laplacian', params=dict(shape=1.0),
+               attack_ms=_TICK_MS, release_ms=_TICK_MS, sustain=1.0, amp_slew=False),
+        B=dict(engine='laplacian', params=dict(shape=1.0),
+               attack_ms=_TICK_MS, release_ms=_TICK_MS, sustain=1.0, amp_slew=True),
+    ),
 ]

@@ -334,6 +334,13 @@ class SlotPool:
         self._env_phase = np.zeros(sz, dtype=int)
         self._env_level = np.zeros(sz)
 
+        # Slewed engine amplitude per ACTIVE slot (amp_slew path only): tracks the
+        # engine's amp_new toward its target instead of jumping, so an amplitude
+        # modulation on a STABLE pitch (which the freq-onset envelope never sees)
+        # is smoothed.  Kept in sync with amp_new when slewing is off -> a clean
+        # hand-off if the flag is later turned on.
+        self._amp_smooth = np.zeros(sz)
+
         # Diagnostics: count tail-pool steals (pool exhausted -> a still-ringing
         # tail had to be overwritten = a residual click) and the loudest stolen
         # amplitude.  Read by the probe; zero in normal (non-exhausted) operation.
@@ -401,7 +408,7 @@ class SlotPool:
         # ph == 0 (idle): level stays at its current value (0 for a silent slot).
 
     def update(self, voices, phase, amp_cur, pan_cur, release_chunks,
-               attack_chunks, decay_chunks, sustain):
+               attack_chunks, decay_chunks, sustain, amp_slew=False):
         """Push a new voice list into the slot pool.
 
         phase / amp_cur / pan_cur : the engine's per-slot state arrays (mutated in
@@ -414,6 +421,10 @@ class SlotPool:
             envelope (0..1) multiplying the engine's per-mode amplitude; it is
             (re)triggered to ATTACK on every mode onset and advanced one chunk per
             update via _advance_env.
+        amp_slew : when True, also smooth per-mode AMPLITUDE changes on a STABLE
+            pitch (rise over attack_chunks, fall over release_chunks) -- fixes the
+            shape>0 beep where a fixed-frequency mode gates its amplitude and the
+            freq-onset envelope never sees it.  Default False -> bit-exact legacy.
 
         For each voice×mode:
           - frequency unchanged: advance the envelope, glide amp(=env·amp_new)/pan
@@ -453,10 +464,28 @@ class SlotPool:
                     self.pan_tgt[a] = pan_new
                     if freq_new > 0.0:
                         self._advance_env(a, attack_chunks, decay_chunks, sustain)
-                        self.amp_tgt[a] = self._env_level[a] * amp_new
+                        if amp_slew:
+                            # Smooth per-mode AMPLITUDE changes on a stable pitch:
+                            # rise over attack_chunks, fall over release_chunks.  The
+                            # freq-onset envelope never sees this (it only re-triggers
+                            # on a PITCH change), so without slewing a mode that gates
+                            # its amplitude at a fixed frequency clicks/beeps.  At the
+                            # min knobs (attack=release=1 chunk) the step is 1.0 ->
+                            # instant == the non-slew path.
+                            cur = self._amp_smooth[a]
+                            if amp_new > cur:
+                                cur = min(amp_new, cur + 1.0 / attack_chunks)
+                            else:
+                                cur = max(amp_new, cur - 1.0 / release_chunks)
+                            self._amp_smooth[a] = cur
+                            self.amp_tgt[a] = self._env_level[a] * cur
+                        else:
+                            self._amp_smooth[a] = amp_new
+                            self.amp_tgt[a] = self._env_level[a] * amp_new
                     else:
                         self._env_phase[a] = 0
                         self._env_level[a] = 0.0
+                        self._amp_smooth[a] = 0.0
                         self.amp_tgt[a] = 0.0
                     self._freq_prev[v, m] = freq_new
                     continue
@@ -486,11 +515,15 @@ class SlotPool:
                     self._env_phase[a] = 1          # (re)trigger -> attack
                     self._env_level[a] = 0.0
                     self._advance_env(a, attack_chunks, decay_chunks, sustain)
+                    # Fresh onset: the ADSR level does the 0->1 rise, so the slewed
+                    # engine amp starts AT its target (no double-ramp).
+                    self._amp_smooth[a] = amp_new
                     self.amp_tgt[a] = self._env_level[a] * amp_new
                 else:
                     self.freq_slots[a] = 0.0
                     self._env_phase[a] = 0
                     self._env_level[a] = 0.0
+                    self._amp_smooth[a] = 0.0
                     self.amp_tgt[a] = 0.0
                 self._freq_prev[v, m] = freq_new
 

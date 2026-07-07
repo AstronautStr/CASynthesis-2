@@ -108,6 +108,7 @@ def new_field():
         engine_params=_default_engine_params(),
         attack_ms=ATTACK_MS_DEFAULT, decay_ms=DECAY_MS_DEFAULT,
         sustain=SUSTAIN_DEFAULT, release_ms=RELEASE_MS_DEFAULT,
+        amp_slew=False,
         tune=0.0, tuned_f0=midi_to_freq(NOTE_DEFAULT),
         # last analyse() result (kept for the tune snap + display); spec_f0 is the
         # carrier the voices were computed at.
@@ -160,6 +161,7 @@ def apply_field_spec(f, spec):
     f['decay_ms']   = float(spec.get('decay_ms',   DECAY_MS_DEFAULT))
     f['sustain']    = float(spec.get('sustain',    SUSTAIN_DEFAULT))
     f['release_ms'] = float(spec.get('release_ms', RELEASE_MS_DEFAULT))
+    f['amp_slew']   = bool(spec.get('amp_slew', False))
     f['tune']       = float(spec.get('tune', 0.0))
 
 
@@ -418,16 +420,18 @@ def main(startup_preset=None):
                 voices_in = []
                 a_ch = d_ch = 1; sus = 1.0
                 r_ch = max(1, round(RELEASE_MS_DEFAULT / 1000.0 / CHUNK_S))
+                slew = False
             else:
                 voices_in = spec['voices']
                 a_ch = max(1, round(spec['attack_ms'] / 1000.0 / CHUNK_S))
                 d_ch = max(1, round(spec['decay_ms'] / 1000.0 / CHUNK_S))
                 r_ch = max(1, round(spec['release_ms'] / 1000.0 / CHUNK_S))
                 sus = float(spec['sustain'])
+                slew = bool(spec.get('amp_slew', False))
             gain = MASTER_GAIN * common['vol']
             pool = AU['pool']
             pool.update(voices_in, AU['phase'], AU['amp_cur'], AU['pan_cur'],
-                        r_ch, a_ch, d_ch, sus)
+                        r_ch, a_ch, d_ch, sus, amp_slew=slew)
             buf, peak, _nclip = render_chunk_laplacian(
                 AU['phase'], AU['amp_cur'], AU['pan_cur'],
                 pool.amp_tgt, pool.pan_tgt, pool.freq_slots, 2, gain_prev, gain)
@@ -742,7 +746,8 @@ def main(startup_preset=None):
                    for v in voices]
             render_spec['cur'] = dict(
                 voices=pub, attack_ms=f['attack_ms'], decay_ms=f['decay_ms'],
-                sustain=f['sustain'], release_ms=f['release_ms'])
+                sustain=f['sustain'], release_ms=f['release_ms'],
+                amp_slew=f['amp_slew'])
         else:
             render_spec['cur'] = None
 
