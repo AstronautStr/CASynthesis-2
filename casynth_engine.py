@@ -198,8 +198,19 @@ def analyse(grid, f0, engine_id, params, exc=None):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def render_chunk_laplacian(phase, amp_cur, pan_cur,
-                           amp_tgt, pan_tgt, freq_slots, channels, gain_prev, gain):
+                           amp_tgt, pan_tgt, freq_slots, channels, gain_prev, gain,
+                           transpose=1.0):
     """Render one gapless chunk over the flat slot pool.
+
+    transpose : carrier pitch ratio applied to EVERY slot's stored frequency
+    (active AND tail) as it is rendered.  The slot pool lives in a pitch-normalized
+    space (freqs analysed at a fixed reference f0); the live carrier note is applied
+    here as a scalar multiply on the oscillator frequency.  Because phase is
+    accumulated per slot and never reset, a change of `transpose` between chunks is
+    phase-continuous (the waveform keeps its phase, only its increment changes) ->
+    the carrier moves without a click and WITHOUT retriggering the per-mode envelope
+    (the target model: KA field = free-running oscillator, note = pure transpose).
+    Default 1.0 reproduces the historical (already-rescaled) sound bit-for-bit.
 
     gain_prev, gain : pre-clip master gain (MASTER_GAIN * volume) at the start and
     end of this chunk.  The gain is GLIDED from gain_prev to gain across the chunk
@@ -239,7 +250,7 @@ def render_chunk_laplacian(phase, amp_cur, pan_cur,
     for k in range(1, TOTAL_SLOTS + 1):
         if amp_cur[k] < 1e-4 and amp_tgt[k] < 1e-4:
             continue
-        freq = freq_slots[k]
+        freq = freq_slots[k] * transpose
         if freq <= 0.0 or freq >= guard:
             amp_cur[k] = 0.0
             continue

@@ -506,42 +506,36 @@ def main(autoplay_midi=None):
         return None
 
     # ── Audio render thread + MIDI input thread (decoupled from the 60 fps loop) ──
-    # The MAIN thread publishes the current render spec (voices computed at base_f0
-    # + the live knob values); the RENDER thread renders sub-chunks just-in-time,
-    # rescaling each voice's freqs to the LIVE MIDI note (so a note change between
-    # frames is applied within one sub-chunk, not a frame) and applying the live
-    # gate; the MIDI thread polls the device continuously.  This takes the MIDI poll
-    # and the look-ahead off the timing path -> onsets quantise to one CHUNK_S
+    # The MAIN thread publishes the current render spec (voices analysed at the fixed
+    # REFERENCE f0 -- a PITCH-NORMALIZED oscillator -- plus the live knob values); the
+    # RENDER thread renders sub-chunks just-in-time, applying the live carrier as a
+    # scalar TRANSPOSE at render (phase-continuous, no per-mode retrigger) and the
+    # live gate; the MIDI thread polls the device continuously.  This takes the MIDI
+    # poll and the look-ahead off the timing path -> onsets quantise to one CHUNK_S
     # sub-chunk locked to the playback clock, not to the frame rate.
+    #
+    # Target model (decisions.md 2026-07-06): the KA field is a free-running
+    # oscillator whose spectrum is analysed ONCE at REFERENCE_F0.  A note change is a
+    # pure transpose of that oscillator (freq × ratio in render_chunk_laplacian), NOT
+    # a change of the pool's stored frequencies -- so SlotPool no longer sees the note
+    # as a per-mode frequency change (no spurious attack retrigger / tail spawn on
+    # every note).  This is what fixes the long-note "hang" and the dense-MIDI churn.
+    REFERENCE_F0 = midi_to_freq(NOTE_DEFAULT)   # pitch-normalized analysis anchor
     render_spec = {'cur': None}        # atomic publish point (single ref swap)
     audio_ctl   = {'alive': True}      # threads exit when False
-    # Cache voices rescaled to the live note so an unchanged (spec, note) -- the
-    # common case (live note == the note the spec was built at) -- does not
-    # re-allocate every sub-chunk.
-    _rescale = {'key': None, 'voices': None}
 
-    def _live_voices(spec, note):
-        """`spec` voices with freqs rescaled to the actual sounding carrier f0.
+    def _transpose(note):
+        """Carrier transpose ratio: sounding f0 / REFERENCE_F0.
 
-        When tune>0 and a snapped carrier is set, the sounding f0 is state['tuned_f0']
-        (which may differ from midi_to_freq(note)).  The cache key uses the target f0
-        (a float) so an unchanged (spec, tuned_f0) pair is a single allocation hit.
-        freqs are linear in f0 for every engine, so the rescale is exact; amps/pan
-        are f0-independent and untouched."""
-        base_f0 = spec['base_f0']
-        # Use tuned_f0 (Sethares-snapped) when tune>0 and we have a valid value.
+        Applied at render as a scalar multiply on every slot's stored frequency
+        (see render_chunk_laplacian).  When tune>0 and a snapped carrier is set the
+        sounding f0 is state['tuned_f0'] (Sethares-snapped), else midi_to_freq(note).
+        On the default note the ratio is 1.0 -> bit-identical to the historical sound.
+        """
         tf = state['tuned_f0']
         target_f0 = (tf if (state['tune'] > 0.0 and tf is not None and tf > 0.0)
                      else midi_to_freq(note))
-        ratio = (target_f0 / base_f0) if base_f0 > 0 else 1.0
-        if abs(ratio - 1.0) < 1e-9:
-            return spec['voices']
-        key = (id(spec), target_f0)
-        if _rescale['key'] != key:
-            _rescale['voices'] = [dict(v, freqs=v['freqs'] * ratio)
-                                  for v in spec['voices']]
-            _rescale['key'] = key
-        return _rescale['voices']
+        return (target_f0 / REFERENCE_F0) if REFERENCE_F0 > 0 else 1.0
 
     # Note-on tracking for Sethares snap (per-frame polling in the main loop).
     # Initialised to the default note so the first frame doesn't trigger snap
@@ -623,14 +617,16 @@ def main(autoplay_midi=None):
             decay_chunks   = max(1, round(state['decay_ms']   / 1000.0 / CHUNK_S))
             sustain        = float(state['sustain'])
             gain = MASTER_GAIN * state['vol']
-            voices_in = (_live_voices(spec, note) if (spec is not None and gate)
-                         else [])
+            # Pool is fed PITCH-NORMALIZED reference voices; the live carrier is a
+            # scalar transpose applied at render (phase-continuous, no retrigger).
+            transpose = _transpose(note)
+            voices_in = (spec['voices'] if (spec is not None and gate) else [])
             pool.update(voices_in, phase, amp_cur, pan_cur, release_chunks,
                         attack_chunks, decay_chunks, sustain)
             buf, peak, n_clip = render_chunk_laplacian(phase, amp_cur, pan_cur,
                                                        pool.amp_tgt, pool.pan_tgt,
                                                        pool.freq_slots, 2,
-                                                       gain_prev, gain)
+                                                       gain_prev, gain, transpose)
             gain_prev = gain
             audio_q.put(buf)
             meter['peak'] = max(peak, meter['peak'] * METER_DECAY)
@@ -938,12 +934,13 @@ def main(autoplay_midi=None):
             _last_note_for_snap[0] = _curr_note
 
         _ep = state['engine_params'][state['engine']]
-        base_f0 = f0()
+        base_f0 = REFERENCE_F0            # analyse the field as a pitch-normalized oscillator
         labels, voices, color = analyse(grid, base_f0, state['engine'], _ep,
                                         exc=exc_field)
         # Publish an immutable render spec for the render thread (atomic ref swap).
-        # The render thread rescales these voices to the LIVE MIDI note and applies
-        # the live gate, so note timing follows the device, not this frame.
+        # Voices are pitch-normalized (analysed at REFERENCE_F0); the render thread
+        # applies the live carrier as a transpose and the live gate, so note timing
+        # follows the device, not this frame.
         render_spec['cur'] = {'voices': voices, 'base_f0': base_f0}
         ur_delta = _ur['n'] - _ur['prev']
         _ur['prev'] = _ur['n']
@@ -980,8 +977,14 @@ def main(autoplay_midi=None):
             rec['replay_grids'].append(grid.copy())
 
         # ── render one frame (all drawing lives in casynth_ui.draw_frame) ────
+        # The spectrum strip is designed to FOLLOW the carrier (bars shift right as
+        # the note rises); voices are now pitch-normalized, so transpose a display
+        # copy by the live ratio (== 1.0 on the default note -> dumpframe unchanged).
+        _disp_ratio = _transpose(state['note'])
+        _disp_voices = (voices if abs(_disp_ratio - 1.0) < 1e-9
+                        else [dict(v, freqs=v['freqs'] * _disp_ratio) for v in voices])
         rt = SimpleNamespace(
-            grid=grid, color=color, labels=labels, voices=voices, drag=drag,
+            grid=grid, color=color, labels=labels, voices=_disp_voices, drag=drag,
             ghost=_ghost, white_keys=white_keys, black_keys=black_keys,
             sb_scroll=_sb_scroll, meter=meter, audio_ok=audio_ok, midi_in=midi_in,
             midi_dropdown_open=_midi_dropdown_open, midi_dd_items=_midi_dd_items,
