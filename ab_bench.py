@@ -51,6 +51,11 @@ from casynth_tuning import (dissonance_curve, scale_minima, snap_ratio,
                             TUNE_MAX_PARTIALS)
 from patterns import PATTERNS
 
+try:
+    from ab_presets import PRESETS
+except Exception:                                    # no presets file -> manual mode
+    PRESETS = []
+
 
 # ── Test cases ────────────────────────────────────────────────────────────────
 # (name, grid_w, grid_h, [(pattern_name, x, y), ...])
@@ -130,6 +135,32 @@ def analyse_field(f, f0):
     """Run analyse() on the field's grid with its engine + params + exc field."""
     ep = f['engine_params'][f['engine']]
     return analyse(f['grid'], f0, f['engine'], ep, exc=f['exc'])
+
+
+# ── Preset application (shared by the live bench and the selftest) ─────────────
+def resolve_scene(scene):
+    """A preset scene is a CASES name (str) or an inline case dict
+    dict(name, gw, gh, place=[(pattern, x, y), ...])."""
+    if isinstance(scene, str):
+        for c in CASES:
+            if c['name'] == scene:
+                return c
+        raise KeyError(f"preset scene {scene!r} not found in CASES")
+    return scene
+
+
+def apply_field_spec(f, spec):
+    """Overwrite a field's engine / params / ADSR / tune from a preset field spec.
+    engine_params is reset to registry defaults first so a preset is hermetic
+    (leftover knobs from a previously loaded preset never leak in)."""
+    f['engine'] = spec.get('engine', ENGINES[0]['id'])
+    f['engine_params'] = _default_engine_params()
+    f['engine_params'][f['engine']].update(spec.get('params', {}))
+    f['attack_ms']  = float(spec.get('attack_ms',  ATTACK_MS_DEFAULT))
+    f['decay_ms']   = float(spec.get('decay_ms',   DECAY_MS_DEFAULT))
+    f['sustain']    = float(spec.get('sustain',    SUSTAIN_DEFAULT))
+    f['release_ms'] = float(spec.get('release_ms', RELEASE_MS_DEFAULT))
+    f['tune']       = float(spec.get('tune', 0.0))
 
 
 def field_spectrum(f, f0):
@@ -235,6 +266,36 @@ def selftest():
         ok = False
         print(f"[FAIL] A/B switch simulation raised {type(e).__name__}: {e}")
 
+    # 4) presets (if any): each resolves its scene, applies to both fields, and
+    #    renders a few ticks headlessly -- catches typos in agent-authored presets
+    #    (bad scene name, unknown engine, out-of-range knob) before a listen session.
+    for p in PRESETS:
+        try:
+            scene = resolve_scene(p['scene'])
+            f0 = midi_to_freq(p.get('common', {}).get('note', NOTE_DEFAULT))
+            gain = MASTER_GAIN * VOL_DEFAULT
+            for key in ('A', 'B'):
+                fld = new_field()
+                reset_field(fld, scene)
+                apply_field_spec(fld, p.get(key, {}))
+                pool = SlotPool()
+                sz = TOTAL_SLOTS + 1
+                phase = np.zeros(sz); amp_cur = np.zeros(sz); pan_cur = np.full(sz, 0.5)
+                for _t in range(12):
+                    step_field(fld)
+                    _l, voices, _c = analyse_field(fld, f0)
+                    pool.update(voices, phase, amp_cur, pan_cur,
+                                max(1, round(fld['release_ms'] / 1000.0 / CHUNK_S)),
+                                max(1, round(fld['attack_ms'] / 1000.0 / CHUNK_S)),
+                                max(1, round(fld['decay_ms'] / 1000.0 / CHUNK_S)),
+                                float(fld['sustain']))
+                    render_chunk_laplacian(phase, amp_cur, pan_cur, pool.amp_tgt,
+                                           pool.pan_tgt, pool.freq_slots, 2, gain, gain)
+            print(f"[ok]   preset {p['key']} {p['name']:<20} applies + 12 ticks clean")
+        except Exception as e:                           # noqa: BLE001 -- report & fail
+            ok = False
+            print(f"[FAIL] preset {p.get('name', '?')} raised {type(e).__name__}: {e}")
+
     print("\nSELFTEST", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 
@@ -258,7 +319,7 @@ WIN_H = TOOLBAR_H + GAP + FIELD_VP_H + STATUS_H
 FIELD_COL = [(111, 208, 224), (224, 168, 96)]     # A = cyan, B = amber
 
 
-def main():
+def main(startup_preset=None):
     os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')
     import pygame
     from casynth_ui import _draw_spectrum            # reuse the synth's spectrum view
@@ -277,7 +338,9 @@ def main():
     # ── shared state ─────────────────────────────────────────────────────────
     fields = [new_field(), new_field()]
     common = dict(note=NOTE_DEFAULT, vol=VOL_DEFAULT, speed=6.0)   # speed = ticks/s
-    case_idx = [0]
+    case_idx = [0]         # highlighted CASES button; -1 when a preset set a custom scene
+    cur_case = [CASES[0]]  # the ACTUAL scene geometry in play (CASES entry or preset dict)
+    cur_preset = [None]    # currently loaded preset (for the banner / status line)
     active = [None]        # which field SOUNDS+runs (0/1/None)
     sel = [0]              # which field the panel EDITS (0/1); == active when running
     next_step_time = [None]
@@ -285,7 +348,7 @@ def main():
     last_note = [common['note']]
 
     for f in fields:
-        reset_field(f, CASES[case_idx[0]])
+        reset_field(f, cur_case[0])
 
     # ── audio state (single pipeline; recreated on reset to kill tails) ───────
     import queue as _queue
@@ -378,6 +441,8 @@ def main():
     # ── field activation / case selection ────────────────────────────────────
     def select_case(i):
         case_idx[0] = i
+        cur_case[0] = CASES[i]
+        cur_preset[0] = None               # manual case pick -> no active preset
         for f in fields:
             reset_field(f, CASES[i])
         active[0] = None
@@ -385,13 +450,40 @@ def main():
         render_spec['cur'] = None
         audio_ctl['reset'] = True          # silence any ringing tail
 
+    def apply_preset(p):
+        """Load a preset: set the scene + both fields' engine/params/ADSR + common,
+        so the human just presses a number key and clicks A/B."""
+        scene = resolve_scene(p['scene'])
+        cur_case[0] = scene
+        case_idx[0] = next((i for i, c in enumerate(CASES) if c is scene), -1)
+        for f in fields:
+            reset_field(f, scene)
+        apply_field_spec(fields[0], p.get('A', {}))
+        apply_field_spec(fields[1], p.get('B', {}))
+        c = p.get('common', {})
+        common['note']  = c.get('note',  NOTE_DEFAULT)
+        common['vol']   = c.get('vol',   VOL_DEFAULT)
+        common['speed'] = c.get('speed', 6.0)
+        last_note[0] = common['note']
+        sel[0] = 0
+        active[0] = None
+        next_step_time[0] = None
+        render_spec['cur'] = None
+        audio_ctl['reset'] = True
+        cur_preset[0] = p
+
     def activate_field(i):
         """Restart field i on the case initial and make it the sounding field."""
         sel[0] = i
         active[0] = i
-        reset_field(fields[i], CASES[case_idx[0]])
+        reset_field(fields[i], cur_case[0])
         next_step_time[0] = time.perf_counter() + 1.0 / max(0.1, common['speed'])
         audio_ctl['reset'] = True          # kill the previous field's tail
+
+    # CLI auto-load: `python ab_bench.py --preset N` (1-based).
+    if startup_preset is not None and PRESETS:
+        if 1 <= startup_preset <= len(PRESETS):
+            apply_preset(PRESETS[startup_preset - 1])
 
     # ── Sethares snap for the active field (mirrors gol_synth._snap_note_on) ──
     def snap_active(new_note):
@@ -531,7 +623,7 @@ def main():
 
     def draw_field(i, base_f0):
         f = fields[i]
-        case = CASES[case_idx[0]]
+        case = cur_case[0]
         vp = field_vp(i)
         pygame.draw.rect(screen, (18, 20, 26), vp)
         gw, gh = case['gw'], case['gh']
@@ -576,8 +668,13 @@ def main():
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 running = False
-            elif e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
-                running = False
+            elif e.type == pygame.KEYDOWN:
+                if e.key == pygame.K_ESCAPE:
+                    running = False
+                elif e.unicode and e.unicode.isdigit():   # 1..9 -> load that preset
+                    n = int(e.unicode)
+                    if 1 <= n <= len(PRESETS):
+                        apply_preset(PRESETS[n - 1])
             elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
                 mx, my = e.pos
                 # case buttons
@@ -659,6 +756,16 @@ def main():
             tc = C_BG if b['idx'] == case_idx[0] else C_TXT
             screen.blit(font.render(b['label'], True, tc),
                         (b['rect'].x + 10, b['rect'].y + 6))
+        # preset banner (right side of the toolbar)
+        if PRESETS:
+            hint = "keys 1-%d: presets" % len(PRESETS)
+            if cur_preset[0] is not None:
+                banner = "PRESET %s  %s" % (cur_preset[0].get('key', '?'),
+                                            cur_preset[0]['name'])
+            else:
+                banner = "no preset"
+            screen.blit(small.render(banner, True, C_ACCENT), (PANEL_X, 6))
+            screen.blit(small.render(hint, True, C_DIM), (PANEL_X, 24))
         # fields (each with its own spectrum strip -> A/B difference is visible)
         draw_field(0, base_f0)
         draw_field(1, base_f0)
@@ -680,9 +787,13 @@ def main():
         # status line
         sy = TOOLBAR_H + GAP + FIELD_VP_H
         act = 'AB'[active[0]] if active[0] is not None else '—'
-        status = (f"Click a field to play/restart it (only one sounds).  "
-                  f"Panel edits field {'AB'[sel[0]]}.  Active: {act}.  "
-                  f"peak {meter['peak']:.2f}   Esc quits")
+        if cur_preset[0] is not None:
+            status = (f"[{cur_preset[0]['name']}]  {cur_preset[0].get('listen', '')}"
+                      f"   (active {act}, peak {meter['peak']:.2f})")
+        else:
+            status = (f"Click a field to play/restart it (only one sounds).  "
+                      f"Panel edits field {'AB'[sel[0]]}.  Active: {act}.  "
+                      f"peak {meter['peak']:.2f}   Esc quits")
         screen.blit(small.render(status, True, C_DIM), (GAP, sy + 7))
 
         pygame.display.flip()
@@ -696,6 +807,13 @@ def main():
 
 
 if __name__ == '__main__':
-    if '--selftest' in sys.argv[1:]:
+    argv = sys.argv[1:]
+    if '--selftest' in argv:
         sys.exit(selftest())
-    main()
+    sp = None
+    for i, a in enumerate(argv):
+        if a == '--preset' and i + 1 < len(argv):
+            sp = int(argv[i + 1])
+        elif a.startswith('--preset='):
+            sp = int(a.split('=', 1)[1])
+    main(startup_preset=sp)
