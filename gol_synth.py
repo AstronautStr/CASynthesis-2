@@ -257,7 +257,9 @@ def main(autoplay_midi=None):
         # the default note so the session log always has a valid float value.
         tune=0.0,
         tuned_f0=midi_to_freq(NOTE_DEFAULT),
-        # MIDI gate: True = voices active; False = all slots in release (note-off).
+        # MIDI gate: note-on/off for the VOICE VCA (True = attack/sustain, False =
+        # release).  The oscillator (KA field) is free-running -- gate does NOT empty
+        # the voice pool; it only articulates the master VCA (see _render_loop).
         # Keyboard/mouse piano always set gate=True (latch). MIDI note-off sets False.
         gate=True,
         midi_held=[],   # stack of currently held MIDI notes (last-note priority)
@@ -646,7 +648,7 @@ def main(autoplay_midi=None):
         # no-op multiplier == the historical sound.  (Note-off release is wired in the
         # next step; here gate-off is still handled by emptying voices_in.)
         venv = {'level': (1.0 if last_gate else 0.0),
-                'phase': (3 if last_gate else 0)}
+                'phase': (3 if last_gate else 0), 'rel0': 0.0}
         while audio_ctl['alive']:
             if audio_q.qsize() >= AUDIO_LOOKAHEAD_CHUNKS:
                 time.sleep(0.001)      # ring full -> idle briefly
@@ -660,13 +662,23 @@ def main(autoplay_midi=None):
             decay_chunks   = max(1, round(state['decay_ms']   / 1000.0 / CHUNK_S))
             sustain        = float(state['sustain'])
             # ── VOICE ADSR (VCA): advance one chunk, fold into the master gain ────
+            # note-on edge -> (re)trigger attack; note-off edge -> release.  This is
+            # the ONLY articulation gate now: the oscillator (KA field) is fed to the
+            # pool ALWAYS (below), so a note change never retriggers the per-mode GEN
+            # envelope -- it just re-articulates this scalar VCA.
             va = state['voice_attack_ms']  / 1000.0
             vd = state['voice_decay_ms']   / 1000.0
             vs = float(state['voice_sustain'])
+            vr = state['voice_release_ms'] / 1000.0
             if gate and not last_gate:                 # note-on edge -> attack
                 venv['phase'] = 1
                 if va <= 0.0:                          # instant attack
                     venv['level'], venv['phase'] = 1.0, 2
+            elif last_gate and not gate:               # note-off edge -> release
+                venv['phase'] = 4
+                venv['rel0'] = venv['level']
+                if vr <= 0.0:                          # instant cut
+                    venv['level'], venv['phase'] = 0.0, 0
             _vph = venv['phase']
             if _vph == 1:                              # attack: 0 -> 1
                 venv['level'] += CHUNK_S / va
@@ -681,11 +693,18 @@ def main(autoplay_midi=None):
                         venv['level'], venv['phase'] = vs, 3
             elif _vph == 3:                            # sustain: track live level
                 venv['level'] = vs
+            elif _vph == 4:                            # release: rel0 -> 0
+                venv['level'] -= venv['rel0'] * CHUNK_S / vr
+                if venv['level'] <= 0.0:
+                    venv['level'], venv['phase'] = 0.0, 0
             gain = MASTER_GAIN * state['vol'] * venv['level']
             # Pool is fed PITCH-NORMALIZED reference voices; the live carrier is a
             # scalar transpose applied at render (phase-continuous, no retrigger).
+            # The oscillator is FREE-RUNNING: voices flow regardless of gate (note-off
+            # is the VCA release above, not a pool empty) -> no per-mode retrigger on
+            # note changes, no spurious note-driven tails.
             transpose = _transpose(note)
-            voices_in = (spec['voices'] if (spec is not None and gate) else [])
+            voices_in = spec['voices'] if spec is not None else []
             pool.update(voices_in, phase, amp_cur, pan_cur, release_chunks,
                         attack_chunks, decay_chunks, sustain)
             buf, peak, n_clip = render_chunk_laplacian(phase, amp_cur, pan_cur,
