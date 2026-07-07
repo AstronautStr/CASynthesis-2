@@ -257,6 +257,12 @@ def main(autoplay_midi=None):
         gen_decay=GEN_DECAY_DEFAULT,
         gen_sustain=GEN_SUSTAIN_DEFAULT,
         gen_release=GEN_RELEASE_DEFAULT,
+        # GEN amp-slew: when on, per-mode AMPLITUDE changes on a STABLE pitch are
+        # smoothed (rise over gen_attack, fall over gen_release) -- kills the shape>0
+        # beep where a fixed-frequency mode gates its amplitude and the freq-onset
+        # envelope never sees it.  OFF by default = bit-exact; toggle in the GEN
+        # header.  (Off for dyn's snappy transients; on for smooth shape>0 timbres.)
+        gen_amp_slew=False,
         # VOICE ADSR (note-on/off VCA over the summed signal -- see casynth_config).
         # Defaults (A=0,S=1) make it a no-op multiplier (1.0) while a note is held.
         voice_attack_ms=VOICE_ATTACK_MS_DEFAULT,
@@ -367,6 +373,9 @@ def main(autoplay_midi=None):
     _VOICE_RC_Y0    = _ctrl_y0 + 18
     _GEN_HDR_RC_Y   = by + 110
     _GEN_RC_Y0      = _GEN_HDR_RC_Y + 18
+    # Click-toggle for GEN amp-slew, tucked to the right of the "GEN" header text
+    # (no extra knob row -> keeps the tight right-column geometry unchanged).
+    _slew_btn = pygame.Rect(_rc_x + 34, _GEN_HDR_RC_Y - 1, 46, 15)
     ctrls = []
 
     def _fmt_for(integer, is_ms):
@@ -476,7 +485,7 @@ def main(autoplay_midi=None):
         div_buttons=div_buttons, legend_x=legend_x, info_y=info_y, rc_x=_rc_x,
         vol_section_y=_vol_section_y, vol_track=vol_track, rc_track_x=_rc_track_x,
         rc_track_w=_RC_TRACK_W, voice_hdr_rc_y=_VOICE_HDR_RC_Y,
-        gen_hdr_rc_y=_GEN_HDR_RC_Y, ctrls=ctrls,
+        gen_hdr_rc_y=_GEN_HDR_RC_Y, slew_btn=_slew_btn, ctrls=ctrls,
         meter_track=meter_track, midi_btn=_midi_btn, midi_btn_w=_MIDI_BTN_W,
         mf_btn=_mf_btn,
         midi_dd_ith=_MIDI_DD_ITH, engine_tabs=engine_tabs, sb_items=_sb_items,
@@ -720,7 +729,8 @@ def main(autoplay_midi=None):
             transpose = _transpose(note)
             voices_in = spec['voices'] if spec is not None else []
             pool.update(voices_in, phase, amp_cur, pan_cur, release_chunks,
-                        attack_chunks, decay_chunks, sustain)
+                        attack_chunks, decay_chunks, sustain,
+                        amp_slew=state['gen_amp_slew'])
             buf, peak, n_clip = render_chunk_laplacian(phase, amp_cur, pan_cur,
                                                        pool.amp_tgt, pool.pan_tgt,
                                                        pool.freq_slots, 2,
@@ -932,6 +942,8 @@ def main(autoplay_midi=None):
                                 rebuild_ctrls()   # swap knob panel to new engine
                         elif _pat_btn.collidepoint(e.pos):
                             state['sidebar_open'] = not state['sidebar_open']
+                        elif _slew_btn.collidepoint(e.pos):
+                            state['gen_amp_slew'] = not state['gen_amp_slew']
                         elif bpm_track.inflate(0, 16).collidepoint(e.pos):
                             dragging_bpm = True
                             set_bpm(e.pos[0])
@@ -1071,6 +1083,7 @@ def main(autoplay_midi=None):
                 gen_decay=float(state['gen_decay']),
                 gen_sustain=float(state['gen_sustain']),
                 gen_release=float(state['gen_release']),
+                gen_amp_slew=bool(state['gen_amp_slew']),
                 voice_attack_ms=float(state['voice_attack_ms']),
                 voice_decay_ms=float(state['voice_decay_ms']),
                 voice_sustain=float(state['voice_sustain']),

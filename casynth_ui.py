@@ -130,6 +130,7 @@ def draw_frame(screen, fonts, state, lay, rt):
     _RC_TRACK_W    = lay.rc_track_w
     _VOICE_HDR_RC_Y = lay.voice_hdr_rc_y
     _GEN_HDR_RC_Y   = lay.gen_hdr_rc_y
+    _slew_btn      = lay.slew_btn
     ctrls          = lay.ctrls
     meter_track    = lay.meter_track
     _midi_btn      = lay.midi_btn
@@ -259,6 +260,13 @@ def draw_frame(screen, fonts, state, lay, rt):
     for _hy, _hlbl in ((_VOICE_HDR_RC_Y, "VOICE"), (_GEN_HDR_RC_Y, "GEN")):
         pygame.draw.line(screen, C_EDGE, (_rc_x, _hy), (_env_rc_right, _hy))
         screen.blit(small.render(_hlbl, True, C_DIM), (_rc_x, _hy + 2))
+    # GEN amp-slew toggle (right of the "GEN" header): lit when on.  Smooths
+    # stable-pitch amplitude gating (the shape>0 beep); off = bit-exact legacy.
+    _slew_on = state['gen_amp_slew']
+    pygame.draw.rect(screen, C_ACCENT if _slew_on else C_BTN, _slew_btn,
+                     border_radius=3)
+    screen.blit(small.render("slew", True, C_BG if _slew_on else C_DIM),
+                (_slew_btn.x + 6, _slew_btn.y + 1))
     for c in ctrls:
         tr = c['track']
         val = _ctrl_value(state, c)

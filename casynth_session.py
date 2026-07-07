@@ -268,9 +268,10 @@ def replay_session(ts, prefix="_session"):
             decay_chunks   = max(1, round(float(c["decay_ms"])   / 1000.0 / CHUNK_S))
             sustain        = float(c["sustain"])
         gain = master_gain * float(c["vol"])
+        amp_slew = bool(c.get("gen_amp_slew", False))   # legacy sessions -> False
         for _ in range(int(c["n_rendered"])):
             pool.update(voices_for_replay, phase, amp_cur, pan_cur, release_chunks,
-                        attack_chunks, decay_chunks, sustain)
+                        attack_chunks, decay_chunks, sustain, amp_slew=amp_slew)
             buf, pk, nc = render_chunk_laplacian(phase, amp_cur, pan_cur,
                                                  pool.amp_tgt, pool.pan_tgt,
                                                  pool.freq_slots, 2, gain_prev, gain)
