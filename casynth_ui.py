@@ -128,7 +128,8 @@ def draw_frame(screen, fonts, state, lay, rt):
     vol_track      = lay.vol_track
     _rc_track_x    = lay.rc_track_x
     _RC_TRACK_W    = lay.rc_track_w
-    _ENV_HDR_RC_Y  = lay.env_hdr_rc_y
+    _VOICE_HDR_RC_Y = lay.voice_hdr_rc_y
+    _GEN_HDR_RC_Y   = lay.gen_hdr_rc_y
     ctrls          = lay.ctrls
     meter_track    = lay.meter_track
     _midi_btn      = lay.midi_btn
@@ -252,11 +253,12 @@ def draw_frame(screen, fonts, state, lay, rt):
     if not audio_ok:
         screen.blit(small.render("audio disabled", True, C_DIM), (W - 110, 6))
 
-    # ENV header in the right column, above the ADSR sliders.
+    # Two ADSR section headers in the right column: VOICE (note-on/off VCA) above
+    # its 4 sliders, GEN (per-mode / automaton-clock envelope) above its 4.
     _env_rc_right = _rc_track_x + _RC_TRACK_W + 44
-    pygame.draw.line(screen, C_EDGE, (_rc_x, _ENV_HDR_RC_Y),
-                     (_env_rc_right, _ENV_HDR_RC_Y))
-    screen.blit(small.render("ENV", True, C_DIM), (_rc_x, _ENV_HDR_RC_Y + 2))
+    for _hy, _hlbl in ((_VOICE_HDR_RC_Y, "VOICE"), (_GEN_HDR_RC_Y, "GEN")):
+        pygame.draw.line(screen, C_EDGE, (_rc_x, _hy), (_env_rc_right, _hy))
+        screen.blit(small.render(_hlbl, True, C_DIM), (_rc_x, _hy + 2))
     for c in ctrls:
         tr = c['track']
         val = _ctrl_value(state, c)

@@ -245,6 +245,12 @@ def main(autoplay_midi=None):
         attack_ms=ATTACK_MS_DEFAULT,
         decay_ms=DECAY_MS_DEFAULT,
         sustain=SUSTAIN_DEFAULT,
+        # VOICE ADSR (note-on/off VCA over the summed signal -- see casynth_config).
+        # Defaults (A=0,S=1) make it a no-op multiplier (1.0) while a note is held.
+        voice_attack_ms=VOICE_ATTACK_MS_DEFAULT,
+        voice_decay_ms=VOICE_DECAY_MS_DEFAULT,
+        voice_sustain=VOICE_SUSTAIN_DEFAULT,
+        voice_release_ms=VOICE_RELEASE_MS_DEFAULT,
         # Sethares tuning: tune∈[0,1] magnets the note-on carrier toward the nearest
         # dissonance minimum of the current colony spectrum (0 = transparent, bit-exact).
         # tuned_f0: actual sounding carrier in Hz (snapped when tune>0); pre-seeded to
@@ -289,12 +295,12 @@ def main(autoplay_midi=None):
 
     legend_x = 12
     _pat_btn = pygame.Rect(_bpm_x + _bpm_widget_w + 8, by, 96, 40)
-    # Right column (former sidebar area): ADSR → level meter → vol slider.
+    # Right column (former sidebar area): VOICE ADSR → GEN ADSR → Tune → meter → vol.
     _rc_x        = W + 8                          # label left edge
     _RC_LABEL_W  = 24                             # width of label area
     _rc_track_x  = _rc_x + _RC_LABEL_W + 4       # track left = W + 36
     _RC_TRACK_W  = 100                            # track width (value label at W+142, 50px to edge)
-    _vol_section_y = by + 118                     # starts 4px below T(tune)-track (by+108+8+4)
+    _vol_section_y = by + 228                     # starts 4px below T(tune)-track (by+216+8+4)
     meter_track  = pygame.Rect(_rc_track_x, _vol_section_y + 13, _RC_TRACK_W, 10)
     vol_track    = pygame.Rect(_rc_track_x, _vol_section_y + 62, _RC_TRACK_W, 8)
 
@@ -339,9 +345,13 @@ def main(autoplay_midi=None):
     _ctrl_x  = _pat_btn.right + 16
     _ctrl_y0 = by + 2
     _CTRL_ROW_H = 22
-    # ADSR is in the right column; ENV header and sliders start at _ctrl_y0.
-    _ENV_HDR_RC_Y = _ctrl_y0
-    _ENV_RC_Y0    = _ctrl_y0 + 18
+    # Right column, top to bottom: VOICE ADSR block, GEN ADSR block, Tune row.
+    # VOICE header at _ctrl_y0; its 4 knobs at _VOICE_RC_Y0 + row*22.
+    # GEN header at by+110; its 4 knobs at _GEN_RC_Y0 + row*22; Tune one row below.
+    _VOICE_HDR_RC_Y = _ctrl_y0
+    _VOICE_RC_Y0    = _ctrl_y0 + 18
+    _GEN_HDR_RC_Y   = by + 110
+    _GEN_RC_Y0      = _GEN_HDR_RC_Y + 18
     ctrls = []
 
     def _fmt_for(integer, is_ms):
@@ -363,21 +373,44 @@ def main(autoplay_midi=None):
                 label_x=_ctrl_x,
                 track=pygame.Rect(_ctrl_x + CTRL_LABEL_W,
                                   _ctrl_y0 + row * _CTRL_ROW_H, CTRL_TRACK_W, 8)))
-        # ADSR + Tune in the right column (synth-wide; A/D/R are durations, S/T levels).
-        env_specs = [
+        # Right column, synth-wide.  Two ADSR blocks (A/D/R durations, S levels):
+        #   VOICE = note-on/off VCA over the summed signal (classic articulation);
+        #   GEN   = per-mode envelope on the AUTOMATON clock (the oscillator's life).
+        # Then a lone Tune row (Sethares carrier magnet).  block= tags drive the
+        # section headers drawn in casynth_ui.
+        voice_specs = [
+            ('voice_attack_ms',  'A', VOICE_ATTACK_MS_MIN,  VOICE_ATTACK_MS_MAX,  True),
+            ('voice_decay_ms',   'D', VOICE_DECAY_MS_MIN,   VOICE_DECAY_MS_MAX,   True),
+            ('voice_sustain',    'S', VOICE_SUSTAIN_MIN,    VOICE_SUSTAIN_MAX,    False),
+            ('voice_release_ms', 'R', VOICE_RELEASE_MS_MIN, VOICE_RELEASE_MS_MAX, True),
+        ]
+        for i, (arg, lbl, lo, hi, is_ms) in enumerate(voice_specs):
+            ctrls.append(dict(
+                id=arg, label=lbl, lo=lo, hi=hi, integer=False, scope='synth',
+                block='voice', fmt=_fmt_for(False, is_ms),
+                label_x=_rc_x,
+                track=pygame.Rect(_rc_track_x,
+                                  _VOICE_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)))
+        gen_specs = [
             ('attack_ms',  'A', ATTACK_MS_MIN,  ATTACK_MS_MAX,  True),
             ('decay_ms',   'D', DECAY_MS_MIN,   DECAY_MS_MAX,   True),
             ('sustain',    'S', SUSTAIN_MIN,    SUSTAIN_MAX,    False),
             ('release_ms', 'R', RELEASE_MS_MIN, RELEASE_MS_MAX, True),
-            ('tune',       'T', 0.0,            1.0,            False),
         ]
-        for i, (arg, lbl, lo, hi, is_ms) in enumerate(env_specs):
+        for i, (arg, lbl, lo, hi, is_ms) in enumerate(gen_specs):
             ctrls.append(dict(
                 id=arg, label=lbl, lo=lo, hi=hi, integer=False, scope='synth',
-                block='env', fmt=_fmt_for(False, is_ms),
+                block='gen', fmt=_fmt_for(False, is_ms),
                 label_x=_rc_x,
                 track=pygame.Rect(_rc_track_x,
-                                  _ENV_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)))
+                                  _GEN_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)))
+        # Tune: one row below the GEN block.
+        ctrls.append(dict(
+            id='tune', label='T', lo=0.0, hi=1.0, integer=False, scope='synth',
+            block='tune', fmt=_fmt_for(False, False),
+            label_x=_rc_x,
+            track=pygame.Rect(_rc_track_x,
+                              _GEN_RC_Y0 + 4 * _CTRL_ROW_H, _RC_TRACK_W, 8)))
 
     rebuild_ctrls()
 
@@ -428,7 +461,8 @@ def main(autoplay_midi=None):
         W=W, buttons=buttons, pat_btn=_pat_btn, bpm_x=_bpm_x, bpm_track=bpm_track,
         div_buttons=div_buttons, legend_x=legend_x, info_y=info_y, rc_x=_rc_x,
         vol_section_y=_vol_section_y, vol_track=vol_track, rc_track_x=_rc_track_x,
-        rc_track_w=_RC_TRACK_W, env_hdr_rc_y=_ENV_HDR_RC_Y, ctrls=ctrls,
+        rc_track_w=_RC_TRACK_W, voice_hdr_rc_y=_VOICE_HDR_RC_Y,
+        gen_hdr_rc_y=_GEN_HDR_RC_Y, ctrls=ctrls,
         meter_track=meter_track, midi_btn=_midi_btn, midi_btn_w=_MIDI_BTN_W,
         mf_btn=_mf_btn,
         midi_dd_ith=_MIDI_DD_ITH, engine_tabs=engine_tabs, sb_items=_sb_items,
@@ -604,6 +638,15 @@ def main(autoplay_midi=None):
         gain_prev = MASTER_GAIN * state['vol']
         cum = 0                        # cumulative output samples (onset timestamps)
         last_note, last_gate = state['note'], bool(state['gate'])
+        # VOICE ADSR (VCA): a scalar 0..1 envelope keyed to note-on/off, multiplying
+        # the master gain (a classic articulation over the summed oscillator signal).
+        # phase: 0 idle, 1 attack, 2 decay, 3 sustain, 4 release.  Seeded to the
+        # held state (a note is latched at startup) so a steady field sounds without
+        # waiting for an edge; with the default knobs (A=0,S=1) it sits at 1.0 -> a
+        # no-op multiplier == the historical sound.  (Note-off release is wired in the
+        # next step; here gate-off is still handled by emptying voices_in.)
+        venv = {'level': (1.0 if last_gate else 0.0),
+                'phase': (3 if last_gate else 0)}
         while audio_ctl['alive']:
             if audio_q.qsize() >= AUDIO_LOOKAHEAD_CHUNKS:
                 time.sleep(0.001)      # ring full -> idle briefly
@@ -616,7 +659,29 @@ def main(autoplay_midi=None):
             attack_chunks  = max(1, round(state['attack_ms']  / 1000.0 / CHUNK_S))
             decay_chunks   = max(1, round(state['decay_ms']   / 1000.0 / CHUNK_S))
             sustain        = float(state['sustain'])
-            gain = MASTER_GAIN * state['vol']
+            # ── VOICE ADSR (VCA): advance one chunk, fold into the master gain ────
+            va = state['voice_attack_ms']  / 1000.0
+            vd = state['voice_decay_ms']   / 1000.0
+            vs = float(state['voice_sustain'])
+            if gate and not last_gate:                 # note-on edge -> attack
+                venv['phase'] = 1
+                if va <= 0.0:                          # instant attack
+                    venv['level'], venv['phase'] = 1.0, 2
+            _vph = venv['phase']
+            if _vph == 1:                              # attack: 0 -> 1
+                venv['level'] += CHUNK_S / va
+                if venv['level'] >= 1.0:
+                    venv['level'], venv['phase'] = 1.0, 2
+            elif _vph == 2:                            # decay: 1 -> sustain
+                if vd <= 0.0:
+                    venv['level'], venv['phase'] = vs, 3
+                else:
+                    venv['level'] -= (1.0 - vs) * CHUNK_S / vd
+                    if venv['level'] <= vs:
+                        venv['level'], venv['phase'] = vs, 3
+            elif _vph == 3:                            # sustain: track live level
+                venv['level'] = vs
+            gain = MASTER_GAIN * state['vol'] * venv['level']
             # Pool is fed PITCH-NORMALIZED reference voices; the live carrier is a
             # scalar transpose applied at render (phase-continuous, no retrigger).
             transpose = _transpose(note)
@@ -969,6 +1034,10 @@ def main(autoplay_midi=None):
                 decay_ms=float(state['decay_ms']),
                 sustain=float(state['sustain']),
                 release_ms=float(state['release_ms']),
+                voice_attack_ms=float(state['voice_attack_ms']),
+                voice_decay_ms=float(state['voice_decay_ms']),
+                voice_sustain=float(state['voice_sustain']),
+                voice_release_ms=float(state['voice_release_ms']),
                 engine_params=dict(_ep),
                 tune=float(state['tune']),
                 tuned_f0=(float(_tf) if (_tf is not None and _tf > 0.0)

@@ -16,17 +16,18 @@ import numpy as np
 GRID_W, GRID_H = 52, 30
 CELL = 20
 # Toolbar: main button row (40px) + note-div row (18px) + status row (~38px) +
-# engine-knob panel (Laplace 6×22px, right col: ADSR+Tune 5×22px + vol/level) +
+# engine-knob panel (Laplace 6×22px, right col: VOICE+GEN ADSR + Tune + vol/level) +
 # MIDI device bar (20px) + engine-tab strip (20px) + gaps.
-# Height is determined by the ADSR+Tune+meter+vol column:
-#   ENV knobs 5 rows (A/D/S/R/T) at _ENV_RC_Y0=by+20, rows 0-4, 22px each;
-#   T (tune) track ends at by+20+4*22+8 = by+116;
-#   _vol_section_y = by+118 (4px gap after T-track); vol_track bottom = by+118+62+8 = by+188;
-#   MIDI bar at by+192 (4px gap), height 20 → bottom by+212;
-#   tabs at by+216 (4px gap), tab height 20, gap 4 → bar bottom = by+240
-#   TOOLBAR_H = 8 + 240 = 248.
-# (Was 226 before the tune knob was added as a 5th ENV row 2026-07-06.)
-TOOLBAR_H = 248
+# Height is determined by the right column (two stacked ADSR blocks + tune + meter/vol):
+#   VOICE header at by+2; VOICE knobs 4 rows (A/D/S/R) at by+20,+42,+64,+86;
+#   GEN header at by+110; GEN knobs 4 rows at by+128,+150,+172,+194;
+#   T (tune) row at by+216, track ends by+224;
+#   _vol_section_y = by+228 (4px gap after T-track); vol_track bottom = by+228+62+8 = by+298;
+#   MIDI bar at grid_bottom+TOOLBAR_H-48, tabs at -24 (anchored to the toolbar bottom).
+#   For MIDI bar (rel 310) to clear vol (rel 306): TOOLBAR_H = 358.
+# (Envelope refactor 2026-07-07: split the single 5-row ENV block into a note-on/off
+#  VOICE VCA block + the per-mode GEN block; was 248 with one A/D/S/R/T column.)
+TOOLBAR_H = 358
 PIANO_H = 96
 FPS = 60
 
@@ -189,6 +190,27 @@ SUSTAIN_DEFAULT    = 1.0
 SUSTAIN_MIN        = 0.0
 SUSTAIN_MAX        = 1.0
 
+# ── VOICE ADSR (the note-on/off VCA over the SUMMED oscillator signal) ─────────
+# Target model (decisions.md 2026-07-06): the KA field is a free-running oscillator
+# (its per-mode GEN envelope above rides the AUTOMATON clock); the classic musical
+# articulation is a SEPARATE scalar envelope keyed to note-on/off, applied to the
+# summed signal (a VCA on the master gain).  attack/decay/release are in ms of wall
+# time (not automaton ticks); sustain is a 0..1 held level.  Defaults reproduce the
+# historical sound: ATTACK=0 (instant to full on note-on), SUSTAIN=1 -> the VCA sits
+# at 1.0 the whole time a note is held (a no-op multiplier); RELEASE shapes note-off.
+VOICE_ATTACK_MS_DEFAULT  = 0.0
+VOICE_ATTACK_MS_MIN      = 0.0
+VOICE_ATTACK_MS_MAX      = 2000.0
+VOICE_DECAY_MS_DEFAULT   = 0.0
+VOICE_DECAY_MS_MIN       = 0.0
+VOICE_DECAY_MS_MAX       = 4000.0
+VOICE_SUSTAIN_DEFAULT    = 1.0
+VOICE_SUSTAIN_MIN        = 0.0
+VOICE_SUSTAIN_MAX        = 1.0
+VOICE_RELEASE_MS_DEFAULT = 50.0
+VOICE_RELEASE_MS_MIN     = 0.0
+VOICE_RELEASE_MS_MAX     = 4000.0
+
 # Spectrum strip (read-only viz: engine mode bars in the toolbar).  Log-frequency
 # X axis spans the full audio band so the pattern shifts right as the note rises
 # and stays put as topology changes -- a stable reference.  Pure display range,
@@ -260,6 +282,10 @@ __all__ = [
     'ATTACK_MS_DEFAULT', 'ATTACK_MS_MIN', 'ATTACK_MS_MAX',
     'DECAY_MS_DEFAULT', 'DECAY_MS_MIN', 'DECAY_MS_MAX',
     'SUSTAIN_DEFAULT', 'SUSTAIN_MIN', 'SUSTAIN_MAX',
+    'VOICE_ATTACK_MS_DEFAULT', 'VOICE_ATTACK_MS_MIN', 'VOICE_ATTACK_MS_MAX',
+    'VOICE_DECAY_MS_DEFAULT', 'VOICE_DECAY_MS_MIN', 'VOICE_DECAY_MS_MAX',
+    'VOICE_SUSTAIN_DEFAULT', 'VOICE_SUSTAIN_MIN', 'VOICE_SUSTAIN_MAX',
+    'VOICE_RELEASE_MS_DEFAULT', 'VOICE_RELEASE_MS_MIN', 'VOICE_RELEASE_MS_MAX',
     'SPEC_F_MIN', 'SPEC_F_MAX',
     'NOTE_DEFAULT', 'KB_BASE_MIN', 'KB_BASE_MAX',
     'C_BG', 'C_GRID', 'C_PANEL', 'C_EDGE', 'C_TXT', 'C_DIM', 'C_BTN', 'C_BTN_HOT',
