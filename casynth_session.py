@@ -250,10 +250,23 @@ def replay_session(ts, prefix="_session"):
                                exc=exc_field)
         gate = bool(c.get("gate", True))   # default True for sessions recorded pre-MIDI
         voices_for_replay = voices if gate else []
-        release_chunks = max(1, round(float(c["release_ms"]) / 1000.0 / CHUNK_S))
-        attack_chunks  = max(1, round(float(c["attack_ms"])  / 1000.0 / CHUNK_S))
-        decay_chunks   = max(1, round(float(c["decay_ms"])   / 1000.0 / CHUNK_S))
-        sustain        = float(c["sustain"])
+        # GEN A/D/R chunk counts.  New recordings store gen_* as FRACTIONS of a tick;
+        # legacy recordings store *_ms.  (This is the superseded per-frame path --
+        # threaded-era recordings log n_rendered=0, so it renders nothing; the VCA
+        # articulation is not reproduced here.  Kept tolerant for legacy ms sessions.)
+        if "gen_release" in c:
+            _bpm = float(c.get("bpm", BPM_DEFAULT))
+            _div = int(c.get("div_idx", DIV_DEFAULT))
+            _interval = NOTE_DIVS[_div][1] * 60.0 / _bpm
+            release_chunks = max(1, round(float(c["gen_release"]) * _interval / CHUNK_S))
+            attack_chunks  = max(1, round(float(c["gen_attack"])  * _interval / CHUNK_S))
+            decay_chunks   = max(1, round(float(c["gen_decay"])   * _interval / CHUNK_S))
+            sustain        = float(c["gen_sustain"])
+        else:
+            release_chunks = max(1, round(float(c["release_ms"]) / 1000.0 / CHUNK_S))
+            attack_chunks  = max(1, round(float(c["attack_ms"])  / 1000.0 / CHUNK_S))
+            decay_chunks   = max(1, round(float(c["decay_ms"])   / 1000.0 / CHUNK_S))
+            sustain        = float(c["sustain"])
         gain = master_gain * float(c["vol"])
         for _ in range(int(c["n_rendered"])):
             pool.update(voices_for_replay, phase, amp_cur, pan_cur, release_chunks,

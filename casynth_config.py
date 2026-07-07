@@ -190,6 +190,23 @@ SUSTAIN_DEFAULT    = 1.0
 SUSTAIN_MIN        = 0.0
 SUSTAIN_MAX        = 1.0
 
+# ── GEN ADSR lengths as FRACTIONS OF ONE AUTOMATON TICK ───────────────────────
+# Target model (decisions.md 2026-07-06): the per-mode GEN envelope rides the
+# AUTOMATON clock, so its A/D/R are expressed as a fraction [0,1] of the current
+# step interval (NOTE_DIVS × 60/BPM) rather than absolute ms -- the texture then
+# scales with tempo.  chunk count = max(1, round(fraction × interval_s / CHUNK_S))
+# (proportional compression: a faster automaton simply shortens the envelope; no
+# separate truncation).  S is a held 0..1 level (dimensionless, unchanged).
+# Defaults are calibrated so that at the reference tempo (120 BPM, 1/4 = 0.5 s/tick)
+# they reproduce the previous ms defaults: GEN_RELEASE 0.1 tick = 50 ms = 6 chunks;
+# GEN_ATTACK 0 -> the old 1-chunk onset via the max(1,...) floor.
+GEN_ATTACK_DEFAULT  = 0.0
+GEN_DECAY_DEFAULT   = 0.0
+GEN_SUSTAIN_DEFAULT = 1.0
+GEN_RELEASE_DEFAULT = 0.1
+GEN_FRAC_MIN = 0.0
+GEN_FRAC_MAX = 1.0
+
 # ── VOICE ADSR (the note-on/off VCA over the SUMMED oscillator signal) ─────────
 # Target model (decisions.md 2026-07-06): the KA field is a free-running oscillator
 # (its per-mode GEN envelope above rides the AUTOMATON clock); the classic musical
@@ -282,6 +299,8 @@ __all__ = [
     'ATTACK_MS_DEFAULT', 'ATTACK_MS_MIN', 'ATTACK_MS_MAX',
     'DECAY_MS_DEFAULT', 'DECAY_MS_MIN', 'DECAY_MS_MAX',
     'SUSTAIN_DEFAULT', 'SUSTAIN_MIN', 'SUSTAIN_MAX',
+    'GEN_ATTACK_DEFAULT', 'GEN_DECAY_DEFAULT', 'GEN_SUSTAIN_DEFAULT',
+    'GEN_RELEASE_DEFAULT', 'GEN_FRAC_MIN', 'GEN_FRAC_MAX',
     'VOICE_ATTACK_MS_DEFAULT', 'VOICE_ATTACK_MS_MIN', 'VOICE_ATTACK_MS_MAX',
     'VOICE_DECAY_MS_DEFAULT', 'VOICE_DECAY_MS_MIN', 'VOICE_DECAY_MS_MAX',
     'VOICE_SUSTAIN_DEFAULT', 'VOICE_SUSTAIN_MIN', 'VOICE_SUSTAIN_MAX',

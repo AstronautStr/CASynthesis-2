@@ -241,10 +241,12 @@ def main(autoplay_midi=None):
         engine=ENGINES[0]['id'],
         engine_params={e['id']: {arg: default for (arg, _l, _lo, _hi, _i, default)
                                  in e['params']} for e in ENGINES},
-        release_ms=RELEASE_MS_DEFAULT,
-        attack_ms=ATTACK_MS_DEFAULT,
-        decay_ms=DECAY_MS_DEFAULT,
-        sustain=SUSTAIN_DEFAULT,
+        # GEN ADSR: per-mode envelope on the AUTOMATON clock; A/D/R are FRACTIONS of
+        # one step interval (see casynth_config), S is a 0..1 level.
+        gen_attack=GEN_ATTACK_DEFAULT,
+        gen_decay=GEN_DECAY_DEFAULT,
+        gen_sustain=GEN_SUSTAIN_DEFAULT,
+        gen_release=GEN_RELEASE_DEFAULT,
         # VOICE ADSR (note-on/off VCA over the summed signal -- see casynth_config).
         # Defaults (A=0,S=1) make it a no-op multiplier (1.0) while a note is held.
         voice_attack_ms=VOICE_ATTACK_MS_DEFAULT,
@@ -339,10 +341,11 @@ def main(autoplay_midi=None):
 
     # Live knobs -- mouse-drag sliders to the right of the Lib button, in TWO
     # stacked groups: the ACTIVE engine's attributes (top, DYNAMIC per engine via
-    # rebuild_ctrls) and the synth-wide ADSR ENVELOPE block A/D/S/R (fixed position
-    # below, so it reads as a stable separate block independent of engine).
-    # Engine-attribute sliders write state['engine_params'][engine]; the ADSR
-    # sliders write state['attack_ms'/'decay_ms'/'sustain'/'release_ms'].
+    # rebuild_ctrls) and the synth-wide envelope blocks below (fixed position, so
+    # they read as stable separate blocks independent of engine): VOICE ADSR (VCA,
+    # note-on/off) over GEN ADSR (per-mode, automaton clock) + a Tune row.
+    # Engine-attribute sliders write state['engine_params'][engine]; VOICE sliders
+    # write state['voice_*'], GEN sliders write state['gen_*'].
     CTRL_LABEL_W, CTRL_TRACK_W = 56, 120
     _ctrl_x  = _pat_btn.right + 16
     _ctrl_y0 = by + 2
@@ -393,16 +396,17 @@ def main(autoplay_midi=None):
                 label_x=_rc_x,
                 track=pygame.Rect(_rc_track_x,
                                   _VOICE_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)))
+        # GEN A/D/R are fractions of a tick (dimensionless), S a 0..1 level.
         gen_specs = [
-            ('attack_ms',  'A', ATTACK_MS_MIN,  ATTACK_MS_MAX,  True),
-            ('decay_ms',   'D', DECAY_MS_MIN,   DECAY_MS_MAX,   True),
-            ('sustain',    'S', SUSTAIN_MIN,    SUSTAIN_MAX,    False),
-            ('release_ms', 'R', RELEASE_MS_MIN, RELEASE_MS_MAX, True),
+            ('gen_attack',  'A', GEN_FRAC_MIN, GEN_FRAC_MAX),
+            ('gen_decay',   'D', GEN_FRAC_MIN, GEN_FRAC_MAX),
+            ('gen_sustain', 'S', SUSTAIN_MIN,  SUSTAIN_MAX),
+            ('gen_release', 'R', GEN_FRAC_MIN, GEN_FRAC_MAX),
         ]
-        for i, (arg, lbl, lo, hi, is_ms) in enumerate(gen_specs):
+        for i, (arg, lbl, lo, hi) in enumerate(gen_specs):
             ctrls.append(dict(
                 id=arg, label=lbl, lo=lo, hi=hi, integer=False, scope='synth',
-                block='gen', fmt=_fmt_for(False, is_ms),
+                block='gen', fmt=_fmt_for(False, False),
                 label_x=_rc_x,
                 track=pygame.Rect(_rc_track_x,
                                   _GEN_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)))
@@ -656,11 +660,13 @@ def main(autoplay_midi=None):
             spec = render_spec['cur']
             note = state['note']
             gate = bool(state['gate'])
-            # Live knob-derived chunk counts (ms-based -> grid-independent).
-            release_chunks = max(1, round(state['release_ms'] / 1000.0 / CHUNK_S))
-            attack_chunks  = max(1, round(state['attack_ms']  / 1000.0 / CHUNK_S))
-            decay_chunks   = max(1, round(state['decay_ms']   / 1000.0 / CHUNK_S))
-            sustain        = float(state['sustain'])
+            # GEN envelope rides the AUTOMATON clock: A/D/R are fractions of one
+            # step interval, so the per-mode texture scales with tempo (BPM/division).
+            gen_interval = NOTE_DIVS[state['div_idx']][1] * 60.0 / state['bpm']
+            release_chunks = max(1, round(state['gen_release'] * gen_interval / CHUNK_S))
+            attack_chunks  = max(1, round(state['gen_attack']  * gen_interval / CHUNK_S))
+            decay_chunks   = max(1, round(state['gen_decay']   * gen_interval / CHUNK_S))
+            sustain        = float(state['gen_sustain'])
             # ── VOICE ADSR (VCA): advance one chunk, fold into the master gain ────
             # note-on edge -> (re)trigger attack; note-off edge -> release.  This is
             # the ONLY articulation gate now: the oscillator (KA field) is fed to the
@@ -1049,10 +1055,14 @@ def main(autoplay_midi=None):
                 note=int(state['note']),
                 gate=bool(state['gate']),
                 vol=float(state['vol']),
-                attack_ms=float(state['attack_ms']),
-                decay_ms=float(state['decay_ms']),
-                sustain=float(state['sustain']),
-                release_ms=float(state['release_ms']),
+                # bpm/div_idx are logged so offline replay can reconstruct the tick
+                # interval that GEN A/D/R (fractions of a tick) scale against.
+                bpm=float(state['bpm']),
+                div_idx=int(state['div_idx']),
+                gen_attack=float(state['gen_attack']),
+                gen_decay=float(state['gen_decay']),
+                gen_sustain=float(state['gen_sustain']),
+                gen_release=float(state['gen_release']),
                 voice_attack_ms=float(state['voice_attack_ms']),
                 voice_decay_ms=float(state['voice_decay_ms']),
                 voice_sustain=float(state['voice_sustain']),
