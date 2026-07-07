@@ -1172,8 +1172,9 @@ def test_tune_zero_bitexact():
     """Criterion A: tune=0 → snap_ratio returns r_raw exactly (bit-level).
 
     This is the unit-level guarantee that underlies the full audio bit-exact
-    criterion A: when tune=0, _live_voices falls back to midi_to_freq(note)
-    and no dissonance computation occurs.  The snap function is the gate.
+    criterion A: when tune=0, the carrier transpose falls back to
+    midi_to_freq(note) and no dissonance computation occurs.  The snap function
+    is the gate.
     """
     import math
     test_ratios = [0.5, 1.0, 1.26, 1.5, 1.99, 2.0, 3.14159, 4.0]
@@ -1187,6 +1188,41 @@ def test_tune_zero_bitexact():
         got_empty = snap_ratio(r, np.array([]), 0.0)
         assert got_empty == r, \
             f"tune=0 empty-minima snap changed r={r} to {got_empty}"
+
+
+def test_render_transpose_equivalence():
+    """Envelope refactor: the carrier transpose in render_chunk_laplacian is a
+    pure frequency scale.  Rendering a slot at (freq=f, transpose=r) must equal
+    rendering it at (freq=f*r, transpose=1) -- the pitch-normalized pool + render
+    transpose is identical to pre-scaling the freqs.  And transpose=1.0 is a no-op
+    (the default that keeps the golden master byte-exact)."""
+    sz = eng.TOTAL_SLOTS + 1
+
+    def _render(freq, transpose):
+        phase   = np.zeros(sz)
+        amp_cur = np.zeros(sz); amp_cur[1] = 0.5
+        pan_cur = np.full(sz, 0.5)
+        amp_tgt = np.zeros(sz); amp_tgt[1] = 0.5
+        pan_tgt = np.full(sz, 0.5)
+        freq_slots = np.zeros(sz); freq_slots[1] = freq
+        buf, _pk, _nc = eng.render_chunk_laplacian(
+            phase, amp_cur, pan_cur, amp_tgt, pan_tgt, freq_slots, 2,
+            0.5, 0.5, transpose)
+        return buf
+
+    f = 200.0
+    # (f, transpose=2) == (2f, transpose=1): transpose is a pure freq scale.
+    assert np.array_equal(_render(f, 2.0), _render(2.0 * f, 1.0)), \
+        "transpose is not a pure frequency scale"
+    # transpose=1.0 (explicit) == default omitted -> no-op.
+    phase = np.zeros(sz); amp_cur = np.zeros(sz); amp_cur[1] = 0.5
+    pan_cur = np.full(sz, 0.5); amp_tgt = np.zeros(sz); amp_tgt[1] = 0.5
+    pan_tgt = np.full(sz, 0.5); freq_slots = np.zeros(sz); freq_slots[1] = f
+    b_default, _, _ = eng.render_chunk_laplacian(
+        phase.copy(), amp_cur.copy(), pan_cur.copy(), amp_tgt, pan_tgt,
+        freq_slots, 2, 0.5, 0.5)
+    assert np.array_equal(b_default, _render(f, 1.0)), \
+        "transpose=1.0 differs from the default (no-op broken)"
 
 
 # ── Runner (works without pytest) ─────────────────────────────────────────────
