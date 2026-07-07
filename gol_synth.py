@@ -60,6 +60,8 @@ RUN
 
 
 import os
+import sys
+import ctypes
 import time
 import queue as _queue
 import threading
@@ -121,6 +123,14 @@ _KB_PIANO = {
 
 def main(autoplay_midi=None):
     os.environ.setdefault('PYGAME_HIDE_SUPPORT_PROMPT', '1')
+    # Render at physical pixels on high-DPI Windows.  Without this, a 125%-scaled
+    # desktop reports a 1536x960 logical space to DPI-unaware apps, and our
+    # ~1054px-tall window gets its bottom strip (the piano) clipped off-screen.
+    if sys.platform == 'win32':
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
     pygame.init()
 
     # ── audio output: sounddevice callback stream pulling from a ring buffer ──
@@ -437,17 +447,15 @@ def main(autoplay_midi=None):
     _sb_scroll = 0
     _sb_scroll_min = min(0, GRID_H * CELL - _sb_content_h)
 
-    # Spectrum strip: engine mode bars (voices' freqs/amps) in the empty toolbar
-    # area below the engine-knob column.  Top is derived from the tallest engine
-    # panel (max params across ENGINES, e.g. Laplace's 7 rows incl. dyn) so it
-    # keeps clearing the knob column as engines grow params; hardcoding a row
-    # count here silently overlapped the last knob when Laplace grew past it
-    # (dyn added 2026-07-05).  Read-only viz -> no knob, no session-log path.
-    _max_engine_rows = max(len(_e['params']) for _e in ENGINES)
-    _spec_top = _ctrl_y0 + _max_engine_rows * _CTRL_ROW_H + 6
-    _spec_rect = pygame.Rect(_ctrl_x, _spec_top,
-                             (W - 8) - _ctrl_x,
-                             (GRID_H * CELL + TOOLBAR_H - 4) - _spec_top)
+    # Spectrum strip: engine mode bars (voices' freqs/amps).  Lives in the wide
+    # empty band on the LEFT of the toolbar -- below the legend/status row, above
+    # the MIDI bar, and stopping short of the engine-knob column (_ctrl_x).  This
+    # is roomier than the old right-side pocket and frees that area up.  Read-only
+    # viz -> no knob, no session-log path.
+    _spec_top = info_y + 40
+    _spec_rect = pygame.Rect(legend_x, _spec_top,
+                             (_ctrl_x - 12) - legend_x,
+                             (_midi_bar_y - 6) - _spec_top)
 
     piano_top = GRID_H * CELL + TOOLBAR_H
     white_keys, black_keys = _make_piano(state['kb_base'], piano_top, W)
@@ -1114,7 +1122,6 @@ def main(autoplay_midi=None):
 
 
 if __name__ == '__main__':
-    import sys
     if len(sys.argv) >= 3 and sys.argv[1] == 'replay':
         _replay_cli(sys.argv[2])
     elif len(sys.argv) >= 3 and sys.argv[1] == 'play':

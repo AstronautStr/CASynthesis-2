@@ -28,7 +28,10 @@ CELL = 20
 # (Envelope refactor 2026-07-07: split the single 5-row ENV block into a note-on/off
 #  VOICE VCA block + the per-mode GEN block; was 248 with one A/D/S/R/T column.)
 TOOLBAR_H = 358
-PIANO_H = 96
+# 64 keeps the whole window (grid 600 + toolbar 358 + piano) short enough to clear
+# the bottom edge with a little slack; the two C-octave labels still fit (drawn at
+# key bottom-18).  Paired with DPI-awareness in gol_synth.main().
+PIANO_H = 64
 FPS = 60
 
 SR = 44100
