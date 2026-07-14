@@ -46,10 +46,12 @@ type: index
 ## Прототипы и инструменты
 
 - [[P1-Main]] — `gol_life_synth.py` (legacy v1, pygame.mixer)
-- [[P2-Laplacian]] — `gol_life_synth_laplacian.py` (#done — лапласиан в живом виде; крутилки приняты 2026-06-17)
-- `gol_synth.py` — мульти-движковый наследник P2 (живой селектор 5 приёмов: FFT/Walsh/Random/Laplace/Granulo); ручки Laplace: spread/alpha/shape/harm/full + synth-wide ADSR; лог сессии + офлайн-реплей. Активный стенд профилирования. _(Заметку P3 завести по запросу.)_
-- `gol_vocoder.py` — offline GoL-вокодер (SA-ресинтез под спектр цели через `map_laplacian`); #untested (REQ T3 `[OPEN]`).
-- `laplacian_explainer.html` — discover-обучалка: клик-toggle мод, слайдер `shape`, краевое возбуждение; #untested (REQ-ы explainer `[OPEN]`).
+- [[P2-Laplacian]] — `gol_life_synth_laplacian.py` (#done — лапласиан в живом виде; крутилки приняты 2026-06-17; заморожен)
+- `gol_synth.py` — **активный прототип**, мульти-движковый наследник P2 (селектор 5 приёмов: FFT/Walsh/Random/Laplace/Granulo); ручки Laplace: spread/alpha/shape/harm/full/dyn + synth-wide tune (Сетхарес) + огибающие GEN (доли тика) / VOICE (VCA, note-on/off) — модель «КА = осциллятор, несущая = транспоз» (2026-07-07); MIDI-вход + MIDI-file плеер; спектр-полоска; лог сессии + офлайн-реплей (`replay <ts>`). _(Заметку P3 завести по запросу.)_
+- `ab_bench.py` — A/B стенд слухового сравнения (два поля, мгновенное переключение, пресеты 1–9); построен для очереди прослушиваний (`current.md`).
+- `gol_vocoder.py` — offline GoL-вокодер (SA-ресинтез под спектр цели через `map_laplacian`); **#shelved 2026-07-14** (решение Пользователя: не фокус; ревью/прослушивание не проводились).
+- `laplacian_explainer/` — discover-обучалка: клик-toggle мод, слайдер `shape`, секция краевого возбуждения; REQ-1/REQ-2 **приняты Researcher по коду 2026-06-23**; слуховой/визуальный пласт за Пользователем (#untested на слух).
+- `check.py` — все регрессионные гейты одной командой (тесты + golden-master + UI-кадр + smoke; эталоны в `tests/golden/`).
 
 ---
 

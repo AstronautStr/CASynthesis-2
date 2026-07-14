@@ -1,5 +1,5 @@
 {
-  "last_commit": "4cd53fdba7c59edb6ca6fbb1d4772579f61b9692",
-  "date": "2026-06-22",
-  "note": "Маркер последней dream-консолидации. ВНИМАНИЕ: память и obsidian НЕ коммитятся по сессиям — рабочее дерево обычно впереди HEAD. Источник сигнала для следующего dream — memory/log/*.md новее date + сам код, НЕ git diff от last_commit. На 2026-06-22 в КОДЕ реализованы (но логов log/ по ним нет): harm, fullshape, gol_vocoder.py, переделка laplacian_explainer.html — сверялось чтением кода."
+  "last_commit": "6fb093a",
+  "date": "2026-07-14",
+  "note": "Маркер последней dream-консолидации. ВНИМАНИЕ: память и obsidian НЕ коммитятся по сессиям — рабочее дерево обычно впереди HEAD. Источник сигнала для следующего dream — memory/log/*.md новее date + сам код, НЕ git diff. Консолидация 2026-07-14: current.md пере-ужат в снапшот (счётчики тестов выправлены на 59); 4 закрытых треда (explainer x2, dyn, tune) → archive (итого 14); vocoder T3 → SHELVED (решение Пользователя); research-*.md → memory/research/; canvas догнал ветку ДИНАМИКА (ноды a_dyn/a_acc/a_scan/a_tune, активная = a_acc); эталоны гейтов переехали в tests/golden/, check.py = все гейты; artifacts/ выметен (оставлены reflection/ и vocoder-материалы — см. отчёт)."
 }
