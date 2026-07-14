@@ -15,6 +15,25 @@ the synth **offline, deterministically** to a WAV and **measure** the artifact,
 then **measure again after the fix**. Never declare a fix done without a
 before/after number.
 
+## Route by prototype FIRST (updated 2026-07-14)
+- **`gol_synth.py` (the ACTIVE prototype)** — has its own, richer record/replay
+  pipeline built in: record with `CASYNTH_RECORD=1 python gol_synth.py` (writes a
+  per-rendered-frame snapshot of ALL controls — `replay_controls`: engine +
+  note/vol + full `engine_params` + voice/gen ADSR + tune/tuned_f0 + bpm — plus
+  `steps`/`step_prevs` for exc reconstruction; npz object-arrays need
+  `np.load(..., allow_pickle=True)`), replay with **`python gol_synth.py replay <ts>`**
+  (offline re-render through the same analyse/SlotPool/render + sample-fidelity
+  check vs the recorded WAV). Use THIS pipeline for gol_synth bugs; the
+  `_render_probe.py` flow below does NOT read this schema.
+  KNOWN GAP: after the 2026-07-07 envelope refactor the offline replay does NOT
+  reproduce Voice-ADSR (VCA) articulation (per-frame path superseded; the log
+  still RECORDS voice_* for context) — a VCA-dependent artifact must be judged on
+  the recorded WAV/metrics, not the re-render.
+- **`gol_life_synth_laplacian.py` (frozen predecessor)** — use the legacy
+  `_render_probe.py session <ts>` flow described below.
+- The **metrics** (distortion/clicks/spectrum) and **gotchas** sections below are
+  engine-agnostic — they apply to both.
+
 ## PRIMARY pipeline: reproduce + verify on the USER'S session snapshot
 Artifacts here are usually **state-dependent** (a specific field × knob
 combination — e.g. a click that only appears with long *release* on a particular
@@ -24,9 +43,11 @@ shape). A synthetic scene may not hit it. So the canonical pipeline is:
    The user reproduces the artifact and quits; this saves the exact field history
    AND every live knob (spread / alpha / release / volume) per rendered frame.
 2. **Replay that snapshot offline** with the current (unfixed) engine:
-   `python _render_probe.py session <ts>`. This re-renders the user's exact
-   inputs and prints a **fidelity check** vs the recorded WAV — they should be
-   IDENTICAL, proving the replay reproduces the live artifact (not a guess).
+   `python gol_synth.py replay <ts>` for the active prototype, or
+   `python _render_probe.py session <ts>` for the legacy laplacian. This
+   re-renders the user's exact inputs and prints a **fidelity check** vs the
+   recorded WAV — they should be IDENTICAL, proving the replay reproduces the
+   live artifact (not a guess).
 3. **Measure** the artifact on the snapshot (clipping / clicks, below).
 4. **Fix**, then **replay the SAME snapshot again** and re-measure: artifact gone,
    spectrum preserved (`compare`).
@@ -36,8 +57,9 @@ snapshot is available — reproduce on the snapshot. Synthetic scenes are a
 **fallback only** (see "Fallback scenes" below), for when no snapshot exists or
 the snapshot doesn't trigger it.
 
-Ready-to-run tools live in the repo root:
-- `_render_probe.py` — `session <ts>` replays a recorded snapshot (PRIMARY);
+Ready-to-run tools live in the repo root (built for the LEGACY laplacian schema;
+for gol_synth use its built-in `replay <ts>` and adapt the metrics below):
+- `_render_probe.py` — `session <ts>` replays a recorded snapshot;
   `<label>` renders the fallback pentadecathlon scene; `compare A B` compares two
   saved spectra. Prints distortion + click metrics and saves a normalised spectrum.
 - `_click_test.py` — isolate the envelope-corner click from carrier curvature
@@ -58,7 +80,9 @@ back-to-back — it cannot reproduce artifacts born in the **live audio path**:
 So if your offline WAV is clean but the user still hears clicks live, **do not
 conclude it's fixed** — record a real session (below) and analyse THAT.
 
-## Live session recording (env `CASYNTH_RECORD=1`)
+## Live session recording (env `CASYNTH_RECORD=1`) — LEGACY laplacian schema
+(For `gol_synth.py` recording/replay see "Route by prototype" above — its schema
+is a superset and its reader is built in.)
 `gol_life_synth_laplacian.py` records when run with the env var set:
 ```
 # PowerShell:  $env:CASYNTH_RECORD=1; python gol_life_synth_laplacian.py
