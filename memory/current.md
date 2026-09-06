@@ -22,12 +22,13 @@ _Снапшот живого состояния (консолидирован /d
 | `gol_vocoder.py` | Offline GoL-вокодер (SA-ресинтез) — **SHELVED 2026-07-14** |
 | `laplacian_explainer/`, `frontiers_explainer/` | Обучалки (JS дублирует ядро — известный trade-off) |
 | `patterns.py` | 29 паттернов в 9 категориях |
+| `demo_bench.py` + `casynth_lab/` + `demos/` | **Demo-стенд S1** (2026-09-07): `DemoRunner` (единый live/offline исполнитель, часы в сэмплах, очередь команд + журнал), `LiveEngine` (render-поток + sounddevice), сцены JSON v1; запуск `run_demo_bench.bat` |
 | `check.py` | **Все гейты одной командой** (см. «Гейты») |
-| `tests/` | `test_casynth_core.py` (59 тестов) + `golden/` (эталоны golden-master и UI) |
+| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (19 тестов S1) + `golden/` (эталоны golden-master и UI) |
 
 ## Гейты (обязательны после каждого изменения)
 
-`python check.py` = 59 юнит-тестов + golden-master аудио (байт-в-байт,
+`python check.py` = 59 юнит-тестов + 19 тестов demo-стенда S1 + golden-master аудио (байт-в-байт,
 sha256[:16]=cd3126907ad13b6c) + UI-кадр (пиксель-в-пиксель vs `tests/golden/ui_frame.png`)
 + import/init smoke. Эталоны ВЕРСИОНИРУЮТСЯ в `tests/golden/` (переехали из gitignored
 `artifacts/` 2026-07-14). Легитимное изменение UI → `python check.py --bless-ui` в том же
@@ -114,6 +115,11 @@ _(A/B стенд `ab_bench.py` с пресетами (клавиши 1–9, `ab_
 для этой очереди; спектр-полоски под полями показывают разницу глазом.)_
 
 ## In-flight / следующее
+
+- **Demo lab (ТЗ `memory/req-demo-lab.md`, спринты S1–S9):** S1 сдан 2026-09-07
+  (`memory/log/2026-09-07-demo-lab-s1.md`), ждёт ручной приёмки Пользователя (3 пункта
+  в начале `req-demo-lab-s1.md`). S2 (A/B, параметры из реестра, 5 движков) — только
+  после приёмки и нового ТЗ Researcher.
 
 - **`acc` (событийные акценты, громкостный канал ветки ДИНАМИКА)** — дизайн принят
   2026-07-06 (REQ с критериями A–G в `decisions.md`), ЖДЁТ РЕАЛИЗАЦИИ. Переиспользует
