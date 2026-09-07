@@ -38,8 +38,8 @@ class LiveEngine:
     def __init__(self, runner, output_factory=_default_output_factory,
                  sink=None, lookahead=AUDIO_LOOKAHEAD_CHUNKS):
         """output_factory(callback) -> object with .stop()/.close(); raises if
-        no device.  sink(buf) -- test hook: receives every block instead of a
-        device (no pacing)."""
+        no device.  sink(monitor_buf, block) -- test hook: receives every block
+        (monitor as heard + the full Block with raw A/B) instead of a device."""
         self.runner = runner
         self._factory = output_factory
         self._sink = sink
@@ -90,6 +90,9 @@ class LiveEngine:
 
     # -- UI side --------------------------------------------------------------
     def post(self, kind, at=None, **args):
+        """Validate (registry ranges etc.) on the caller's thread -- a bad
+        command raises here and never reaches the runner -- then queue."""
+        self.runner._check(kind, dict(args))
         self._cmd_q.put((kind, at, args))
 
     def snapshot(self):
@@ -100,8 +103,8 @@ class LiveEngine:
             return "test sink"
         if not self.device_ok:
             return f"NO AUDIO DEVICE (silent): {self.device_error}"
-        s = self._snap
-        return f"OK  underrun {self.underruns}  clip {s['clip_blocks']}"
+        c = self._snap['clip_blocks']
+        return f"OK  underrun {self.underruns}  clip A {c['A']} / B {c['B']}"
 
     # -- render thread --------------------------------------------------------
     def _flush_blocks(self):
@@ -126,7 +129,8 @@ class LiveEngine:
                     self._flush_blocks()
                     self._fade_left = TRANSPORT_FADE_BLOCKS
                 r.post(kind, at=at, **args)
-            buf = r.next_block()
+            blk = r.next_block()
+            buf = blk.monitor
             if self._fade_left > 0:
                 k = TRANSPORT_FADE_BLOCKS - self._fade_left
                 ramp = (np.linspace(k, k + 1, len(buf), endpoint=False)
@@ -135,7 +139,7 @@ class LiveEngine:
                 self._fade_left -= 1
             self._snap = r.snapshot()
             if self._sink is not None:
-                self._sink(buf)
+                self._sink(buf, blk)
             else:
                 self._blk_q.put(buf)
 
