@@ -263,6 +263,26 @@ def test_reset_clears_tails_phases_and_queue():
     assert r.vol == VOL_DEFAULT
 
 
+def test_stop_returns_to_initial_silent_scene():
+    r = DemoRunner(SCENE)
+    r.post('start', at=0)
+    for _ in range(600):
+        r.next_block()
+    assert r.running and r.gen > 0
+    r.post('vol', at=r.out_samples + 10 * BLOCK, value=0.1)      # future -> dropped
+    r.post('stop')
+    b = r.next_block()
+    assert not r.running and r.gen == 0 and r.ca_samples == 0 and not b.any()
+    assert not r._pending
+    assert np.array_equal(r.grid, SCENE.initial_grid())
+    # Start again == a fresh run
+    r.post('start')
+    fresh = DemoRunner(SCENE)
+    fresh.post('start', at=0)
+    for _ in range(50):
+        assert np.array_equal(r.next_block(), fresh.next_block())
+
+
 def test_empty_field_goes_silent_after_tails():
     r = DemoRunner(SCENE)
     r.post('start', at=0)
@@ -335,6 +355,14 @@ def test_ui_headless_smoke_buttons_and_painting():
         time.sleep(0.2)
         assert len(got) > n_before, "audio stopped during pause"
         assert eng.snapshot()['gen'] == g0, "field evolved while paused"
+
+        # Start button reads Stop while running -> full stop
+        rect = app.buttons['start'][0]
+        assert app.press((rect[0] + 5, rect[1] + 5), 1) == 'stop'
+        assert _wait(lambda: (not eng.snapshot()['running'] and eng.snapshot()['gen'] == 0
+                              and eng.snapshot()['grid'].sum() == 5))
+        assert app.press((rect[0] + 5, rect[1] + 5), 1) == 'start'
+        assert _wait(lambda: eng.snapshot()['running'])
 
         rect = app.buttons['reset'][0]
         assert app.press((rect[0] + 5, rect[1] + 5), 1) == 'reset'

@@ -30,7 +30,7 @@ from casynth_engine import (step, events_field, analyse, SlotPool,
 BLOCK = int(CHUNK_S * SR)          # samples per audio block (== engine chunk)
 CHANNELS = 2
 PAN_CENTER = 0.5                   # S1: both channels identical
-COMMANDS = ('start', 'pause', 'set_cell', 'reset', 'vol')
+COMMANDS = ('start', 'stop', 'pause', 'set_cell', 'reset', 'vol')
 
 
 def _gen_chunks(frac, interval_s):
@@ -106,8 +106,8 @@ class DemoRunner:
         for seq, _at, kind, args in due:
             self._apply(kind, args)
             self.journal.append((self.out_samples, seq, kind, dict(args)))
-            if kind == 'reset':
-                # Reset discards everything still queued for the future (those
+            if kind in ('reset', 'stop'):
+                # Reset/stop discard everything still queued for the future (those
                 # events belong to the previous run).
                 self._pending.clear()
 
@@ -128,6 +128,10 @@ class DemoRunner:
         elif kind == 'reset':
             self._init_scene_state()
             self.running = True
+        elif kind == 'stop':
+            # Full stop (player semantics): back to the initial scene, silent,
+            # not running -- Start begins again from the beginning.
+            self._init_scene_state()
         elif kind == 'vol':
             self.vol = float(min(max(args['value'], 0.0), 1.0))
 

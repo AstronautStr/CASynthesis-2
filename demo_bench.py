@@ -4,9 +4,10 @@
     python demo_bench.py --demo demos/laplace_basic.json
     python demo_bench.py --demo demos/laplace_basic.json --render artifacts/s1.wav --seconds 8
 
-Window: field, demo title, three buttons (Start / Pause CA / Restart), volume,
+Window: field, demo title, three buttons (Start|Stop / Pause CA / Restart), volume,
 generation counter, audio-output state.  LMB paints, RMB erases.  Startup is
-silent and frozen; Start launches both the automaton and the sound; Pause CA
+silent and frozen; Start launches both the automaton and the sound (and turns
+into Stop: full stop = silence + initial scene, like a player); Pause CA
 freezes only the automaton (sound keeps running, edits still apply); Restart
 resets field + clocks + every audio tail and starts the scene again.
 
@@ -79,6 +80,8 @@ class BenchApp:
         if button == 1:
             for key, (rect, _label) in self.buttons.items():
                 if self._inside(rect, pos):
+                    if key == 'start' and self.engine.snapshot()['running']:
+                        key = 'stop'
                     self.engine.post(key)
                     return key
             vx, vy, vw, vh = self.vol_rect
@@ -126,6 +129,8 @@ class BenchApp:
                   (key == 'pause' and snap['paused']))
             pygame.draw.rect(screen, C_BTN_ON if on else C_BTN, rect, border_radius=4)
             pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
+            if key == 'start' and snap['running']:
+                label = 'Stop'
             t = font.render(label, True, C_TXT)
             screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                             rect[1] + (rect[3] - t.get_height()) // 2))

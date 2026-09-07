@@ -122,7 +122,7 @@ class LiveEngine:
                     kind, at, args = self._cmd_q.get_nowait()
                 except queue.Empty:
                     break
-                if kind == 'reset':
+                if kind in ('reset', 'stop'):
                     self._flush_blocks()
                     self._fade_left = TRANSPORT_FADE_BLOCKS
                 r.post(kind, at=at, **args)

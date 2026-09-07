@@ -8,7 +8,8 @@ Offline render, no window / no audio device:
 
 Dependencies: `pip install -r requirements.txt` (numpy, scipy, pygame-ce, sounddevice).
 
-Buttons: **Start** (field evolves + sound), **Pause CA** (only the automaton
+Buttons: **Start** (field evolves + sound; while running the same button is
+**Stop** = full stop, back to the initial silent scene), **Pause CA** (only the automaton
 freezes; painting and sound continue), **Restart** (initial scene, clocks and
 all audio tails reset, scene starts again).  LMB paints, RMB erases.
 Scene format v1: see `laplace_basic.json` (strictly validated: unknown engine /
