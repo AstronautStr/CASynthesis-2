@@ -16,7 +16,7 @@ automaton freezes; painting and sound continue), **Restart** (initial scene,
 clocks and all audio tails reset, scene starts again).  Stop/Restart keep the
 engines, parameters, volume and the selected side.  LMB paints, RMB erases.
 
-Hotkey: **R** = Restart.  `<<` / `>>` copy ALL settings (engine + params) B->A / A->B;
+Hotkeys: **R** = Restart, **Space** = Pause CA, **1** / **2** = select A / B.  `<<` / `>>` copy ALL settings (engine + params) B->A / A->B;
 **Factory A+B** restores both sides to the scene defaults; a `*` next to A or B
 marks a side that differs from those defaults.
 

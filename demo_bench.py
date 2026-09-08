@@ -75,7 +75,7 @@ class BenchApp:
         self.height = TOP_H + max(self.field_h, 420) + MARGIN
         self.buttons = {}
         x = MARGIN
-        for key, label in (('start', 'Start'), ('pause', 'Pause CA'), ('reset', 'Restart (R)')):
+        for key, label in (('start', 'Start'), ('pause', 'Pause CA (Space)'), ('reset', 'Restart (R)')):
             self.buttons[key] = ((x, BTN_Y, BTN_W, BTN_H), label)
             x += BTN_W + 10
         self.vol_rect = (MARGIN + 92, BTN_Y + BTN_H + 14, VOL_W, 10)
@@ -193,9 +193,17 @@ class BenchApp:
 
     def key(self, name):
         """Keyboard hotkey by key name ('r' = Restart).  Returns the command or None."""
-        if name.lower() == 'r':
+        name = name.lower()
+        if name == 'r':
             self._post('reset')
             return 'reset'
+        if name == 'space':
+            self._post('pause')
+            return 'pause'
+        if name in ('1', '2', '[1]', '[2]'):
+            side = 'A' if name.endswith('1') or name == '1' else 'B'
+            self._post('select', side=side)
+            return f'select:{side}'
         return None
 
     def release(self):
@@ -276,7 +284,8 @@ class BenchApp:
             pygame.draw.rect(screen, C_BTN_ON if on else C_BTN, rect, border_radius=4)
             pygame.draw.rect(screen, C_ACCENT if on else C_EDGE, rect, 1, border_radius=4)
             star = '*' if snap['modified'][s] else ''
-            lbl = f"{s}{star}: {ENGINE_BY_ID[snap['sides'][s][0]]['label']}"
+            hot = '1' if s == 'A' else '2'
+            lbl = f"{s}{star}: {ENGINE_BY_ID[snap['sides'][s][0]]['label']} ({hot})"
             t = font.render(lbl, True, C_TXT)
             screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                             rect[1] + (rect[3] - t.get_height()) // 2))

@@ -662,6 +662,14 @@ def test_ui_headless_smoke_buttons_and_painting():
         assert app.key('r') == 'reset'
         assert _wait(lambda: eng.snapshot()['gen'] == 0 and eng.snapshot()['running'])
         assert app.key('x') is None
+        assert app.key('1') == 'select:A'
+        assert _wait(lambda: eng.snapshot()['selected'] == 'A')
+        assert app.key('2') == 'select:B'
+        assert _wait(lambda: eng.snapshot()['selected'] == 'B')
+        assert app.key('space') == 'pause'
+        assert _wait(lambda: eng.snapshot()['paused'])
+        assert app.key('space') == 'pause'
+        assert _wait(lambda: not eng.snapshot()['paused'])
         assert app.set_param('harm', 0.5)
         assert _wait(lambda: eng.snapshot()['modified']['B'])
         # >> copies A into B
