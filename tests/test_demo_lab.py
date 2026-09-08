@@ -465,6 +465,40 @@ def test_bad_commands_are_rejected_before_any_state_change():
         raise AssertionError("harm accepted for a pending FFT side")
 
 
+def test_copy_side_and_factory_reset_and_modified_flag():
+    r = DemoRunner(SCENE_AB)
+    r.post('start', at=0)
+    r.next_block()
+    assert r.side_modified() == {'A': False, 'B': False}
+    r.post('set_engine', side='A', engine_id='fft2d')
+    r.post('set_param', side='A', name='n', value=9)
+    r.next_block()
+    assert r.side_modified() == {'A': True, 'B': False}
+    r.post('copy_side', src='A', dst='B')                 # >>
+    r.next_block()
+    assert r.side_settings()['B'] == ('fft2d', {'n': 9}) and r.side_modified()['B']
+    assert r.side_settings()['A'] == ('fft2d', {'n': 9})
+    r.post('set_param', side='B', name='n', value=3)
+    r.post('copy_side', src='B', dst='A')                 # <<
+    r.next_block()
+    assert r.side_settings()['A'] == ('fft2d', {'n': 3})
+    r.post('factory')
+    r.next_block()
+    assert r.side_settings() == {n: SCENE_AB.variants[n] for n in ('A', 'B')}
+    assert r.side_modified() == {'A': False, 'B': False}
+    assert r.sides['B'].params['harm'] == 1 and r.running
+    # memory keeps the last FFT values for a later return
+    r.post('set_engine', side='A', engine_id='fft2d')
+    r.next_block()
+    assert r.sides['A'].params['n'] == 3
+    try:
+        r.post('copy_side', src='A', dst='A')
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("copy A->A accepted")
+
+
 # =============================================================================
 # S2: synchrony / independence
 # =============================================================================
@@ -614,6 +648,26 @@ def test_ui_headless_smoke_buttons_and_painting():
         # rejected value shows a message, state intact
         assert app.set_param('harm', 5.0) is False and "outside" in app.message
         assert abs(eng.snapshot()['sides']['B'][1]['harm'] - 0.5) < 0.02
+
+        # << copies B into A (A gets the star), Factory restores both, R hotkey restarts
+        rect = app.copy_btns[('B', 'A')]
+        assert app.press((rect[0] + 5, rect[1] + 5), 1) == 'copy:BA'
+        assert _wait(lambda: abs(eng.snapshot()['sides']['A'][1]['harm'] - 0.5) < 0.02)
+        assert eng.snapshot()['modified'] == {'A': True, 'B': True}
+        fr = app.factory_btn
+        assert app.press((fr[0] + 5, fr[1] + 5), 1) == 'factory'
+        assert _wait(lambda: eng.snapshot()['modified'] == {'A': False, 'B': False})
+        assert eng.snapshot()['sides']['A'][1]['harm'] == 0
+        assert eng.snapshot()['sides']['B'][1]['harm'] == 1
+        assert app.key('r') == 'reset'
+        assert _wait(lambda: eng.snapshot()['gen'] == 0 and eng.snapshot()['running'])
+        assert app.key('x') is None
+        assert app.set_param('harm', 0.5)
+        assert _wait(lambda: eng.snapshot()['modified']['B'])
+        # >> copies A into B
+        rect = app.copy_btns[('A', 'B')]
+        assert app.press((rect[0] + 5, rect[1] + 5), 1) == 'copy:AB'
+        assert _wait(lambda: eng.snapshot()['sides']['B'][1]['harm'] == 0)
 
         # engine FFT on B -> its params appear
         rect = app.engine_btns['fft2d']

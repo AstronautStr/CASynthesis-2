@@ -35,8 +35,9 @@ TOP_H = 156
 BTN_W, BTN_H = 130, 32
 BTN_Y = 58
 VOL_W = 140
-PANEL_W = 250
-TAB_W, TAB_H = 110, 30
+PANEL_W = 270
+TAB_W, TAB_H = 96, 30
+ARROW_W = 28
 ENG_W, ENG_H = 74, 24
 ROW_H = 26
 SLIDER_W = 120
@@ -74,15 +75,20 @@ class BenchApp:
         self.height = TOP_H + max(self.field_h, 420) + MARGIN
         self.buttons = {}
         x = MARGIN
-        for key, label in (('start', 'Start'), ('pause', 'Pause CA'), ('reset', 'Restart')):
+        for key, label in (('start', 'Start'), ('pause', 'Pause CA'), ('reset', 'Restart (R)')):
             self.buttons[key] = ((x, BTN_Y, BTN_W, BTN_H), label)
             x += BTN_W + 10
         self.vol_rect = (MARGIN + 92, BTN_Y + BTN_H + 14, VOL_W, 10)
         # side panel
         px, py = self.panel_x, TOP_H
-        self.tabs = {s: (px + i * (TAB_W + 8), py, TAB_W, TAB_H) for i, s in enumerate(SIDES)}
+        # row: [A] [<<] [>>] [B]
+        self.tabs = {'A': (px, py, TAB_W, TAB_H),
+                     'B': (px + TAB_W + 2 * (ARROW_W + 4) + 4, py, TAB_W, TAB_H)}
+        self.copy_btns = {('B', 'A'): (px + TAB_W + 4, py, ARROW_W, TAB_H),          # <<
+                          ('A', 'B'): (px + TAB_W + ARROW_W + 8, py, ARROW_W, TAB_H)}  # >>
+        self.factory_btn = (px + PANEL_W - 100, py + TAB_H + 6, 100, 22)
         self.engine_btns = {}
-        ey = py + TAB_H + 44
+        ey = py + TAB_H + 48
         for i, e in enumerate(ENGINES):
             col, row = i % 3, i // 3
             self.engine_btns[e['id']] = (px + col * (ENG_W + 6), ey + row * (ENG_H + 6),
@@ -145,6 +151,13 @@ class BenchApp:
                 if self._inside(rect, pos):
                     self._post('select', side=s)
                     return f'tab:{s}'
+            for (src, dst), rect in self.copy_btns.items():
+                if self._inside(rect, pos):
+                    self._post('copy_side', src=src, dst=dst)
+                    return f'copy:{src}{dst}'
+            if self._inside(self.factory_btn, pos):
+                self._post('factory')
+                return 'factory'
             side, eid, params = self._side()
             for e_id, rect in self.engine_btns.items():
                 if self._inside(rect, pos):
@@ -177,6 +190,13 @@ class BenchApp:
             cell = self.cell_at(pos)
             if cell is not None:
                 self._paint(cell)
+
+    def key(self, name):
+        """Keyboard hotkey by key name ('r' = Restart).  Returns the command or None."""
+        if name.lower() == 'r':
+            self._post('reset')
+            return 'reset'
+        return None
 
     def release(self):
         self.paint_value = None
@@ -255,10 +275,22 @@ class BenchApp:
             on = (s == side)
             pygame.draw.rect(screen, C_BTN_ON if on else C_BTN, rect, border_radius=4)
             pygame.draw.rect(screen, C_ACCENT if on else C_EDGE, rect, 1, border_radius=4)
-            lbl = f"{s}: {ENGINE_BY_ID[snap['sides'][s][0]]['label']}"
+            star = '*' if snap['modified'][s] else ''
+            lbl = f"{s}{star}: {ENGINE_BY_ID[snap['sides'][s][0]]['label']}"
             t = font.render(lbl, True, C_TXT)
             screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                             rect[1] + (rect[3] - t.get_height()) // 2))
+        for (src, dst), rect in self.copy_btns.items():
+            pygame.draw.rect(screen, C_BTN, rect, border_radius=4)
+            pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
+            t = font.render('<<' if dst == 'A' else '>>', True, C_TXT)
+            screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
+                            rect[1] + (rect[3] - t.get_height()) // 2))
+        fr = self.factory_btn
+        pygame.draw.rect(screen, C_BTN, fr, border_radius=4)
+        pygame.draw.rect(screen, C_EDGE, fr, 1, border_radius=4)
+        t = small.render('Factory A+B', True, C_TXT)
+        screen.blit(t, (fr[0] + (fr[2] - t.get_width()) // 2, fr[1] + (fr[3] - t.get_height()) // 2))
         px = self.panel_x
         screen.blit(small.render(f"Listening + editing: {side}", True, C_ACCENT),
                     (px, TOP_H + TAB_H + 6))
@@ -317,6 +349,8 @@ def run_ui(scene, vol):
                     alive = False
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
                     alive = False
+                elif ev.type == pygame.KEYDOWN:
+                    app.key(pygame.key.name(ev.key))
                 elif ev.type == pygame.MOUSEBUTTONDOWN:
                     app.press(ev.pos, ev.button)
                 elif ev.type == pygame.MOUSEMOTION and (ev.buttons[0] or ev.buttons[2]):

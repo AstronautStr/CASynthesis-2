@@ -42,7 +42,7 @@ OUTPUTS = ('A', 'B', 'monitor')
 XFADE_MS = 20.0                    # A/B switch crossfade (output mixer only)
 XFADE_SAMPLES = int(round(XFADE_MS / 1000.0 * SR))   # 882
 COMMANDS = ('start', 'stop', 'pause', 'set_cell', 'reset', 'vol',
-            'select', 'set_param', 'set_engine')
+            'select', 'set_param', 'set_engine', 'copy_side', 'factory')
 
 
 def _gen_chunks(frac, interval_s):
@@ -204,6 +204,10 @@ class DemoRunner:
             side = args.get('side')
             if side not in SIDES:
                 raise ValueError(f"unknown side {side!r} (expected A or B)")
+        if kind == 'copy_side':
+            src, dst = args.get('src'), args.get('dst')
+            if src not in SIDES or dst not in SIDES or src == dst:
+                raise ValueError(f"copy_side: need two different sides, got {src!r}->{dst!r}")
         if kind == 'set_engine':
             if args.get('engine_id') not in ENGINE_BY_ID:
                 raise ValueError(f"unknown engine {args.get('engine_id')!r}")
@@ -285,6 +289,26 @@ class DemoRunner:
             s.analyse(self.grid, self.scene.f0_hz, self.exc)
             if s.name == self.selected:
                 self._begin_xfade(None)      # transport fade-in on the monitor
+        elif kind == 'copy_side':
+            src = self.sides[args['src']]
+            self._set_side(self.sides[args['dst']], src.engine_id, src.params)
+        elif kind == 'factory':
+            for name in SIDES:
+                eid, params = self.scene.variants[name]
+                self._set_side(self.sides[name], eid, params)
+
+    def _set_side(self, s, eid, params):
+        """Put engine+params on a side (copy / factory).  Same engine -> the
+        usual param update path; different engine -> that side's audio restarts."""
+        changed_engine = (eid != s.engine_id)
+        s.engine_id = eid
+        s.params = dict(params)
+        self._memory[(s.name, eid)] = dict(s.params)
+        if changed_engine:
+            s.reset_audio(self._gain())
+        s.analyse(self.grid, self.scene.f0_hz, self.exc)
+        if changed_engine and s.name == self.selected:
+            self._begin_xfade(None)
 
     def _begin_xfade(self, from_side):
         """Start a mixer crossfade from `from_side` (None = from silence)."""
@@ -341,12 +365,18 @@ class DemoRunner:
     def side_settings(self):
         return {n: (s.engine_id, dict(s.params)) for n, s in self.sides.items()}
 
+    def side_modified(self):
+        """True per side when engine/params differ from the scene's defaults."""
+        return {n: (s.engine_id, s.params) != (self.scene.variants[n][0],
+                                                 self.scene.variants[n][1])
+                for n, s in self.sides.items()}
+
     def snapshot(self):
         return dict(grid=self.grid.copy(), gen=self.gen, running=self.running,
                     paused=self.paused, t_seconds=self.t_samples / SR,
                     vol=self.vol, out_samples=self.out_samples,
                     selected=self.selected,
-                    sides=self.side_settings(),
+                    sides=self.side_settings(), modified=self.side_modified(),
                     peak={n: s.peak for n, s in self.sides.items()},
                     clip_blocks={n: s.clip_blocks for n, s in self.sides.items()})
 
