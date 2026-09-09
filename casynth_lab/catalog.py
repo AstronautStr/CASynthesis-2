@@ -152,14 +152,43 @@ class Record:
         return tuple(out)
 
 
+def end_state_by_replay(meta):
+    """Run the record's journal (no audio comparison) and return the runner's
+    end state as stored by newer records: cells, gen, vol."""
+    try:
+        scene = scene_from_doc(meta['scene'])
+        runner = DemoRunner(scene, vol=meta.get('runner', {}).get('vol_initial', VOL_DEFAULT))
+    except (SceneError, KeyError, TypeError, ValueError) as e:
+        raise CatalogError(f"cannot rebuild the end state: {e}")
+    end = meta['end_sample']
+    cmds = [j for j in meta['journal'] if j['kind'] not in REPLAY_COMMANDS_SKIP]
+    cmds.sort(key=lambda j: (j['out_sample'], j['seq']))
+    i = 0
+    try:
+        while runner.out_samples < end:
+            while i < len(cmds) and cmds[i]['out_sample'] <= runner.out_samples:
+                c = cmds[i]
+                runner.post(c['kind'], at=None, **c['args'])
+                i += 1
+            runner.next_block()
+    except Exception as e:                     # noqa: BLE001
+        raise CatalogError(f"cannot rebuild the end state: {e}")
+    return dict(cells=[[int(a), int(b)] for a, b in np.argwhere(runner.grid > 0)],
+                gen=int(runner.gen), vol=float(runner.vol))
+
+
 def bench_scene(rec):
     """Scene document + volume that put the bench into the record's END state
     (field, engines/params of both sides, selected side).  The user starts it
     manually.  CatalogError for records without state_at_end."""
     meta = rec.meta
     st = meta.get('state_at_end')
-    if not st or 'settings_at_end' not in meta:
-        raise CatalogError(f"{rec.id}: record has no end state to open")
+    if not st:
+        # older record (before state_at_end): recompute the end state from
+        # the embedded conditions + journal
+        st = end_state_by_replay(meta)
+    if 'settings_at_end' not in meta:
+        raise CatalogError(f"{rec.id}: record has no end settings to open")
     d = copy.deepcopy(meta['scene'])
     d['format'] = 2
     d.pop('engine_id', None)

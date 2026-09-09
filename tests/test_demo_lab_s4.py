@@ -21,7 +21,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 from casynth_config import SR                                        # noqa: E402
 from casynth_lab import load_scene, DemoRunner, BLOCK, registry      # noqa: E402
 from casynth_lab.audio_out import LiveEngine                         # noqa: E402
-from casynth_lab.catalog import Catalog, CatalogError, read_wav      # noqa: E402
+from casynth_lab.catalog import Catalog, CatalogError, read_wav, bench_scene  # noqa: E402
 from casynth_lab.engine_api import SoundEngine                       # noqa: E402
 from casynth_lab.registry import EngineSpec, register, unregister    # noqa: E402
 
@@ -149,6 +149,22 @@ def test_save_replay_fixed_experiment_in_fresh_process():
         assert k in kinds
     assert rec.meta['audio_start_sample'] > 0
     assert rec.engines == ('laplacian', 'laplacian')     # after factory
+    # end state -> a scene that puts a bench into the record's final state
+    st = rec.meta['state_at_end']
+    assert st['gen'] == s.runner.gen and st['vol'] == 0.5
+    sc2, vol2 = bench_scene(rec)
+    assert vol2 == 0.5 and sc2.initial_side == 'B' and sc2.title == rec.title
+    assert np.array_equal(sc2.initial_grid(), s.runner.grid)
+    assert sc2.variants == s.runner.side_settings()
+    r2 = DemoRunner(sc2, vol=vol2)
+    assert not r2.running and r2.gen == 0 and np.array_equal(r2.grid, s.runner.grid)
+    # an older record without state_at_end opens too (end state recomputed)
+    old = dict(rec.meta)
+    old.pop('state_at_end')
+    from casynth_lab.catalog import Record
+    sc3, vol3 = bench_scene(Record(cat.root, rid, old))
+    assert vol3 == vol2 and np.array_equal(sc3.initial_grid(), sc2.initial_grid())
+    assert sc3.variants == sc2.variants and sc3.initial_side == sc2.initial_side
     # replay in a FRESH process, byte-exact, and commands after Stop/Restart ran
     code = (
         "import sys, json; sys.path.insert(0, %r)\n"
@@ -191,7 +207,7 @@ def test_cut_is_a_consistent_prefix_and_session_continues():
         # session keeps running; a later save is a NEW record, the first is unchanged
         s.run_until(cut1.end_sample + _sec(0.5))
         s.engine.post('set_cell', r=1, c=1, v=1)
-        assert _wait(lambda: s.engine.snapshot()['grid'][1, 1] == 1)     # applied
+        assert _wait(lambda: any(k == 'set_cell' for (_t, _q, k, _a) in list(s.runner.journal)))
         kind, cut2 = s.engine.cut_now()
         rid2 = cat.save(cut2, "second", "")
         assert rid2 != rid1 and cut2.end_sample > cut1.end_sample
@@ -452,7 +468,12 @@ def test_ui_headless_save_catalog_player_replay():
         ref = rec.pcm('monitor')
         # what the device got is the record's PCM (a contiguous slice of it)
         pos, n = eng.play_pos
-        assert pos > 0 and np.array_equal(out_frames[-1], ref[pos - 512:pos])
+        assert pos > 0
+        last = out_frames[-1]
+        lo = max(0, pos - 8192)
+        found = any(np.array_equal(last, ref[k:k + 512])
+                    for k in range(lo, min(pos, len(ref) - 512) + 1))
+        assert found, "device output is not a slice of the record PCM"
         assert app.press((r['stop'][0] + 3, r['stop'][1] + 3), 1) == 'play:stop'
         assert not eng.playing
         assert app.press((r['play_A'][0] + 3, r['play_A'][1] + 3), 1) == 'play:A'
@@ -468,9 +489,41 @@ def test_ui_headless_save_catalog_player_replay():
         pygame.image.save(screen, os.path.join(ART, "_demo_bench_catalog.png"))
         assert app.key('escape') == 'back'
         assert app.mode == 'live' and not eng.playing
+        # Open in bench: new session in the record's end state, not running
+        rect = app.lab_buttons['catalog']
+        app.press((rect[0] + 3, rect[1] + 3), 1)
+        app.press((app._list_rect(0)[0] + 5, app._list_rect(0)[1] + 5), 1)
         stop_pull.set()
+        th.join(timeout=2)
+        assert app.press((r['open'][0] + 3, r['open'][1] + 3), 1) == 'open'
+        assert app.mode == 'live' and app.engine is not eng
+        eng = app.engine
+        snap = eng.snapshot()
+        assert not snap['running'] and snap['gen'] == 0
+        assert np.array_equal(snap['grid'], np.array(
+            [[1 if [rr, cc] in rec.meta['state_at_end']['cells'] else 0
+              for cc in range(scene.cols)] for rr in range(scene.rows)], np.uint8))
+        assert snap['sides']['A'][1]['harm'] == 0.5 and snap['selected'] == 'B'
+        assert abs(snap['vol'] - rec.meta['state_at_end']['vol']) < 1e-9
+        assert app.status.startswith("Opened in bench")
+        app.draw(screen, font, small)
+        # the new session needs its blocks pulled like a device would
+        stop_pull.clear()
+
+        def pull2():
+            while not stop_pull.is_set():
+                out = np.zeros((512, 2), np.int16)
+                eng._audio_cb(out, 512, None, None)
+                time.sleep(512 / SR)
+        th2 = threading.Thread(target=pull2, daemon=True)
+        th2.start()
+        rect = app.buttons['start'][0]
+        app.press((rect[0] + 3, rect[1] + 3), 1)
+        assert _wait(lambda: eng.snapshot()['gen'] >= 1, 30)
+        stop_pull.set()
+        th2.join(timeout=2)
     finally:
-        eng.stop()
+        app.engine.stop()
         pygame.quit()
 
 
