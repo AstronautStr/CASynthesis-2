@@ -163,6 +163,11 @@ def test_save_replay_fixed_experiment_in_fresh_process():
     old.pop('state_at_end')
     from casynth_lab.catalog import Record
     sc3, vol3 = bench_scene(Record(cat.root, rid, old))
+    seen = []
+    st_sub = cat.end_state_in_subprocess(rid, progress=seen.append)
+    assert st_sub['cells'] == rec.meta['state_at_end']['cells'] and seen[-1] == 1.0
+    sc4, vol4 = bench_scene(Record(cat.root, rid, old), st_sub)
+    assert np.array_equal(sc4.initial_grid(), sc2.initial_grid()) and vol4 == vol2
     assert vol3 == vol2 and np.array_equal(sc3.initial_grid(), sc2.initial_grid())
     assert sc3.variants == sc2.variants and sc3.initial_side == sc2.initial_side
     # replay in a FRESH process, byte-exact, and commands after Stop/Restart ran

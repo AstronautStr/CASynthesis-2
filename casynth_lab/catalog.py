@@ -152,7 +152,7 @@ class Record:
         return tuple(out)
 
 
-def end_state_by_replay(meta):
+def end_state_by_replay(meta, progress=None):
     """Run the record's journal (no audio comparison) and return the runner's
     end state as stored by newer records: cells, gen, vol."""
     try:
@@ -170,22 +170,28 @@ def end_state_by_replay(meta):
                 c = cmds[i]
                 runner.post(c['kind'], at=None, **c['args'])
                 i += 1
+            before = runner.out_samples
             runner.next_block()
+            if progress is not None and (before // BLOCK) % 50 == 0:
+                progress(min(before / max(end, 1), 1.0))
     except Exception as e:                     # noqa: BLE001
         raise CatalogError(f"cannot rebuild the end state: {e}")
+    if progress is not None:
+        progress(1.0)
     return dict(cells=[[int(a), int(b)] for a, b in np.argwhere(runner.grid > 0)],
                 gen=int(runner.gen), vol=float(runner.vol))
 
 
-def bench_scene(rec):
+def bench_scene(rec, state=None):
     """Scene document + volume that put the bench into the record's END state
     (field, engines/params of both sides, selected side).  The user starts it
     manually.  CatalogError for records without state_at_end."""
     meta = rec.meta
-    st = meta.get('state_at_end')
+    st = state or meta.get('state_at_end')
     if not st:
         # older record (before state_at_end): recompute the end state from
-        # the embedded conditions + journal
+        # the embedded conditions + journal (slow: a UI should rather call
+        # Catalog.end_state_in_subprocess and pass the result as `state`)
         st = end_state_by_replay(meta)
     if 'settings_at_end' not in meta:
         raise CatalogError(f"{rec.id}: record has no end settings to open")
@@ -413,12 +419,25 @@ class Catalog:
 
 
     # -- replay in a separate process (live UI) ------------------------------
+    def end_state_in_subprocess(self, rid, progress=None, cancel=None):
+        """end_state_by_replay() in a child interpreter (see replay_in_subprocess).
+        Returns the state dict, or raises CatalogError."""
+        res = self._run_child('end_state', rid, progress, cancel)
+        if res.status == 'cancelled':
+            raise CatalogError("cancelled")
+        if res.status != 'match':
+            raise CatalogError(res.reason)
+        return res.outputs            # the state dict travels in 'outputs'
+
     def replay_in_subprocess(self, rid, progress=None, cancel=None):
         """Same as replay() but computed by a child interpreter, so the live
         audio callback / render thread never compete with it for the GIL.
         Progress arrives as JSON lines on the child's stdout; cancel() -> True
         terminates the child."""
-        cmd = [sys.executable, '-X', 'utf8', '-m', 'casynth_lab.catalog', 'replay',
+        return self._run_child('replay', rid, progress, cancel)
+
+    def _run_child(self, verb, rid, progress=None, cancel=None):
+        cmd = [sys.executable, '-X', 'utf8', '-m', 'casynth_lab.catalog', verb,
                self.root, rid]
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         try:
@@ -467,13 +486,21 @@ class Catalog:
 
 def _cli(argv):
     """python -m casynth_lab.catalog replay ROOT ID   (JSON lines on stdout)"""
-    if len(argv) != 3 or argv[0] != 'replay':
-        print("usage: python -m casynth_lab.catalog replay ROOT ID")
+    if len(argv) != 3 or argv[0] not in ('replay', 'end_state'):
+        print("usage: python -m casynth_lab.catalog replay|end_state ROOT ID")
         return 2
     cat = Catalog(argv[1])
 
     def prog(f):
         print(json.dumps({'progress': f}), flush=True)
+    if argv[0] == 'end_state':
+        try:
+            st = end_state_by_replay(cat.load(argv[2]).meta, progress=prog)
+            print(json.dumps(dict(status='match', outputs=st), ensure_ascii=False), flush=True)
+        except CatalogError as e:
+            print(json.dumps(dict(status='unavailable', reason=str(e)), ensure_ascii=False),
+                  flush=True)
+        return 0
     res = cat.replay(argv[2], progress=prog, yield_cpu=False)
     print(json.dumps(dict(status=res.status, reason=res.reason, outputs=res.outputs,
                           replay_dir=res.replay_dir), ensure_ascii=False), flush=True)
