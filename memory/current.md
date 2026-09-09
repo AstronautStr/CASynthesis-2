@@ -22,13 +22,13 @@ _Снапшот живого состояния (консолидирован /d
 | `gol_vocoder.py` | Offline GoL-вокодер (SA-ресинтез) — **SHELVED 2026-07-14** |
 | `laplacian_explainer/`, `frontiers_explainer/` | Обучалки (JS дублирует ядро — известный trade-off) |
 | `patterns.py` | 29 паттернов в 9 категориях |
-| `demo_bench.py` + `casynth_lab/` + `demos/` | **Demo-стенд S1+S2** (2026-09-07/08): `DemoRunner` (единый live/offline исполнитель, общее поле + две стороны A/B, часы в сэмплах, очередь команд + журнал, crossfade 20 мс в мониторе), `LiveEngine` (render-поток + sounddevice), сцены JSON v1/v2; запуск `run_demo_bench.bat` (`laplace_ab.json`) |
+| `demo_bench.py` + `casynth_lab/` + `demos/` | **Demo-стенд S1–S3** (2026-09-07/09): `DemoRunner` (единый live/offline исполнитель, общее поле + две стороны A/B, часы в сэмплах, очередь команд + журнал, crossfade 20 мс в мониторе), `LiveEngine` (render-поток + sounddevice), сцены JSON v1/v2; движки через `registry.py` (интерфейс `engine_api.SoundEngine`, адаптер `legacy_engine.py`); запуск `run_demo_bench.bat` (`laplace_ab.json`) |
 | `check.py` | **Все гейты одной командой** (см. «Гейты») |
-| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (33 теста S1+S2) + `golden/` (эталоны golden-master и UI) |
+| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (39 тестов S1–S3) + `golden/` (эталоны golden-master и UI) |
 
 ## Гейты (обязательны после каждого изменения)
 
-`python check.py` = 59 юнит-тестов + 33 теста demo-стенда S1+S2 + golden-master аудио (байт-в-байт,
+`python check.py` = 59 юнит-тестов + 39 тестов demo-стенда S1–S3 + golden-master аудио (байт-в-байт,
 sha256[:16]=cd3126907ad13b6c) + UI-кадр (пиксель-в-пиксель vs `tests/golden/ui_frame.png`)
 + import/init smoke. Эталоны ВЕРСИОНИРУЮТСЯ в `tests/golden/` (переехали из gitignored
 `artifacts/` 2026-07-14). Легитимное изменение UI → `python check.py --bless-ui` в том же
@@ -120,7 +120,11 @@ _(A/B стенд `ab_bench.py` с пресетами (клавиши 1–9, `ab_
   (`memory/log/2026-09-07-demo-lab-s1.md`). **S2 (A/B + параметры из реестра, 5 движков)
   сдан 2026-09-08 и принят Пользователем 2026-09-09** (`memory/log/2026-09-08-demo-lab-s2.md`;
   по приёмке добавлены: копирование настроек `<<`/`>>`, Factory A+B, звёздочка изменённой
-  стороны, хоткеи R / Space / 1 / 2). S3 (новый движок с памятью) — по отдельному ТЗ.
+  стороны, хоткеи R / Space / 1 / 2). **S3 (интерфейс звукового движка + реестр стенда,
+  ТЗ `req-demo-lab-s3.md`) сдан 2026-09-09** (`memory/log/2026-09-09-demo-lab-s3.md`):
+  `casynth_lab/engine_api.py` / `legacy_engine.py` / `registry.py`; пять методов —
+  адаптер под прежними id, звук S2 закреплён `tests/golden/demo_lab_s2_ref.json`.
+  Ждёт ручной проверки (Start → A/B → harm на B). Следующий спринт — после приёмки.
 
 - **`acc` (событийные акценты, громкостный канал ветки ДИНАМИКА)** — дизайн принят
   2026-07-06 (REQ с критериями A–G в `decisions.md`), ЖДЁТ РЕАЛИЗАЦИИ. Переиспользует

@@ -24,8 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from casynth_config import (VOL_DEFAULT, C_BG, C_GRID, C_PANEL, C_EDGE, C_TXT,
                             C_DIM, C_BTN, C_ACCENT)                    # noqa: E402
-from casynth_core import ENGINES, ENGINE_BY_ID                          # noqa: E402
-from casynth_lab import (load_scene, SceneError, DemoRunner, SIDES,
+from casynth_lab import (load_scene, SceneError, DemoRunner, SIDES, registry,
                          describe_difference, validate_param)           # noqa: E402
 
 # -- layout ------------------------------------------------------------------
@@ -89,9 +88,9 @@ class BenchApp:
         self.factory_btn = (px + PANEL_W - 100, py + TAB_H + 6, 100, 22)
         self.engine_btns = {}
         ey = py + TAB_H + 48
-        for i, e in enumerate(ENGINES):
+        for i, e in enumerate(registry.specs()):
             col, row = i % 3, i // 3
-            self.engine_btns[e['id']] = (px + col * (ENG_W + 6), ey + row * (ENG_H + 6),
+            self.engine_btns[e.id] = (px + col * (ENG_W + 6), ey + row * (ENG_H + 6),
                                          ENG_W, ENG_H)
         self.params_y = ey + 2 * (ENG_H + 6) + 12
         self.slider_x = px + 60
@@ -118,7 +117,7 @@ class BenchApp:
     def _param_rows(self, eid):
         """[(spec, slider_rect)] for the selected side's engine."""
         rows = []
-        for i, spec in enumerate(ENGINE_BY_ID[eid]['params']):
+        for i, spec in enumerate(registry.get(eid).params):
             y = self.params_y + i * ROW_H
             rows.append((spec, (self.slider_x, y + 6, SLIDER_W, 10)))
         return rows
@@ -226,7 +225,7 @@ class BenchApp:
 
     def _set_param_from_x(self, mx):
         side, eid, params = self._side()
-        spec = next(p for p in ENGINE_BY_ID[eid]['params'] if p[0] == self.drag_param)
+        spec = registry.get(eid).spec_of(self.drag_param)
         _arg, _label, lo, hi, integer, _d = spec
         frac = min(max((mx - self.slider_x) / SLIDER_W, 0.0), 1.0)
         v = lo + frac * (hi - lo)
@@ -285,7 +284,7 @@ class BenchApp:
             pygame.draw.rect(screen, C_ACCENT if on else C_EDGE, rect, 1, border_radius=4)
             star = '*' if snap['modified'][s] else ''
             hot = '1' if s == 'A' else '2'
-            lbl = f"{s}{star}: {ENGINE_BY_ID[snap['sides'][s][0]]['label']} ({hot})"
+            lbl = f"{s}{star}: {registry.label(snap['sides'][s][0])} ({hot})"
             t = font.render(lbl, True, C_TXT)
             screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                             rect[1] + (rect[3] - t.get_height()) // 2))
@@ -309,7 +308,7 @@ class BenchApp:
             on = (e_id == eid)
             pygame.draw.rect(screen, C_BTN_ON if on else C_BTN, rect, border_radius=3)
             pygame.draw.rect(screen, C_ACCENT if on else C_EDGE, rect, 1, border_radius=3)
-            t = small.render(ENGINE_BY_ID[e_id]['label'], True, C_TXT)
+            t = small.render(registry.label(e_id), True, C_TXT)
             screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                             rect[1] + (rect[3] - t.get_height()) // 2))
         for spec, (sx, sy, sw, sh) in self._param_rows(eid):

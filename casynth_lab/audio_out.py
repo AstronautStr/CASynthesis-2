@@ -22,6 +22,7 @@ import numpy as np
 
 from casynth_config import SR, AUDIO_LOOKAHEAD_CHUNKS
 from .runner import BLOCK, CHANNELS
+from .engine_api import EngineBlockError
 
 TRANSPORT_FADE_BLOCKS = 3      # ~24 ms fade-in after reset
 
@@ -54,6 +55,8 @@ class LiveEngine:
         self.device_ok = False
         self.device_error = None
         self.underruns = 0
+        self.block_errors = 0        # engine blocks rejected (replaced by silence)
+        self.last_error = None
         self._fade_left = 0
         self._snap = runner.snapshot()
 
@@ -99,12 +102,14 @@ class LiveEngine:
         return self._snap
 
     def status_text(self):
+        err = (f"ENGINE ERROR x{self.block_errors} ({self.last_error})  "
+               if self.block_errors else "")
         if self._sink is not None:
-            return "test sink"
+            return err + "test sink"
         if not self.device_ok:
-            return f"NO AUDIO DEVICE (silent): {self.device_error}"
+            return err + f"NO AUDIO DEVICE (silent): {self.device_error}"
         c = self._snap['clip_blocks']
-        return f"OK  underrun {self.underruns}  clip A {c['A']} / B {c['B']}"
+        return err + f"OK  underrun {self.underruns}  clip A {c['A']} / B {c['B']}"
 
     # -- render thread --------------------------------------------------------
     def _flush_blocks(self):
@@ -129,8 +134,16 @@ class LiveEngine:
                     self._flush_blocks()
                     self._fade_left = TRANSPORT_FADE_BLOCKS
                 r.post(kind, at=at, **args)
-            blk = r.next_block()
-            buf = blk.monitor
+            try:
+                blk = r.next_block()
+                buf = blk.monitor
+            except EngineBlockError as e:
+                # a malformed engine block never reaches the device: silence
+                # instead, counted + shown in the status
+                self.block_errors += 1
+                self.last_error = str(e)
+                blk = None
+                buf = np.zeros((BLOCK, CHANNELS), np.int16)
             if self._fade_left > 0:
                 k = TRANSPORT_FADE_BLOCKS - self._fade_left
                 ramp = (np.linspace(k, k + 1, len(buf), endpoint=False)

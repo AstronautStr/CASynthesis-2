@@ -1,10 +1,11 @@
-"""DemoRunner -- the single live/offline executor (S1 + S2 A/B).
+"""DemoRunner -- the single live/offline executor (S1 + S2 A/B + S3 engines).
 
-Owns ALL mutable state: the shared field, excitation, clocks, and two audio
-SIDES (A / B), each with its own engine, params, SlotPool, phases, amps/pan
-and gain ramp.  Commands arrive through post() (a queue) tagged with the output
-sample index at which they may be applied; each is applied at the first block
-boundary >= that time, and its actual time + order is recorded in `journal`.
+Owns the BENCH state: the shared field, excitation, clocks, command queue and
+journal, and two SIDES (A / B) each holding its own engine INSTANCE created
+from the bench registry (casynth_lab.registry).  Commands arrive through
+post() (a queue) tagged with the output sample index at which they may be
+applied; each is applied at the first block boundary >= that time, and its
+actual time + order is recorded in `journal`.
 
 Clocks (all in samples, SR from casynth_config):
   out_samples : transport clock -- every block ever produced by next_block(),
@@ -15,28 +16,24 @@ Clocks (all in samples, SR from casynth_config):
                 frozen by 'pause', so un-pausing never replays missed steps.
 Tempo is derived from the number of rendered samples, never from wall time.
 
-Both sides are rendered every block on the same timeline (one call per side);
-the MONITOR is the listened side with a 20 ms linear crossfade (coefficients
-sum to 1) applied only in the output mixer -- the raw side PCM is untouched.
-
-DSP is imported from casynth_engine (step / events_field / analyse /
-SlotPool.update / render_chunk_laplacian); nothing is re-implemented here.
+Both sides are rendered every block on the same timeline (one engine.render
+per side); the MONITOR is the listened side with a 20 ms linear crossfade
+(coefficients sum to 1) applied only in the output mixer -- the raw side PCM
+is untouched.  Every engine block is validated (engine_api.check_block)
+before it can reach the output.
 """
 import math
 import wave
 
 import numpy as np
 
-from casynth_config import (SR, CHUNK_S, MASTER_GAIN, VOL_DEFAULT, TOTAL_SLOTS,
-                            GEN_ATTACK_DEFAULT, GEN_DECAY_DEFAULT,
-                            GEN_SUSTAIN_DEFAULT, GEN_RELEASE_DEFAULT)
-from casynth_core import ENGINE_BY_ID
-from casynth_engine import (step, events_field, analyse, SlotPool,
-                            render_chunk_laplacian)
+from casynth_config import SR, CHUNK_S, MASTER_GAIN, VOL_DEFAULT
+from casynth_engine import step, events_field
+from . import registry
+from .engine_api import EngineContext, check_block
 
 BLOCK = int(CHUNK_S * SR)          # samples per audio block (== engine chunk)
 CHANNELS = 2
-PAN_CENTER = 0.5                   # both channels identical
 SIDES = ('A', 'B')
 OUTPUTS = ('A', 'B', 'monitor')
 XFADE_MS = 20.0                    # A/B switch crossfade (output mixer only)
@@ -44,76 +41,45 @@ XFADE_SAMPLES = int(round(XFADE_MS / 1000.0 * SR))   # 882
 COMMANDS = ('start', 'stop', 'pause', 'set_cell', 'reset', 'vol',
             'select', 'set_param', 'set_engine', 'copy_side', 'factory')
 
-
-def _gen_chunks(frac, interval_s):
-    """Fraction of one automaton tick -> chunk count, as in gol_synth."""
-    return max(1, round(frac * interval_s / CHUNK_S))
-
-
-def engine_defaults(engine_id):
-    return {p[0]: p[5] for p in ENGINE_BY_ID[engine_id]['params']}
-
-
-def validate_param(engine_id, name, value):
-    """Registry-driven check; returns the coerced value or raises ValueError."""
-    if engine_id not in ENGINE_BY_ID:
-        raise ValueError(f"unknown engine {engine_id!r}")
-    spec = {p[0]: p for p in ENGINE_BY_ID[engine_id]['params']}
-    if name not in spec:
-        raise ValueError(f"unknown parameter {name!r} for engine {engine_id}")
-    _arg, _label, lo, hi, integer, _default = spec[name]
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError(f"{engine_id}.{name}: value must be a number, got {value!r}")
-    if not math.isfinite(value):
-        raise ValueError(f"{engine_id}.{name}: value must be finite, got {value!r}")
-    if integer:
-        if int(value) != value:
-            raise ValueError(f"{engine_id}.{name}: must be an integer, got {value!r}")
-        value = int(value)
-    else:
-        value = float(value)
-    if not (lo <= value <= hi):
-        raise ValueError(f"{engine_id}.{name}={value!r} outside [{lo}, {hi}]")
-    return value
+# re-exported for callers that only import the runner
+validate_param = registry.validate_param
+engine_defaults = registry.defaults
 
 
 class SideState:
-    """Audio state of one A/B side: engine + params + pool/phases/gain."""
+    """One A/B side: the engine id + applied params + the engine instance."""
 
-    def __init__(self, name, engine_id, params):
+    def __init__(self, name, engine_id, params, ctx):
         self.name = name
-        self.engine_id = engine_id
-        self.params = dict(params)
+        self.ctx = ctx
         self.clip_blocks = 0
         self.peak = 0.0
-        self.voices = []
-        self.reset_audio()
+        self.engine_id = engine_id
+        self.params = dict(params)
+        self.engine = registry.create(engine_id, ctx, self.params)
 
-    def reset_audio(self, gain=0.0):
-        self.pool = SlotPool()
-        sz = TOTAL_SLOTS + 1
-        self.phase = np.zeros(sz)
-        self.amp_cur = np.zeros(sz)
-        self.pan_cur = np.full(sz, PAN_CENTER)
-        self.gain_prev = gain
+    def restart(self, grid, exc, gain):
+        """(Re)initialise the engine on the current field: all audio memory gone."""
+        self.engine.init(grid, exc, gain)
 
-    def analyse(self, grid, f0, exc):
-        _labels, voices, _color = analyse(grid, f0, self.engine_id,
-                                          self.params, exc=exc)
-        for v in voices:
-            v['pan'] = PAN_CENTER
-        self.voices = voices
+    def switch(self, engine_id, params, grid, exc, gain):
+        """Replace the engine instance (tails of the old one are not mixed in)."""
+        self.engine_id = engine_id
+        self.params = dict(params)
+        self.engine = registry.create(engine_id, self.ctx, self.params)
+        self.engine.init(grid, exc, gain)
 
-    def render(self, gain, release_chunks, attack_chunks, decay_chunks, sustain):
-        self.pool.update(self.voices, self.phase, self.amp_cur, self.pan_cur,
-                         release_chunks, attack_chunks, decay_chunks, sustain,
-                         amp_slew=False)
-        buf, peak, n_clip = render_chunk_laplacian(
-            self.phase, self.amp_cur, self.pan_cur, self.pool.amp_tgt,
-            self.pool.pan_tgt, self.pool.freq_slots, CHANNELS,
-            self.gain_prev, gain, 1.0)
-        self.gain_prev = gain
-        self.peak = peak
+    def set_params(self, params):
+        self.params = dict(params)
+        self.engine.set_params(self.params)
+
+    def update_field(self, grid, exc):
+        self.engine.update_field(grid, exc)
+
+    def render(self, gain, t_samples):
+        buf, peak, n_clip = self.engine.render(gain, t_samples)
+        check_block(buf, self.ctx, self.engine_id)
+        self.peak = float(peak)
         if n_clip > 0:
             self.clip_blocks += 1
         return buf
@@ -142,13 +108,17 @@ class DemoRunner:
         self._pending = []             # [(seq, at, kind, args)]
         self._seq = 0
         self.selected = scene.initial_side
+        self.ctx = EngineContext(SR, BLOCK, CHANNELS, scene.f0_hz, scene.level,
+                                 scene.rate_hz)
         # per (side, engine) parameter memory: first pick = defaults / scene,
         # returning to an engine restores the previous values
         self._memory = {}
         self.sides = {}
         for name in SIDES:
             eid, params = scene.variants[name]
-            self.sides[name] = SideState(name, eid, params)
+            if eid not in registry.REGISTRY:
+                raise ValueError(f"scene variant {name}: unknown engine {eid!r}")
+            self.sides[name] = SideState(name, eid, params, self.ctx)
             self._memory[(name, eid)] = dict(params)
         # crossfade state (mixer only): from-side and samples done
         self._xfade_from = None
@@ -168,23 +138,17 @@ class DemoRunner:
         self.running = False
         self.paused = False
         self.step_samples = SR / sc.rate_hz
-        interval = 1.0 / sc.rate_hz
-        self._release_chunks = _gen_chunks(GEN_RELEASE_DEFAULT, interval)
-        self._attack_chunks = _gen_chunks(GEN_ATTACK_DEFAULT, interval)
-        self._decay_chunks = _gen_chunks(GEN_DECAY_DEFAULT, interval)
-        self._sustain = float(GEN_SUSTAIN_DEFAULT)
         for s in self.sides.values():
-            s.reset_audio(self._gain())
+            s.restart(self.grid, self.exc, self._gain())
         self._xfade_from = None
         self._xfade_pos = 0
-        self._analyse_all()
 
     def _gain(self):
         return MASTER_GAIN * self.vol * self.scene.level
 
-    def _analyse_all(self):
+    def _field_changed(self):
         for s in self.sides.values():
-            s.analyse(self.grid, self.scene.f0_hz, self.exc)
+            s.update_field(self.grid, self.exc)
 
     # -- commands -------------------------------------------------------------
     def post(self, kind, at=None, **args):
@@ -209,8 +173,9 @@ class DemoRunner:
             if src not in SIDES or dst not in SIDES or src == dst:
                 raise ValueError(f"copy_side: need two different sides, got {src!r}->{dst!r}")
         if kind == 'set_engine':
-            if args.get('engine_id') not in ENGINE_BY_ID:
-                raise ValueError(f"unknown engine {args.get('engine_id')!r}")
+            if args.get('engine_id') not in registry.REGISTRY:
+                raise ValueError(f"unknown engine {args.get('engine_id')!r} "
+                                 f"(registered: {registry.ids()})")
         elif kind == 'set_param':
             # validated against the engine the side WILL have when applied:
             # a queued set_engine for that side counts
@@ -254,7 +219,7 @@ class DemoRunner:
                 prev = self.grid.copy()
                 self.grid[r, c] = v
                 self.exc = events_field(prev, self.grid)
-                self._analyse_all()
+                self._field_changed()
         elif kind == 'reset':
             self._init_scene_state()
             self.running = True
@@ -272,23 +237,17 @@ class DemoRunner:
         elif kind == 'set_param':
             s = self.sides[args['side']]
             v = validate_param(s.engine_id, args['name'], args['value'])
-            s.params[args['name']] = v
+            params = dict(s.params)
+            params[args['name']] = v
+            s.set_params(params)
             self._memory[(s.name, s.engine_id)] = dict(s.params)
-            s.analyse(self.grid, self.scene.f0_hz, self.exc)
         elif kind == 'set_engine':
             s = self.sides[args['side']]
             eid = args['engine_id']
             if eid == s.engine_id:
                 return
-            s.engine_id = eid
-            s.params = dict(self._memory.get((s.name, eid)) or engine_defaults(eid))
-            self._memory[(s.name, eid)] = dict(s.params)
-            # only THIS side's audio memory restarts on the current shared
-            # field; tails of the previous engine are not mixed in
-            s.reset_audio(self._gain())
-            s.analyse(self.grid, self.scene.f0_hz, self.exc)
-            if s.name == self.selected:
-                self._begin_xfade(None)      # transport fade-in on the monitor
+            params = self._memory.get((s.name, eid)) or engine_defaults(eid)
+            self._set_side(s, eid, params)
         elif kind == 'copy_side':
             src = self.sides[args['src']]
             self._set_side(self.sides[args['dst']], src.engine_id, src.params)
@@ -298,17 +257,17 @@ class DemoRunner:
                 self._set_side(self.sides[name], eid, params)
 
     def _set_side(self, s, eid, params):
-        """Put engine+params on a side (copy / factory).  Same engine -> the
-        usual param update path; different engine -> that side's audio restarts."""
-        changed_engine = (eid != s.engine_id)
-        s.engine_id = eid
-        s.params = dict(params)
+        """Put engine+params on a side (engine change / copy / factory).
+        Same engine -> the usual param update path; different engine -> a new
+        engine instance on the current shared field (only THIS side restarts)
+        + a monitor fade-in when it is the listened side."""
+        if eid == s.engine_id:
+            s.set_params(params)
+        else:
+            s.switch(eid, params, self.grid, self.exc, self._gain())
+            if s.name == self.selected:
+                self._begin_xfade(None)
         self._memory[(s.name, eid)] = dict(s.params)
-        if changed_engine:
-            s.reset_audio(self._gain())
-        s.analyse(self.grid, self.scene.f0_hz, self.exc)
-        if changed_engine and s.name == self.selected:
-            self._begin_xfade(None)
 
     def _begin_xfade(self, from_side):
         """Start a mixer crossfade from `from_side` (None = from silence)."""
@@ -321,7 +280,7 @@ class DemoRunner:
         self.grid = step(prev)
         self.exc = events_field(prev, self.grid)
         self.gen += 1
-        self._analyse_all()
+        self._field_changed()
         self.journal.append((self.out_samples, 0, 'step', {'gen': self.gen}))
 
     def _mix_monitor(self, raw):
@@ -350,10 +309,7 @@ class DemoRunner:
         if not self.paused and self.ca_samples >= (self.gen + 1) * self.step_samples:
             self._step()
         gain = self._gain()
-        raw = {name: self.sides[name].render(gain, self._release_chunks,
-                                             self._attack_chunks,
-                                             self._decay_chunks, self._sustain)
-               for name in SIDES}
+        raw = {name: self.sides[name].render(gain, self.t_samples) for name in SIDES}
         mon = self._mix_monitor(raw)
         self.out_samples += BLOCK
         self.t_samples += BLOCK
@@ -384,7 +340,7 @@ class DemoRunner:
 def describe_difference(settings):
     """Short human summary of how A and B differ (no JSON)."""
     (ea, pa), (eb, pb) = settings['A'], settings['B']
-    la, lb = ENGINE_BY_ID[ea]['label'], ENGINE_BY_ID[eb]['label']
+    la, lb = registry.label(ea), registry.label(eb)
     if ea != eb:
         return f"A: {la}  /  B: {lb}"
     diffs = [f"{k}: A={pa[k]:g}, B={pb[k]:g}" for k in pa if pa[k] != pb.get(k)]

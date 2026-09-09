@@ -30,3 +30,38 @@ Settings are remembered per side x engine.
 Scenes: `laplace_basic.json` = format 1 (one engine, loaded as A = B);
 `laplace_ab.json` = format 2 (`variants` A/B + `listen` hint).  Strictly
 validated: unknown engine / parameter, out-of-range value or bad cell -> error.
+
+## Adding a sound engine (S3 interface)
+
+The bench owns the field, clocks, command queue/journal, transport, the A/B
+instances, the monitor and WAV export.  An engine is one class per side that
+turns the field into stereo blocks.
+
+1. **Module** — put it under `casynth_lab/` (e.g. `casynth_lab/my_engine.py`)
+   and subclass `casynth_lab.SoundEngine`:
+   ```python
+   from casynth_lab import SoundEngine
+   class MyEngine(SoundEngine):
+       def init(self, grid, exc, gain): ...        # (re)start on the CURRENT field, silent
+       def update_field(self, grid, exc): ...      # field changed (step / painting)
+       def set_params(self, params): ...           # full validated dict (call super())
+       def render(self, gain, t_samples): ...      # -> (int16 (ctx.block, 2), peak, n_clip)
+       def reset(self, gain): ...                  # == init on the same field
+   ```
+   `self.ctx` gives `sr`, `block`, `channels`, `f0`, `level`, `rate_hz`.  Apply
+   `gain` once (pre-clip).  No wall-clock time, never write to `grid`.
+2. **Register** — explicitly, in one place (`casynth_lab/registry.py`, after the
+   built-in five, or in your module imported from there):
+   ```python
+   from casynth_lab import EngineSpec, register
+   register(EngineSpec('my_engine', 'My', [('depth', 'depth', 0.0, 1.0, False, 0.5)],
+                       lambda ctx, params: MyEngine(ctx, params)))
+   ```
+   Param spec = `(arg, label, lo, hi, integer, default)`; integer 0/1 renders as
+   a toggle.  The UI buttons/knobs, scene validation, commands and `--side`
+   export all come from the registry -- no other Python changes.
+3. **Scene** — reference it from JSON only:
+   `"variants": {"B": {"engine_id": "my_engine", "engine_params": {"depth": 0.5}}}`.
+4. **Check** — `python tests/test_demo_lab.py` (interface + audio references) and
+   `python check.py`.  The bench rejects malformed blocks (wrong shape/dtype):
+   they are replaced by silence and counted in the audio status.

@@ -12,7 +12,7 @@ import os
 
 import numpy as np
 
-from casynth_core import ENGINE_BY_ID
+from . import registry
 
 FORMAT_VERSIONS = (1, 2)
 SIDES = ('A', 'B')
@@ -126,9 +126,9 @@ def validate(d):
 
 
 def _validate_engine(eid, params, where):
-    if eid not in ENGINE_BY_ID:
-        _fail(f"scene: unknown {where}engine_id {eid!r} (known: {sorted(ENGINE_BY_ID)})")
-    spec = {p[0]: p for p in ENGINE_BY_ID[eid]['params']}
+    if eid not in registry.REGISTRY:
+        _fail(f"scene: unknown {where}engine_id {eid!r} (registered: {registry.ids()})")
+    spec = {p[0]: p for p in registry.get(eid).params}
     if not isinstance(params, dict):
         _fail(f"scene: '{where}engine_params' must be an object")
     unknown = sorted(set(params) - set(spec))

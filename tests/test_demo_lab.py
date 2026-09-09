@@ -22,12 +22,14 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 from casynth_config import SR, VOL_DEFAULT                          # noqa: E402
-from casynth_core import ENGINES                                    # noqa: E402
 from casynth_lab import (load_scene, SceneError, DemoRunner, BLOCK,  # noqa: E402
-                         render_offline, describe_difference, engine_defaults)
+                         render_offline, describe_difference, engine_defaults, registry)
 from casynth_lab.scene import validate                              # noqa: E402
 from casynth_lab.runner import XFADE_SAMPLES                        # noqa: E402
 from casynth_lab.audio_out import LiveEngine                        # noqa: E402
+from casynth_lab.engine_api import SoundEngine, EngineBlockError    # noqa: E402
+from casynth_lab.registry import EngineSpec, register, unregister   # noqa: E402
+from casynth_lab.legacy_engine import LegacySynthEngine             # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEMO = os.path.join(ROOT, "demos", "laplace_basic.json")
@@ -303,7 +305,7 @@ def test_reset_clears_tails_phases_and_queue():
     r.post('start', at=0)
     for _ in range(600):
         r.next_block()
-    sa = r.sides['A']
+    sa = r.sides['A'].engine
     assert sa.amp_cur.max() > 0 and sa.phase.any()
     r.post('vol', at=r.out_samples + 10 * BLOCK, value=0.1)      # future -> dropped
     r.post('reset')
@@ -360,7 +362,7 @@ def test_stop_and_restart_keep_settings_but_reset_both_sides():
         assert s['gen'] == 0 and s['running'] == (kind == 'reset')
         if kind == 'stop':                      # silent: no phases/tails survive
             for side in r.sides.values():
-                assert side.amp_cur.max() == 0 and not side.phase.any()
+                assert side.engine.amp_cur.max() == 0 and not side.engine.phase.any()
         assert not r._pending
 
 
@@ -374,7 +376,7 @@ def test_empty_field_goes_silent_after_tails():
     tail = [r.next_block() for _ in range(400)]         # ~3.2 s
     assert r.grid.sum() == 0
     assert not tail[-1].monitor.any(), "empty field still sounds"
-    assert r.sides['A'].amp_cur.max() < 1e-4
+    assert r.sides['A'].engine.amp_cur.max() < 1e-4
 
 
 def test_volume_change_is_smoothed():
@@ -392,17 +394,17 @@ def test_volume_change_is_smoothed():
 # S2: engines / params
 # =============================================================================
 def test_every_engine_runs_on_the_demo_scene():
-    for e in ENGINES:
+    for e in registry.specs():
         r = DemoRunner(SCENE_AB)
-        r.post('set_engine', side='B', engine_id=e['id'])
+        r.post('set_engine', side='B', engine_id=e.id)
         r.post('start', at=0)
         pcm, r = render_offline(SCENE_AB, 2.0, commands=[], runner=r, output='B')
-        assert r.sides['B'].engine_id == e['id']
-        if e['id'] != 'laplacian':
-            assert r.sides['B'].params == engine_defaults(e['id'])
-        assert np.abs(pcm).max() > 100, f"{e['id']} silent"
+        assert r.sides['B'].engine_id == e.id
+        if e.id != 'laplacian':
+            assert r.sides['B'].params == engine_defaults(e.id)
+        assert np.abs(pcm).max() > 100, f"{e.id} silent"
         assert not np.isnan(pcm.astype(float)).any()
-        assert r.sides['B'].clip_blocks == 0, f"{e['id']} clips"
+        assert r.sides['B'].clip_blocks == 0, f"{e.id} clips"
 
 
 def test_param_memory_per_side_and_engine():
@@ -544,19 +546,19 @@ def test_param_change_applies_at_block_boundary_without_reset():
     for _ in range(100):
         r.next_block()
     gen, ca = r.gen, r.ca_samples
-    ph_a, ph_b = r.sides['A'].phase.copy(), r.sides['B'].phase.copy()
+    ph_a, ph_b = r.sides['A'].engine.phase.copy(), r.sides['B'].engine.phase.copy()
     r.post('set_param', side='B', name='harm', value=0.5)
     r.next_block()
     assert r.gen == gen and r.ca_samples == ca + BLOCK
-    assert not np.array_equal(r.sides['B'].phase, ph_b)
-    assert not np.array_equal(r.sides['A'].phase, ph_a)
+    assert not np.array_equal(r.sides['B'].engine.phase, ph_b)
+    assert not np.array_equal(r.sides['A'].engine.phase, ph_a)
     assert r.sides['B'].params['harm'] == 0.5
     # engine change re-initialises ONLY that side's audio memory
-    amp_a = r.sides['A'].amp_cur.copy()
+    amp_a = r.sides['A'].engine.amp_cur.copy()
     r.post('set_engine', side='B', engine_id='walsh')
     r.next_block()
-    assert r.sides['A'].amp_cur.max() > 0 and r.gen == gen
-    assert np.allclose(r.sides['A'].amp_cur, amp_a, atol=0.05)
+    assert r.sides['A'].engine.amp_cur.max() > 0 and r.gen == gen
+    assert np.allclose(r.sides['A'].engine.amp_cur, amp_a, atol=0.05)
 
 
 def test_monitor_crossfade_sums_to_one_and_keeps_block_count():
@@ -591,6 +593,200 @@ def test_live_equals_offline_on_ab_scenario():
     again, _ = render_offline(SCENE_AB, SCEN_AB_SECONDS, commands=SCENARIO_AB, output=ALL)
     for o in ALL:
         assert np.array_equal(off[o], again[o])
+
+
+# =============================================================================
+# S3: engine interface / registry
+# =============================================================================
+def test_s2_audio_reference_preserved_through_engine_interface():
+    """Five methods x fixed journal, hashes recorded from the accepted S2 code
+    BEFORE the S3 refactor (tests/golden/demo_lab_s2_ref.json)."""
+    sys.path.insert(0, os.path.join(ROOT, "tests", "golden"))
+    import demo_lab_s2_ref as ref
+    with open(ref.REF) as f:
+        expect = json.load(f)
+    got = ref.compute()
+    for eid in ref.ENGINE_IDS:
+        assert got[eid] == expect[eid], f"{eid}: {got[eid]} != {expect[eid]}"
+
+
+class _StubEngine(SoundEngine):
+    """Test-only engine: returns a KNOWN PCM pattern (block index ramp) and
+    never touches partials / SlotPool.  Not a sonification method."""
+    calls = []
+
+    def __init__(self, ctx, params):
+        super().__init__(ctx, params)
+        self.n = 0
+
+    def init(self, grid, exc, gain):
+        self.n = 0
+        _StubEngine.calls.append(('init', int(grid.sum()), gain))
+
+    def update_field(self, grid, exc):
+        _StubEngine.calls.append(('field', int(grid.sum())))
+
+    def render(self, gain, t_samples):
+        v = int(self.params['amp'] * 1000) + (self.n % 7)
+        buf = np.full((self.ctx.block, self.ctx.channels), v, np.int16)
+        self.n += 1
+        return buf, v / 32767.0, 0
+
+    def reset(self, gain):
+        self.init(np.zeros((1, 1)), None, gain)
+
+
+class _BadBlockEngine(_StubEngine):
+    def render(self, gain, t_samples):
+        return np.zeros((self.ctx.block // 2, 3), np.float32), 0.0, 0
+
+
+def _stub_spec(eid='stub', cls=_StubEngine):
+    return EngineSpec(eid, 'Stub', [('amp', 'amp', 0.0, 2.0, False, 1.0)],
+                      lambda ctx, params: cls(ctx, params))
+
+
+def _scene_with(engine_id, params):
+    """A v2 scene doc using `engine_id` on side B, validated + loaded."""
+    from casynth_lab.scene import Scene, validate
+    d = _doc(DEMO_AB)
+    d['variants']['B'] = {'engine_id': engine_id, 'engine_params': params}
+    validate(d)
+    return Scene(d)
+
+
+def test_registered_alias_of_existing_adapter_works_everywhere():
+    """Register the existing adapter under an extra id: scene, validation,
+    commands, offline render and UI use it with no code changes."""
+    alias = 'laplacian_alias'
+    register(EngineSpec(alias, 'LaplaceX', registry.get('laplacian').params,
+                        lambda ctx, params: LegacySynthEngine(ctx, params, 'laplacian')))
+    try:
+        assert alias in registry.ids()
+        sc = _scene_with(alias, dict(SCENE_AB.variants['B'][1]))
+        res, r = render_offline(sc, 2.0, output=ALL)
+        ref, _ = render_offline(SCENE_AB, 2.0, output='B')
+        assert np.array_equal(res['B'], ref), "alias sounds different from laplacian"
+        # commands: set_engine / set_param / describe
+        r.post('set_engine', side='A', engine_id=alias)
+        r.post('set_param', side='A', name='harm', value=0.5)
+        r.next_block()
+        assert r.sides['A'].engine_id == alias and r.sides['A'].params['harm'] == 0.5
+        assert describe_difference(r.side_settings()) == "harm: A=0.5, B=1"
+        # validation rejects params the alias does not have
+        try:
+            r.post('set_param', side='A', name='amp', value=0.1)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("unknown param accepted for alias")
+        # UI (headless): the alias shows up as an engine button with its knobs
+        import pygame
+        import demo_bench as db
+        eng = LiveEngine(DemoRunner(sc), sink=lambda m, b: None)
+        pygame.init()
+        app = db.BenchApp(sc, eng)
+        assert alias in app.engine_btns
+        assert [s[0] for s, _ in app._param_rows(alias)] == \
+            [s[0] for s, _ in app._param_rows('laplacian')]
+        screen = pygame.Surface((app.width, app.height))
+        app.draw(screen, pygame.font.SysFont(db.FONT_NAMES, 17),
+                 pygame.font.SysFont(db.FONT_NAMES, 14))
+        pygame.quit()
+    finally:
+        unregister(alias)
+    assert alias not in registry.ids()
+    try:
+        _scene_with(alias, dict(SCENE_AB.variants['B'][1]))
+    except SceneError as e:
+        assert "unknown variants.B.engine_id" in str(e)
+    else:
+        raise AssertionError("unregistered engine accepted by scene validation")
+
+
+def test_stub_engine_pcm_passes_through_untouched():
+    register(_stub_spec())
+    try:
+        _StubEngine.calls.clear()
+        sc = _scene_with('stub', {'amp': 1.5})
+        cmds = [('start', 0, {}), ('set_cell', _sec(0.5), {'r': 1, 'c': 1, 'v': 1}),
+                ('set_param', _sec(1.0), {'side': 'B', 'name': 'amp', 'value': 0.5}),
+                ('select', _sec(1.5), {'side': 'B'})]
+        res, r = render_offline(sc, 2.0, commands=cmds, output=ALL)
+        n_blocks = len(res['B']) // BLOCK + 1
+        # expected: value = amp*1000 + (block index % 7), amp switches at 1.0 s
+        t_par = [t for (t, k, a) in _events(r) if k == 'set_param'][0]
+        expect = np.zeros(len(res['B']), np.int16)
+        for i in range(n_blocks):
+            amp = 1.5 if i * BLOCK < t_par else 0.5
+            expect[i * BLOCK:(i + 1) * BLOCK] = int(amp * 1000) + (i % 7)
+        assert np.array_equal(res['B'][:, 0], expect[:len(res['B'])])
+        assert np.array_equal(res['B'][:, 1], expect[:len(res['B'])])
+        # after the crossfade the monitor is exactly the stub PCM
+        t_sel = [t for (t, k, a) in _events(r) if k == 'select'][0]
+        assert np.array_equal(res['monitor'][t_sel + 2000:], res['B'][t_sel + 2000:])
+        # side A (laplacian) is unaffected by the stub
+        ref, _ = render_offline(SCENE_AB, 2.0, commands=[('start', 0, {}),
+                                ('set_cell', _sec(0.5), {'r': 1, 'c': 1, 'v': 1})],
+                                output='A')
+        assert np.array_equal(res['A'], ref)
+        # the bench drove the engine through the interface only
+        kinds = [c[0] for c in _StubEngine.calls]
+        assert kinds[0] == 'init' and 'field' in kinds
+        assert not hasattr(r.sides['B'].engine, 'pool')
+    finally:
+        unregister('stub')
+
+
+def test_malformed_engine_block_never_reaches_output():
+    register(_stub_spec('bad', _BadBlockEngine))
+    try:
+        sc = _scene_with('bad', {'amp': 1.0})
+        r = DemoRunner(sc)
+        r.post('start', at=0)
+        try:
+            r.next_block()
+        except EngineBlockError as e:
+            assert 'bad' in str(e) and 'shape' in str(e) or 'int16' in str(e)
+        else:
+            raise AssertionError("malformed block accepted")
+        got = []
+        eng = LiveEngine(DemoRunner(sc), sink=lambda m, b: got.append((m, b)))
+        eng.post('start')
+        eng.start()
+        try:
+            assert _wait(lambda: eng.block_errors > 0, 10)
+            time.sleep(0.05)
+        finally:
+            eng.stop()
+        assert "ENGINE ERROR" in eng.status_text()
+        for m, b in got:
+            assert m.shape == (BLOCK, 2) and m.dtype == np.int16
+            assert not m.any()
+    finally:
+        unregister('bad')
+
+
+def test_registry_rejects_bad_registration_and_duplicates():
+    try:
+        register(_stub_spec('laplacian'))
+    except ValueError as e:
+        assert 'already registered' in str(e)
+    else:
+        raise AssertionError("duplicate id accepted")
+    try:
+        register("not a spec")
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("non-spec accepted")
+    try:
+        register(EngineSpec('x', 'X', [('a', 'a', 0, 1)], lambda c, p: None))
+    except ValueError as e:
+        assert 'bad param spec' in str(e)
+    else:
+        raise AssertionError("bad param spec accepted")
+    assert 'x' not in registry.ids()
 
 
 # =============================================================================
