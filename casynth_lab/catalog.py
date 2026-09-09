@@ -182,40 +182,19 @@ def end_state_by_replay(meta, progress=None):
                 gen=int(runner.gen), vol=float(runner.vol))
 
 
-def initial_state(meta):
-    """The experiment's INITIAL state: the embedded scene plus the settings
-    applied before the first Start (side selection, engines, params, volume).
-    Instant -- only pre-start commands are applied, no audio is rendered."""
-    try:
-        scene = scene_from_doc(meta['scene'])
-        runner = DemoRunner(scene, vol=meta.get('runner', {}).get('vol_initial', VOL_DEFAULT))
-    except (SceneError, KeyError, TypeError, ValueError) as e:
-        raise CatalogError(f"cannot rebuild the initial state: {e}")
-    cmds = sorted((j for j in meta['journal'] if j['kind'] not in REPLAY_COMMANDS_SKIP),
-                  key=lambda j: (j['out_sample'], j['seq']))
-    pre = []
-    for c in cmds:
-        if c['kind'] in ('start', 'reset'):
-            break
-        pre.append(c)
-    try:
-        for c in pre:
-            runner.post(c['kind'], at=None, **c['args'])
-        if pre:
-            runner.next_block()          # applies them (scene still not running)
-    except Exception as e:                     # noqa: BLE001
-        raise CatalogError(f"cannot rebuild the initial state: {e}")
-    return dict(cells=[[int(a), int(b)] for a, b in np.argwhere(runner.grid > 0)],
-                vol=float(runner.vol), selected=runner.selected,
-                settings={side: {'engine_id': eid, 'engine_params': dict(p)}
-                          for side, (eid, p) in runner.side_settings().items()})
-
-
-def bench_scene(rec):
-    """Scene document + volume that put a bench into the record's INITIAL
-    state (scene + pre-start settings).  The user starts it manually."""
+def bench_scene(rec, state=None):
+    """Scene document + volume that put the bench into the record's END state
+    (field, engines/params of both sides, selected side).  The user starts it
+    manually.  CatalogError for records without state_at_end."""
     meta = rec.meta
-    st = initial_state(meta)
+    st = state or meta.get('state_at_end')
+    if not st:
+        # older record (before state_at_end): recompute the end state from
+        # the embedded conditions + journal (slow: a UI should rather call
+        # Catalog.end_state_in_subprocess and pass the result as `state`)
+        st = end_state_by_replay(meta)
+    if 'settings_at_end' not in meta:
+        raise CatalogError(f"{rec.id}: record has no end settings to open")
     d = copy.deepcopy(meta['scene'])
     d['format'] = 2
     d.pop('engine_id', None)
@@ -223,14 +202,16 @@ def bench_scene(rec):
     d['id'] = f"{d.get('id', 'demo')}@{rec.id}"
     d['title'] = rec.title
     d['cells'] = [list(c) for c in st['cells']]
-    d['variants'] = st['settings']
-    d['initial_side'] = st['selected']
+    d['variants'] = {side: {'engine_id': v['engine_id'],
+                            'engine_params': dict(v['engine_params'])}
+                     for side, v in meta['settings_at_end'].items()}
+    d['initial_side'] = meta.get('selected_at_end', 'A')
     d.setdefault('listen', '')
     try:
         scene = scene_from_doc(d)
     except SceneError as e:
         raise CatalogError(f"{rec.id}: cannot open in bench: {e}")
-    return scene, st['vol']
+    return scene, float(st.get('vol', VOL_DEFAULT))
 
 
 class ReplayResult:

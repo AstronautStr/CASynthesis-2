@@ -42,9 +42,9 @@ experiment keeps running.  Records live in `lab_catalog/local/<id>/`
 (`record.json` + `A.wav` `B.wav` `monitor.wav`; user data, gitignored).
 
 **Catalog** is a separate screen (the live view is hidden; Esc / Back returns).
-Select a record -> **Open in bench** loads the experiment's INITIAL state
-(the scene field plus the engines, parameters, side and volume set before the
-first Start) into a fresh live session that you start manually; **Play A / Play B / Play as heard** (the live synth is
+Select a record -> **Open in bench** loads its END state (field, engines and
+parameters of A and B, selected side, volume) into a fresh live session that
+you start manually; **Play A / Play B / Play as heard** (the live synth is
 muted meanwhile); **Replay from start**
 recomputes the experiment in a separate process from the embedded conditions
 and compares it byte-exact with the stored WAVs: "Replay matched" /
