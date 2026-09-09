@@ -50,7 +50,7 @@ C_ERR = (230, 120, 90)
 C_WARN = (230, 180, 90)
 C_OK = (120, 210, 140)
 LAB_BTN_W = 104
-ROW_LIST_H = 44
+ROW_LIST_H = 50
 
 
 def _is_toggle(spec):
