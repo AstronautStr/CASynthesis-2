@@ -406,14 +406,6 @@ class BenchApp:
         th = self.cat['thread']
         if th is not None and not th.is_alive():
             self.cat['thread'] = None
-            pending_open = self.cat.pop('open', None)
-            if pending_open is not None:
-                rec, state = pending_open
-                if isinstance(state, CatalogError):
-                    self.status = f"Cannot open: {state}"
-                else:
-                    self._finish_open(rec, state)
-                return
             res = self.cat['result']
             if res is not None:
                 self.status = res.text
@@ -566,40 +558,15 @@ class BenchApp:
         return True
 
     def open_in_bench(self):
-        """Load the selected record's END state (field, both sides' engine +
-        params, selected side, volume) into a fresh live session; the user
-        starts it manually."""
+        """Load the selected record's INITIAL state (scene field, both sides'
+        engine + params, selected side, volume as they were before the first
+        Start) into a fresh live session; the user starts it manually."""
         rec = self.selected_record()
         if rec is None or self.cat['thread'] is not None:
             return False
         self.engine.stop_play()
-        if rec.meta.get('state_at_end'):
-            return self._finish_open(rec, None)
-        # older record: the end state is recomputed in a child process with a
-        # progress bar; the session is swapped on the UI thread when it is ready
-        self.cat['cancel'].clear()
-        self.cat['progress'] = 0.0
-        self.cat['result'] = None
-        self.cat['open'] = None
-        self.status = "Opening: rebuilding the end state..."
-
-        def prog(f):
-            self.cat['progress'] = f
-
-        def work():
-            try:
-                self.cat['open'] = (rec, self.catalog.end_state_in_subprocess(
-                    rec.id, progress=prog, cancel=self.cat['cancel'].is_set))
-            except CatalogError as e:
-                self.cat['open'] = (rec, e)
-        th = threading.Thread(target=work, daemon=True)
-        self.cat['thread'] = th
-        th.start()
-        return True
-
-    def _finish_open(self, rec, state):
         try:
-            scene, vol = bench_scene(rec, state)
+            scene, vol = bench_scene(rec)          # initial state: instant
         except CatalogError as e:
             self.status = f"Cannot open: {e}"
             return False
