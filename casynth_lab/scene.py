@@ -42,6 +42,8 @@ class Scene:
             one = (d['engine_id'], dict(d['engine_params']))
             self.variants = {'A': one, 'B': (one[0], dict(one[1]))}
             self.listen = ''
+            self.factory_variants = {k: (v[0], dict(v[1])) for k, v in self.variants.items()}
+            self.param_memory = {}
             self.initial_side = 'A'
         else:
             self.variants = {k: (d['variants'][k]['engine_id'],
@@ -49,6 +51,12 @@ class Scene:
                              for k in SIDES}
             self.listen = d.get('listen', '')
             self.initial_side = d.get('initial_side', 'A')
+            fv = d.get('factory_variants') or d['variants']
+            self.factory_variants = {k: (fv[k]['engine_id'], dict(fv[k]['engine_params']))
+                                     for k in SIDES}
+            # per side: {engine_id: params} remembered for engines not currently on it
+            self.param_memory = {k: {eid: dict(pp) for eid, pp in v.items()}
+                                 for k, v in (d.get('param_memory') or {}).items()}
         # v1 convenience (single engine)
         self.engine_id, self.engine_params = self.variants['A']
         self.f0_hz = float(d['audio']['f0_hz'])
@@ -116,6 +124,25 @@ def validate(d):
                              where=f"variants.{k}.")
         if 'listen' in d and not isinstance(d['listen'], str):
             _fail("scene: 'listen' must be a string")
+        fv = d.get('factory_variants')
+        if fv is not None:
+            if not isinstance(fv, dict) or sorted(fv) != sorted(SIDES):
+                _fail("scene: 'factory_variants' must have exactly A and B")
+            for k in SIDES:
+                if not isinstance(fv[k], dict) or 'engine_id' not in fv[k] \
+                        or 'engine_params' not in fv[k]:
+                    _fail(f"scene: factory_variants.{k} needs engine_id/engine_params")
+                _validate_engine(fv[k]['engine_id'], fv[k]['engine_params'],
+                                 where=f"factory_variants.{k}.")
+        pm = d.get('param_memory')
+        if pm is not None:
+            if not isinstance(pm, dict) or any(k not in SIDES for k in pm):
+                _fail("scene: 'param_memory' keys must be sides A/B")
+            for k, per_engine in pm.items():
+                if not isinstance(per_engine, dict):
+                    _fail(f"scene: param_memory.{k} must be an object")
+                for eid, pp in per_engine.items():
+                    _validate_engine(eid, pp, where=f"param_memory.{k}.{eid}.")
         if d.get('initial_side', 'A') not in SIDES:
             _fail(f"scene: initial_side must be A or B, got {d.get('initial_side')!r}")
     a = d['audio']

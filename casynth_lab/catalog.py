@@ -69,27 +69,41 @@ def read_wav(path):
     return arr.reshape(-1, ch)
 
 
-def _raw_to_wav(raw_path, n_bytes, wav_path):
-    """Copy the first n_bytes of a raw int16 stream into a WAV, streaming;
-    returns (frames, sha256)."""
+def _pcm_to_wav(pcm, wav_path):
+    """Write an int16 (n, 2) array to a WAV in 1 s chunks; returns (frames, sha256)."""
+    pcm = np.ascontiguousarray(pcm, dtype=np.int16)
+    if pcm.ndim != 2 or pcm.shape[1] != CHANNELS:
+        raise CatalogError(f"{wav_path}: bad PCM shape {pcm.shape}")
     h = hashlib.sha256()
-    frames = 0
-    step = _WAV_CHUNK_FRAMES * 2 * CHANNELS
-    with open(raw_path, 'rb') as src, wave.open(wav_path, 'wb') as w:
+    with wave.open(wav_path, 'wb') as w:
         w.setnchannels(CHANNELS)
         w.setsampwidth(2)
         w.setframerate(SR)
-        left = n_bytes
-        while left > 0:
-            chunk = src.read(min(step, left))
-            if not chunk:
-                raise CatalogError(f"{raw_path}: raw recording shorter than the cut "
-                                   f"({n_bytes - left} of {n_bytes} bytes)")
+        for i in range(0, len(pcm), _WAV_CHUNK_FRAMES):
+            chunk = pcm[i:i + _WAV_CHUNK_FRAMES].tobytes()
             w.writeframes(chunk)
             h.update(chunk)
-            frames += len(chunk) // (2 * CHANNELS)
-            left -= len(chunk)
-    return frames, h.hexdigest()
+    return len(pcm), h.hexdigest()
+
+
+def _effective_scene(scene_doc, state):
+    """The record's conditions: the demo scene with the field, both sides and
+    the selected side as they were at the recording origin."""
+    d = copy.deepcopy(scene_doc)
+    d['format'] = 2
+    d.pop('engine_id', None)
+    d.pop('engine_params', None)
+    d['cells'] = [list(c) for c in state['cells']]
+    d['variants'] = {side: {'engine_id': v['engine_id'],
+                            'engine_params': dict(v['engine_params'])}
+                     for side, v in state['settings'].items()}
+    d['initial_side'] = state['selected']
+    if state.get('factory_variants'):
+        d['factory_variants'] = copy.deepcopy(state['factory_variants'])
+    if state.get('param_memory'):
+        d['param_memory'] = copy.deepcopy(state['param_memory'])
+    d.setdefault('listen', '')
+    return d
 
 
 def _replace_dir(src, dst, attempts=20):
@@ -160,8 +174,10 @@ def end_state_by_replay(meta, progress=None):
         runner = DemoRunner(scene, vol=meta.get('runner', {}).get('vol_initial', VOL_DEFAULT))
     except (SceneError, KeyError, TypeError, ValueError) as e:
         raise CatalogError(f"cannot rebuild the end state: {e}")
-    end = meta['end_sample']
-    cmds = [j for j in meta['journal'] if j['kind'] not in REPLAY_COMMANDS_SKIP]
+    origin = meta.get('origin_sample', 0)
+    end = meta['end_sample'] - origin
+    cmds = [dict(j, out_sample=j['out_sample'] - origin) for j in meta['journal']
+            if j['kind'] not in REPLAY_COMMANDS_SKIP and j['out_sample'] >= origin]
     cmds.sort(key=lambda j: (j['out_sample'], j['seq']))
     i = 0
     try:
@@ -206,6 +222,11 @@ def bench_scene(rec, state=None):
                             'engine_params': dict(v['engine_params'])}
                      for side, v in meta['settings_at_end'].items()}
     d['initial_side'] = meta.get('selected_at_end', 'A')
+    fv = st.get('factory_variants') or (meta.get('scene') or {}).get('factory_variants')
+    if fv:
+        d['factory_variants'] = copy.deepcopy(fv)
+    if st.get('param_memory'):
+        d['param_memory'] = copy.deepcopy(st['param_memory'])
     d.setdefault('listen', '')
     try:
         scene = scene_from_doc(d)
@@ -285,9 +306,8 @@ class Catalog:
             raise CatalogError("nothing to save yet: press Start first")
         if cut.record_error:
             raise CatalogError(f"recording failed: {cut.record_error}")
-        if cut.frames_written < cut.frames_expected:
-            raise CatalogError(f"recording incomplete: {cut.frames_written} of "
-                               f"{cut.frames_expected} frames")
+        if cut.n_frames <= 0:
+            raise CatalogError("nothing recorded yet")
         now = _dt.datetime.now()
         rid = now.strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:6]
         scene_title = cut.scene_doc.get('title', 'demo')
@@ -296,11 +316,9 @@ class Catalog:
         final = os.path.join(self.root, rid)
         try:
             os.makedirs(partial, exist_ok=False)
-            n_bytes = cut.n_frames * 2 * CHANNELS
             audio = {}
             for o in OUTPUTS:
-                frames, sha = _raw_to_wav(cut.raw_paths[o], n_bytes,
-                                          os.path.join(partial, f"{o}.wav"))
+                frames, sha = _pcm_to_wav(cut.pcm[o], os.path.join(partial, f"{o}.wav"))
                 if frames != cut.n_frames:
                     raise CatalogError(f"{o}: wrote {frames} frames, expected {cut.n_frames}")
                 audio[o] = {'file': f"{o}.wav", 'samples': frames, 'sha256': sha}
@@ -311,8 +329,11 @@ class Catalog:
                 'title': title,
                 'note': note or '',
                 'status': 'local',
-                'scene': cut.scene_doc,
-                'initial_side': cut.scene_doc.get('initial_side', 'A'),
+                'scene': _effective_scene(cut.scene_doc, cut.origin_state),
+                'demo_scene': cut.scene_doc,
+                'origin_sample': cut.origin_sample,
+                'origin_state': cut.origin_state,
+                'window_seconds': cut.window_seconds,
                 'runner': dict(cut.runner_settings, vol_initial=cut.vol_initial,
                                master_gain_level=cut.scene_doc.get('audio', {}).get('level', 1.0)),
                 'versions': _versions(),
@@ -363,8 +384,10 @@ class Catalog:
             runner = DemoRunner(scene, vol=rs.get('vol_initial', VOL_DEFAULT))
         except (ValueError, KeyError) as e:
             return ReplayResult('unavailable', f"engine unavailable: {e}")
-        start, end = meta['audio_start_sample'], meta['end_sample']
-        cmds = [j for j in meta['journal'] if j['kind'] not in REPLAY_COMMANDS_SKIP]
+        origin = meta.get('origin_sample', 0)
+        start, end = meta['audio_start_sample'] - origin, meta['end_sample'] - origin
+        cmds = [dict(j, out_sample=j['out_sample'] - origin) for j in meta['journal']
+                if j['kind'] not in REPLAY_COMMANDS_SKIP and j['out_sample'] >= origin]
         cmds.sort(key=lambda j: (j['out_sample'], j['seq']))
         got = {o: [] for o in OUTPUTS}
         i = 0

@@ -197,6 +197,24 @@ def test_scene_v2_rejects_bad_variants():
                   "missing variants.A.engine_params")
     _expect_error(DEMO_AB, lambda d: d.update(initial_side='C'), "initial_side")
     _expect_error(DEMO_AB, lambda d: d.update(format=3), "'format' must be")
+    _expect_error(DEMO_AB, lambda d: d.update(factory_variants={'A': {}}), "factory_variants")
+    _expect_error(DEMO_AB, lambda d: d.update(param_memory={'C': {}}), "param_memory")
+    _expect_error(DEMO_AB, lambda d: d.update(param_memory={'A': {'fft2d': {'n': 99}}}),
+                  "param_memory.A.fft2d.engine_params.n=99 outside")
+    d = _doc(DEMO_AB)
+    d['factory_variants'] = {k: dict(v) for k, v in d['variants'].items()}
+    d['factory_variants']['B']['engine_params'] = dict(d['variants']['B']['engine_params'], harm=0.25)
+    d['param_memory'] = {'B': {'fft2d': {'n': 7}}}
+    from casynth_lab.scene import scene_from_doc
+    sc = scene_from_doc(d)
+    r = DemoRunner(sc)
+    assert r.side_modified() == {'A': False, 'B': True}        # star vs FACTORY defaults
+    r.post('set_engine', side='B', engine_id='fft2d')
+    r.next_block()
+    assert r.sides['B'].params['n'] == 7                       # seeded memory
+    r.post('factory')
+    r.next_block()
+    assert r.sides['B'].params['harm'] == 0.25
 
 
 # =============================================================================

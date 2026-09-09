@@ -33,21 +33,26 @@ validated: unknown engine / parameter, out-of-range value or bad cell -> error.
 
 ## Saving experiments and the local catalog (S4)
 
-Recording starts by itself with the first Start.  **Save** fixes the end of the
-record at the current audio block (typing the title/note afterwards does not
-extend it) and stores *everything since the first start*: the embedded scene,
-the applied command journal (painting, knobs, A/B, Stop/Restart, ...) and three
-WAVs (raw A, raw B, monitor = as heard, incl. the A/B crossfade).  The live
-experiment keeps running.  Records live in `lab_catalog/local/<id>/`
+Recording starts by itself with Start, and starts OVER at every Restart and at
+every Start after a Stop: the record's conditions are the state at that moment
+(field, engines/params of A and B incl. their per-engine memory, factory
+defaults, selected side, volume).  Only the **last 30 s** of audio are kept
+(the command journal since that start is kept in full).  **Save** fixes the
+end at the current audio block (typing the title/note afterwards does not
+extend it) and stores the conditions, the journal and three WAVs (raw A, raw B,
+monitor = as heard, incl. the A/B crossfade).  The live experiment keeps
+running.  Records live in `lab_catalog/local/<id>/`
 (`record.json` + `A.wav` `B.wav` `monitor.wav`; user data, gitignored).
 
-**Catalog** is a separate screen (the live view is hidden; Esc / Back returns).
+**Catalog** is a separate screen: the CA is paused and the live synth muted
+while it is open (only records may sound there); Esc / Back returns and resumes.
 Select a record -> **Open in bench** loads its END state (field, engines and
 parameters of A and B, selected side, volume) into a fresh live session that
 you start manually; **Play A / Play B / Play as heard** (the live synth is
 muted meanwhile); **Replay from start**
 recomputes the experiment in a separate process from the embedded conditions
-and compares it byte-exact with the stored WAVs: "Replay matched" /
+(from the recording's start; the saved window is compared) byte-exact with the
+stored WAVs: "Replay matched" /
 "Replay differs" / a reason why it is unavailable (e.g. the engine is not
 registered any more -- the WAVs still play).  The replay output can be
 listened to (**Play replay**); the originals are never modified.

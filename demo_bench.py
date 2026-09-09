@@ -499,7 +499,8 @@ class BenchApp:
         pygame.draw.rect(screen, C_PANEL, r['box'], border_radius=6)
         pygame.draw.rect(screen, C_ACCENT, r['box'], 1, border_radius=6)
         bx, by = r['box'][0], r['box'][1]
-        screen.blit(font.render(f"Save experiment  ({f['cut'].seconds:.1f} s recorded)",
+        screen.blit(font.render(f"Save experiment  (last {f['cut'].seconds:.1f} s since "
+                                f"Start/Restart, window {f['cut'].window_seconds:.0f} s)",
                                 True, C_TXT), (bx + 20, by + 10))
         for field, label in (('title', 'Title'), ('note', 'Note')):
             rect = r[field]
@@ -521,6 +522,13 @@ class BenchApp:
 
     # -- catalog ------------------------------------------------------------------
     def open_catalog(self):
+        """Catalog screen: the CA is paused and the live output muted -- only
+        records may sound here.  Both are restored by close_catalog()."""
+        snap = self.engine.snapshot()
+        self._was_paused = snap['paused']
+        if snap['running'] and not snap['paused']:
+            self._post('pause', on=True)
+        self.engine.muted = True
         self.mode = 'catalog'
         self.refresh_catalog()
 
@@ -531,6 +539,10 @@ class BenchApp:
 
     def close_catalog(self):
         self.engine.stop_play()
+        self.engine.muted = False
+        snap = self.engine.snapshot()
+        if snap['running'] and snap['paused'] and not getattr(self, '_was_paused', False):
+            self._post('pause', on=False)
         self.mode = 'live'
 
     def select_record(self, idx):
@@ -604,6 +616,7 @@ class BenchApp:
             self.status = f"Cannot open: {e}"
             return False
         self.replace_session(scene, vol)
+        self.engine.muted = False
         self.mode = 'live'
         self.status = f"Opened in bench: {rec.title}  (press Start)"
         return True
@@ -615,7 +628,7 @@ class BenchApp:
         old.stop()
         runner = DemoRunner(scene, vol=vol)
         eng = LiveEngine(runner, output_factory=old._factory, sink=old._sink,
-                         record_root=old._record_root)
+                         record_root=old._record_root, record_seconds=old._record_seconds)
         eng.start()
         self.scene = scene
         self.engine = eng

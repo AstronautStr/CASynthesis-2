@@ -113,6 +113,10 @@ class DemoRunner:
         # per (side, engine) parameter memory: first pick = defaults / scene,
         # returning to an engine restores the previous values
         self._memory = {}
+        for name, per_engine in getattr(scene, 'param_memory', {}).items():
+            for eid, pp in per_engine.items():
+                if eid in registry.REGISTRY:
+                    self._memory[(name, eid)] = dict(pp)
         self.sides = {}
         for name in SIDES:
             eid, params = scene.variants[name]
@@ -253,7 +257,7 @@ class DemoRunner:
             self._set_side(self.sides[args['dst']], src.engine_id, src.params)
         elif kind == 'factory':
             for name in SIDES:
-                eid, params = self.scene.variants[name]
+                eid, params = self.scene.factory_variants[name]
                 self._set_side(self.sides[name], eid, params)
 
     def _set_side(self, s, eid, params):
@@ -318,13 +322,21 @@ class DemoRunner:
         return Block(raw['A'], raw['B'], mon)
 
     # -- introspection ----------------------------------------------------------
+    def param_memory(self):
+        """{side: {engine_id: params}} -- remembered settings of every engine
+        each side has used (part of the reproducible conditions)."""
+        out = {n: {} for n in SIDES}
+        for (name, eid), pp in self._memory.items():
+            out[name][eid] = dict(pp)
+        return out
+
     def side_settings(self):
         return {n: (s.engine_id, dict(s.params)) for n, s in self.sides.items()}
 
     def side_modified(self):
         """True per side when engine/params differ from the scene's defaults."""
-        return {n: (s.engine_id, s.params) != (self.scene.variants[n][0],
-                                                 self.scene.variants[n][1])
+        return {n: (s.engine_id, s.params) != (self.scene.factory_variants[n][0],
+                                                 self.scene.factory_variants[n][1])
                 for n, s in self.sides.items()}
 
     def snapshot(self):

@@ -38,13 +38,16 @@ def _default_output_factory(callback):
 
 class LiveEngine:
     def __init__(self, runner, output_factory=_default_output_factory,
-                 sink=None, lookahead=AUDIO_LOOKAHEAD_CHUNKS, record_root=None):
+                 sink=None, lookahead=AUDIO_LOOKAHEAD_CHUNKS, record_root=None,
+                 record_seconds=None):
         """output_factory(callback) -> object with .stop()/.close(); raises if
         no device.  sink(monitor_buf, block) -- test hook: receives every block
         (monitor as heard + the full Block with raw A/B) instead of a device.
         record_root: temp dir for the streaming Recorder (None = no recording)."""
         self.runner = runner
         self._record_root = record_root
+        self._record_seconds = record_seconds
+        self.muted = False           # live output silenced (catalog screen)
         self.recorder = None
         self._cut_req = False
         self._cut_q = queue.Queue()
@@ -71,7 +74,8 @@ class LiveEngine:
     def start(self):
         self._alive = True
         if self._record_root is not None:
-            self.recorder = Recorder(self.runner, self._record_root)
+            kw = {} if self._record_seconds is None else {'window_seconds': self._record_seconds}
+            self.recorder = Recorder(self.runner, self._record_root, **kw)
         if self._sink is None:
             try:
                 silent = np.zeros((BLOCK, CHANNELS), np.int16)
@@ -226,6 +230,10 @@ class LiveEngine:
         if status and getattr(status, 'output_underflow', False):
             self.underruns += 1
         player = self._player
+        if player is None and self.muted:
+            self._drain_live(frames)
+            outdata[:] = 0
+            return
         if player is not None:
             # record playback: the live monitor is drained (kept running) but
             # NOT mixed in; the record's PCM goes to the device alone

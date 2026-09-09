@@ -139,15 +139,26 @@ def test_save_replay_fixed_experiment_in_fresh_process():
         s.engine.stop()
     rec = cat.load(rid)
     assert rec.title == "Тест S4: опыт" and rec.note == "Заметка — кириллица ✓"
-    assert rec.meta['status'] == 'local' and rec.meta['scene'] == s.scene.doc
+    assert rec.meta['status'] == 'local' and rec.meta['demo_scene'] == s.scene.doc
     # captured WAVs == the blocks the sink received for the same interval
     for o in OUTPUTS:
         got = s.pcm(o, cut.audio_start_sample, cut.end_sample)
         assert np.array_equal(rec.pcm(o), got), f"{o}: saved WAV != sink blocks"
+    # the recording restarted at the Restart (2.8 s): conditions = that moment,
+    # journal from there; the earlier Stop/Start/engine change are history
     kinds = [j['kind'] for j in rec.meta['journal']]
-    for k in ('stop', 'reset', 'copy_side', 'factory', 'set_engine'):
+    assert kinds[0] == 'reset'
+    for k in ('reset', 'copy_side', 'factory', 'select'):
         assert k in kinds
-    assert rec.meta['audio_start_sample'] > 0
+    assert 'stop' not in kinds and 'set_engine' not in kinds
+    assert rec.meta['origin_sample'] == [t for (t, _q, k, _a) in s.runner.journal if k == 'reset'][0]
+    assert rec.meta['audio_start_sample'] == rec.meta['origin_sample']
+    assert rec.meta['scene']['variants']['B']['engine_id'] == 'walsh'      # at the Restart
+    assert rec.meta['scene']['initial_side'] == 'A' and rec.meta['runner']['vol_initial'] == 0.5
+    # factory defaults + per-engine memory travel with the conditions
+    assert rec.meta['scene']['factory_variants'] == {
+        k: {'engine_id': v[0], 'engine_params': v[1]} for k, v in s.scene.variants.items()}
+    assert rec.meta['scene']['param_memory']['B']['laplacian']['harm'] == 0.3
     assert rec.engines == ('laplacian', 'laplacian')     # after factory
     # end state -> a scene that puts a bench into the record's final state
     st = rec.meta['state_at_end']
@@ -245,7 +256,8 @@ def test_waiting_before_start_does_not_lengthen_the_wav():
         assert rec.meta['audio']['A']['samples'] == cut.n_frames
         assert rec.title.startswith(s.scene.title)
         # the pre-start event survives for replay
-        assert rec.meta['journal'][0]['kind'] == 'set_param'
+        assert rec.meta['journal'][0]['kind'] == 'start'
+        assert rec.meta['scene']['variants']['B']['engine_params']['harm'] == 0.7
         assert cat.replay(rid).status == 'match'
     finally:
         s.engine.stop()
@@ -320,11 +332,11 @@ def test_errors_no_false_success_no_lost_records():
     s, cut = _run_experiment(cat, commands=[('start', 0, {})], until=_sec(0.6))
     try:
         import casynth_lab.catalog as cm
-        orig = cm._raw_to_wav
+        orig = cm._pcm_to_wav
 
         def boom(*a, **k):
             raise OSError("disk full")
-        cm._raw_to_wav = boom
+        cm._pcm_to_wav = boom
         try:
             try:
                 cat.save(cut, "disk", "")
@@ -333,7 +345,7 @@ def test_errors_no_false_success_no_lost_records():
             else:
                 raise AssertionError("disk failure saved as success")
         finally:
-            cm._raw_to_wav = orig
+            cm._pcm_to_wav = orig
         assert cat.ids() == [good]
         assert not [n for n in os.listdir(cat.root) if n.endswith('.partial')]
         second = cat.save(cut, "second", "")
@@ -368,6 +380,74 @@ def test_errors_no_false_success_no_lost_records():
     assert "differs" in res.text and "A" in res.text
     assert open(rec.wav_path('A'), 'rb').read() != before      # our edit, not a replay overwrite
     assert np.array_equal(read_wav(rec.wav_path('A')), pcm)
+
+
+def test_window_keeps_last_seconds_and_replay_still_matches():
+    cat = _fresh_catalog('window')
+    s = _Session(cat)
+    s.engine = LiveEngine(s.runner, sink=s._sink, record_root=cat.tmp_root, record_seconds=2.0)
+    s.engine.post('start', at=0)
+    s.engine.post('set_cell', at=_sec(0.5), r=2, c=2, v=1)
+    s.engine.post('set_param', at=_sec(1.0), side='B', name='harm', value=0.4)
+    s.engine.start()
+    try:
+        s.run_until(_sec(5.0))
+        kind, cut = s.engine.cut_now()
+        assert kind == 'ok'
+        assert cut.n_frames == s.engine.recorder.ring_frames        # 2 s window
+        assert cut.end_sample - cut.audio_start_sample <= _sec(2.0) + BLOCK
+        assert cut.audio_start_sample > _sec(2.9)
+        assert cut.origin_sample == 0 and cut.journal[0][2] == 'start'
+        assert any(k == 'set_param' for (_t, _q, k, _a) in cut.journal)  # before the window, kept
+        rid = cat.save(cut, "window", "")
+        rec = cat.load(rid)
+        assert abs(rec.seconds - 2.0) < 0.02
+        for o in OUTPUTS:
+            assert np.array_equal(rec.pcm(o), s.pcm(o, cut.audio_start_sample, cut.end_sample))
+        assert cat.replay(rid).status == 'match'          # recomputed from the origin
+    finally:
+        s.engine.stop()
+
+
+def test_restart_and_stop_start_begin_a_new_recording():
+    cat = _fresh_catalog('origin')
+    s = _Session(cat, paced=True)
+    s.engine.start()
+    cmds = [('start', 0, {}), ('set_cell', _sec(0.4), {'r': 2, 'c': 2, 'v': 1}),
+            ('set_param', _sec(0.6), {'side': 'B', 'name': 'harm', 'value': 0.2}),
+            ('reset', _sec(1.0), {}),
+            ('set_cell', _sec(1.4), {'r': 4, 'c': 4, 'v': 1})]
+    try:
+        for kind, at, args in cmds:
+            s.run_until(max(0, at - 6 * BLOCK))
+            s.engine.post(kind, at=at, **args)
+        s.run_until(_sec(1.8))
+        kind, cut = s.engine.cut_now()
+        t_reset = [t for (t, _q, k, _a) in s.runner.journal if k == 'reset'][0]
+        assert cut.origin_sample == t_reset == cut.audio_start_sample
+        assert [k for (_t, _q, k, _a) in cut.journal if k != 'step'] == ['reset', 'set_cell']
+        assert cut.origin_state['settings']['B']['engine_params']['harm'] == 0.2   # kept setting
+        assert len(cut.origin_state['cells']) == 5                                # scene field
+        rid = cat.save(cut, "after restart", "")
+        assert cat.replay(rid).status == 'match'
+        # Stop, paint while stopped, Start -> new origin with the painted field
+        s.engine.post('stop')
+        assert _wait(lambda: not s.engine.snapshot()['running'])
+        s.engine.post('set_cell', r=8, c=8, v=1)
+        assert _wait(lambda: s.engine.snapshot()['grid'][8, 8] == 1)
+        t_before = s.engine.snapshot()['out_samples']
+        s.engine.post('start')
+        s.run_until(t_before + _sec(0.7))
+        kind, cut2 = s.engine.cut_now()
+        t_start = [t for (t, _q, k, _a) in s.runner.journal if k == 'start'][-1]
+        assert cut2.origin_sample == t_start == cut2.audio_start_sample > t_reset
+        assert [8, 8] in cut2.origin_state['cells'] and len(cut2.origin_state['cells']) == 6
+        assert cut2.journal[0][2] == 'start'
+        rid2 = cat.save(cut2, "after stop/start", "")
+        assert cat.replay(rid2).status == 'match'
+        assert cat.load(rid2).meta['scene']['cells'] != cat.load(rid).meta['scene']['cells']
+    finally:
+        s.engine.stop()
 
 
 def test_replay_progress_and_cancel():
@@ -464,6 +544,10 @@ def test_ui_headless_save_catalog_player_replay():
         assert app.press((rect[0] + 3, rect[1] + 3), 1) == 'catalog'
         assert app.mode == 'catalog' and len(app.cat['entries']) == 1
         app.draw(screen, font, small)
+        # catalog screen: CA paused, live output muted (device gets zeros)
+        assert _wait(lambda: eng.snapshot()['paused']) and eng.muted
+        time.sleep(0.1)
+        assert not out_frames[-1].any()
         assert app.press((app._list_rect(0)[0] + 5, app._list_rect(0)[1] + 5), 1) == 'record:0'
         r = app._catalog_rects()
         assert app.press((r['play_mon'][0] + 3, r['play_mon'][1] + 3), 1) == 'play:monitor'
@@ -494,6 +578,7 @@ def test_ui_headless_save_catalog_player_replay():
         pygame.image.save(screen, os.path.join(ART, "_demo_bench_catalog.png"))
         assert app.key('escape') == 'back'
         assert app.mode == 'live' and not eng.playing
+        assert not eng.muted and _wait(lambda: not eng.snapshot()['paused'])
         # Open in bench: new session in the record's end state, not running
         rect = app.lab_buttons['catalog']
         app.press((rect[0] + 3, rect[1] + 3), 1)

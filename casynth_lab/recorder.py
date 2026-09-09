@@ -1,18 +1,20 @@
-"""Recorder: streams every rendered Block (raw A / raw B / monitor) of a live
-DemoRunner to temporary raw PCM files, and produces consistent CUTS.
+"""Recorder: keeps the LAST `window_seconds` of every rendered Block (raw A /
+raw B / monitor) of a live DemoRunner in bounded ring buffers, and produces
+consistent CUTS.
 
-Runs on the render thread (never in the audio callback): one append per
-output per block.  Recording starts automatically with the first block of a
-RUNNING scene (`audio_start_sample`); everything after it -- pauses, Stop
-silence, Restart -- is part of the timeline.  Events before the start are
-kept in the runner's journal (they restore the initial settings on replay).
+Runs on the render thread (never in the audio callback).
 
-A cut = (end_sample at a completed block boundary, the journal applied
-before it, the byte counts of the three raw files, the scene document and
-the runner's initial settings + diagnostics) -- one interval, one truth.
-The catalog turns a cut into a record (WAVs + record.json) off-thread.
+ORIGIN = the moment the current recording started: the first Start, a Start
+after Stop, or a Restart.  Each of these begins a NEW recording: the origin
+state (field, both sides' engine + params, selected side, volume -- i.e. the
+conditions a replay starts from, with all audio memory at zero) is captured,
+the command journal counts from there, and the audio window rolls behind the
+current block boundary, keeping at most `window_seconds`.
+
+A cut = (origin state, journal since the origin, the PCM window
+[audio_start_sample, end_sample), diagnostics) -- one interval, one truth.
+Replay recomputes from the origin and compares the saved window byte-exact.
 """
-import os
 import uuid
 
 import numpy as np
@@ -20,7 +22,7 @@ import numpy as np
 from casynth_config import SR
 from .runner import BLOCK, CHANNELS, OUTPUTS, XFADE_SAMPLES
 
-BYTES_PER_FRAME = 2 * CHANNELS
+WINDOW_SECONDS_DEFAULT = 30.0
 
 
 class RecorderError(RuntimeError):
@@ -42,84 +44,110 @@ class Cut:
         return self.n_frames / SR
 
 
+def _origin_state(runner):
+    return dict(cells=[[int(a), int(b)] for a, b in np.argwhere(runner.grid > 0)],
+                vol=float(runner.vol), selected=runner.selected,
+                settings={side: {'engine_id': eid, 'engine_params': dict(p)}
+                          for side, (eid, p) in runner.side_settings().items()},
+                param_memory=runner.param_memory(),
+                factory_variants={side: {'engine_id': eid, 'engine_params': dict(p)}
+                                  for side, (eid, p) in runner.scene.factory_variants.items()})
+
+
 class Recorder:
-    def __init__(self, runner, tmp_root):
+    def __init__(self, runner, tmp_root=None, window_seconds=WINDOW_SECONDS_DEFAULT):
         self.runner = runner
         self.session_id = uuid.uuid4().hex[:8]
-        self.dir = os.path.join(tmp_root, self.session_id)
-        self.audio_start_sample = None
-        self.frames = 0                    # frames written to each raw file
-        self.error = None                  # first write failure (recording stops)
-        self.vol_initial = float(runner.vol)
+        self.window_seconds = float(window_seconds)
+        n_blocks = max(1, int(np.ceil(self.window_seconds * SR / BLOCK)))
+        self.ring_frames = n_blocks * BLOCK
+        self._ring = {o: np.zeros((self.ring_frames, CHANNELS), np.int16) for o in OUTPUTS}
+        self._w = 0                        # ring write position (frames)
+        self.origin_sample = None          # out_sample of the current recording's origin
+        self.origin_state = None
+        self.frames_since_origin = 0
+        self.error = None                  # set by close(): recording stopped
         self.scene_doc = runner.scene.doc
-        self._files = {}
-        try:
-            os.makedirs(self.dir, exist_ok=True)
-            for o in OUTPUTS:
-                self._files[o] = open(self.raw_path(o), 'wb')
-        except OSError as e:
-            self.error = f"cannot open temp recording files: {e}"
-            self._files = {}
-
-    def raw_path(self, output):
-        return os.path.join(self.dir, f"{output}.raw")
+        self._prev_running = False
+        self._closed = False
 
     @property
     def started(self):
-        return self.audio_start_sample is not None
+        return self.origin_sample is not None
+
+    @property
+    def audio_start_sample(self):
+        if not self.started:
+            return None
+        return self.runner.out_samples - min(self.frames_since_origin, self.ring_frames)
+
+    def _is_new_origin(self, running, out_sample_before):
+        """A Restart, or a Start that turned a stopped scene on, at this boundary."""
+        journal = self.runner.journal
+        for t, _seq, kind, _args in reversed(journal):
+            if t != out_sample_before:
+                break
+            if kind == 'reset' or (kind == 'start' and not self._prev_running):
+                return True
+        return False
 
     def on_block(self, blk, running, out_sample_before):
         """Called by the render thread after each next_block().
         `blk` may be None (rejected engine block -> silence was output)."""
-        if not running and not self.started:
+        if self._closed:
             return
+        if self._is_new_origin(running, out_sample_before):
+            self.origin_sample = out_sample_before
+            self.origin_state = _origin_state(self.runner)
+            self.frames_since_origin = 0
+            self._w = 0
+        self._prev_running = running
         if not self.started:
-            self.audio_start_sample = out_sample_before
-        if self.error is not None:
             return
-        silent = None
-        try:
-            for o in OUTPUTS:
-                buf = blk.get(o) if blk is not None else None
-                if buf is None:
-                    if silent is None:
-                        silent = np.zeros((BLOCK, CHANNELS), np.int16)
-                    buf = silent
-                self._files[o].write(np.ascontiguousarray(buf, dtype=np.int16).tobytes())
-            self.frames += BLOCK
-        except (OSError, ValueError, KeyError) as e:
-            self.error = f"recording write failed at frame {self.frames}: {e}"
-            self.close()
+        for o in OUTPUTS:
+            buf = blk.get(o) if blk is not None else None
+            dst = self._ring[o][self._w:self._w + BLOCK]
+            if buf is None:
+                dst[:] = 0
+            else:
+                dst[:] = buf
+        self._w = (self._w + BLOCK) % self.ring_frames
+        self.frames_since_origin += BLOCK
+
+    def _window(self, o, n):
+        """Contiguous copy of the last n frames of output o."""
+        if n <= 0:
+            return np.zeros((0, CHANNELS), np.int16)
+        start = (self._w - n) % self.ring_frames
+        ring = self._ring[o]
+        if start + n <= self.ring_frames:
+            return ring[start:start + n].copy()
+        return np.concatenate([ring[start:], ring[:start + n - self.ring_frames]], axis=0)
 
     def cut(self, diagnostics):
         """Consistent cut at the current block boundary (render thread)."""
         if not self.started:
             return None
-        try:
-            for f in self._files.values():
-                f.flush()
-        except OSError as e:
-            self.error = f"flush failed: {e}"
         r = self.runner
         end = r.out_samples
-        expected = end - self.audio_start_sample
+        n = min(self.frames_since_origin, self.ring_frames)
         return Cut(
             session_id=self.session_id,
             scene_doc=self.scene_doc,
-            vol_initial=self.vol_initial,
-            audio_start_sample=self.audio_start_sample,
+            origin_sample=self.origin_sample,
+            origin_state=dict(self.origin_state),
+            vol_initial=float(self.origin_state['vol']),
+            audio_start_sample=end - n,
             end_sample=end,
+            window_seconds=self.window_seconds,
             journal=[(int(t), int(s), k, dict(a)) for (t, s, k, a) in r.journal
-                     if t < end],
-            raw_paths={o: self.raw_path(o) for o in OUTPUTS},
-            n_bytes=self.frames * BYTES_PER_FRAME,
-            frames_written=self.frames,
-            frames_expected=expected,
+                     if self.origin_sample <= t < end],
+            pcm={o: self._window(o, n) for o in OUTPUTS},
             record_error=self.error,
             side_settings=r.side_settings(),
             selected=r.selected,
-            state_at_end=dict(cells=[[int(a), int(b)] for a, b in np.argwhere(r.grid > 0)],
-                              gen=int(r.gen), vol=float(r.vol), paused=bool(r.paused),
+            state_at_end=dict(_origin_state(r),
+                              gen=int(r.gen), paused=bool(r.paused),
                               running=bool(r.running)),
             runner_settings=dict(sr=SR, block=BLOCK, channels=CHANNELS,
                                  xfade_samples=XFADE_SAMPLES),
@@ -127,22 +155,11 @@ class Recorder:
         )
 
     def close(self):
-        for f in self._files.values():
-            try:
-                f.close()
-            except OSError:
-                pass
-        self._files = {}
+        """Stop recording (session end / failure): later cuts report an error."""
+        self._closed = True
+        if self.error is None:
+            self.error = "recording stopped"
 
     def discard(self):
-        """Remove the temp files (session end).  Finished records are elsewhere."""
         self.close()
-        for o in OUTPUTS:
-            try:
-                os.remove(self.raw_path(o))
-            except OSError:
-                pass
-        try:
-            os.rmdir(self.dir)
-        except OSError:
-            pass
+        self._ring = {}
