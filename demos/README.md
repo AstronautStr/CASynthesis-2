@@ -31,6 +31,26 @@ Scenes: `laplace_basic.json` = format 1 (one engine, loaded as A = B);
 `laplace_ab.json` = format 2 (`variants` A/B + `listen` hint).  Strictly
 validated: unknown engine / parameter, out-of-range value or bad cell -> error.
 
+## Saving experiments and the local catalog (S4)
+
+Recording starts by itself with the first Start.  **Save** fixes the end of the
+record at the current audio block (typing the title/note afterwards does not
+extend it) and stores *everything since the first start*: the embedded scene,
+the applied command journal (painting, knobs, A/B, Stop/Restart, ...) and three
+WAVs (raw A, raw B, monitor = as heard, incl. the A/B crossfade).  The live
+experiment keeps running.  Records live in `lab_catalog/local/<id>/`
+(`record.json` + `A.wav` `B.wav` `monitor.wav`; user data, gitignored).
+
+**Catalog** lists the records (newest first): select one -> **Play A / Play B /
+Play as heard** (the live synth is muted meanwhile), **Replay from start**
+recomputes the experiment in a separate process from the embedded conditions
+and compares it byte-exact with the stored WAVs: "Replay matched" /
+"Replay differs" / a reason why it is unavailable (e.g. the engine is not
+registered any more -- the WAVs still play).  The replay output can be
+listened to (**Play replay**); the originals are never modified.
+Esc / Back returns to the live view.  Headless use:
+`python -m casynth_lab.catalog replay lab_catalog/local <id>`.
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B

@@ -27,3 +27,6 @@ obsidian/.obsidian/
 
 # rendered research-map image (regenerable: python render_canvas.py ResearchMap.canvas)
 ResearchMap.png
+
+# demo-bench local experiment catalog (user data, S4)
+lab_catalog/

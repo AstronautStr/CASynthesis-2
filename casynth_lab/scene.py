@@ -7,6 +7,7 @@ Unknown engine / unknown or missing engine parameter / out-of-range cell ->
 SceneError with a readable message.  No silent fallbacks.  The loaded JSON is
 never mutated by playback (the runner copies the settings).
 """
+import copy
 import json
 import os
 
@@ -27,6 +28,7 @@ class SceneError(ValueError):
 class Scene:
     def __init__(self, d, path=None):
         self.path = path
+        self.doc = copy.deepcopy(d)      # self-contained copy (records embed it)
         self.id = d['id']
         self.title = d['title']
         self.rows = int(d['grid']['rows'])
@@ -147,6 +149,12 @@ def _validate_engine(eid, params, where):
             _fail(f"scene: {where}engine_params.{name} must be an integer, got {v!r}")
         if not (lo <= v <= hi):
             _fail(f"scene: {where}engine_params.{name}={v!r} outside [{lo}, {hi}]")
+
+
+def scene_from_doc(d):
+    """Validate + build a Scene from an in-memory document (records)."""
+    validate(d)
+    return Scene(copy.deepcopy(d))
 
 
 def load_scene(path):

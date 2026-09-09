@@ -19,6 +19,7 @@ stdout stays ASCII (Windows console codepage).
 import argparse
 import os
 import sys
+import threading
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -26,6 +27,7 @@ from casynth_config import (VOL_DEFAULT, C_BG, C_GRID, C_PANEL, C_EDGE, C_TXT,
                             C_DIM, C_BTN, C_ACCENT)                    # noqa: E402
 from casynth_lab import (load_scene, SceneError, DemoRunner, SIDES, registry,
                          describe_difference, validate_param)           # noqa: E402
+from casynth_lab.catalog import Catalog, CatalogError                  # noqa: E402
 
 # -- layout ------------------------------------------------------------------
 CELL = 16
@@ -46,6 +48,9 @@ C_ALIVE_PAUSED = (200, 180, 90)
 C_BTN_ON = (48, 92, 104)
 C_ERR = (230, 120, 90)
 C_WARN = (230, 180, 90)
+C_OK = (120, 210, 140)
+LAB_BTN_W = 104
+ROW_LIST_H = 44
 
 
 def _is_toggle(spec):
@@ -57,9 +62,17 @@ class BenchApp:
     """Pure UI state machine over a LiveEngine -- drivable without a display
     (tests call press/drag/release/draw with SDL_VIDEODRIVER=dummy)."""
 
-    def __init__(self, scene, engine):
+    def __init__(self, scene, engine, catalog=None):
         self.scene = scene
         self.engine = engine
+        self.catalog = catalog            # Catalog or None (S4 disabled)
+        self.mode = 'live'                # 'live' | 'save' | 'catalog'
+        self.status = ""                  # save / replay status line
+        self.save_form = None             # {'cut', 'title', 'note', 'field'}
+        self._cut_pending = False
+        self._save_thread = None
+        self.cat = dict(entries=[], sel=None, result=None, thread=None,
+                        progress=0.0, cancel=threading.Event(), play_label="")
         self.vol = VOL_DEFAULT
         self.paint_value = None          # None / 1 (LMB) / 0 (RMB) while dragging
         self.drag_vol = False
@@ -78,6 +91,8 @@ class BenchApp:
             self.buttons[key] = ((x, BTN_Y, BTN_W, BTN_H), label)
             x += BTN_W + 10
         self.vol_rect = (MARGIN + 92, BTN_Y + BTN_H + 14, VOL_W, 10)
+        self.lab_buttons = {'save': (x + 10, BTN_Y, LAB_BTN_W, BTN_H),
+                            'catalog': (x + 20 + LAB_BTN_W, BTN_Y, LAB_BTN_W, BTN_H)}
         # side panel
         px, py = self.panel_x, TOP_H
         # row: [A] [<<] [>>] [B]
@@ -134,6 +149,18 @@ class BenchApp:
     # -- input ---------------------------------------------------------------
     def press(self, pos, button):
         """Mouse button down. button: 1 = left, 3 = right.  Returns what was hit."""
+        if self.mode == 'save':
+            return self._press_save_form(pos, button)
+        if self.mode == 'catalog':
+            return self._press_catalog(pos, button)
+        if button == 1 and self.catalog is not None:
+            for key, rect in self.lab_buttons.items():
+                if self._inside(rect, pos):
+                    if key == 'save':
+                        self.begin_save()
+                    else:
+                        self.open_catalog()
+                    return key
         if button == 1:
             for key, (rect, _label) in self.buttons.items():
                 if self._inside(rect, pos):
@@ -193,6 +220,13 @@ class BenchApp:
     def key(self, name):
         """Keyboard hotkey by key name ('r' = Restart).  Returns the command or None."""
         name = name.lower()
+        if self.mode == 'save':
+            return self._key_save_form(name)
+        if self.mode == 'catalog':
+            if name == 'escape':
+                self.close_catalog()
+                return 'back'
+            return None
         if name == 'r':
             self._post('reset')
             return 'reset'
@@ -237,6 +271,7 @@ class BenchApp:
     # -- drawing -------------------------------------------------------------
     def draw(self, screen, font, small):
         import pygame
+        self.tick()
         snap = self.engine.snapshot()
         screen.fill(C_BG)
         pygame.draw.rect(screen, C_PANEL, (0, 0, self.width, TOP_H))
@@ -332,17 +367,351 @@ class BenchApp:
         if self.message:
             screen.blit(small.render(self.message[:60], True, C_ERR),
                         (px, self.params_y + 7 * ROW_H + 28))
+        # S4: lab buttons + status; overlays
+        if self.catalog is not None:
+            for key, rect in self.lab_buttons.items():
+                pygame.draw.rect(screen, C_BTN, rect, border_radius=4)
+                pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
+                t = font.render('Save' if key == 'save' else 'Catalog', True, C_TXT)
+                screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
+                                rect[1] + (rect[3] - t.get_height()) // 2))
+            if self.status:
+                col = C_ERR if self.status.lower().startswith(('save failed', 'nothing',
+                                                                 'no audio')) else C_OK
+                screen.blit(small.render(self.status[:90], True, col), (MARGIN + 300, TOP_H - 26))
+        if self.mode == 'save':
+            self._draw_save_form(screen, font, small)
+        elif self.mode == 'catalog':
+            self._draw_catalog(screen, font, small)
+
+    # =====================================================================
+    # S4: save / catalog / player / replay
+    # =====================================================================
+    def tick(self):
+        """Per-frame housekeeping (also callable from tests): pick up a cut,
+        finish background save / replay threads."""
+        if self._cut_pending:
+            got = self.engine.take_cut()
+            if got is not None:
+                self._cut_pending = False
+                kind, cut = got
+                if kind == 'none' or cut is None:
+                    self.status = "Nothing to save yet: press Start first"
+                else:
+                    self.save_form = dict(cut=cut, field='title', note='',
+                                          title=Catalog.default_title(self.scene.title))
+                    self.mode = 'save'
+        th = self.cat['thread']
+        if th is not None and not th.is_alive():
+            self.cat['thread'] = None
+            res = self.cat['result']
+            if res is not None:
+                self.status = res.text
+                self.cat['play_label'] = ("Play replay" if res.status in ('match', 'mismatch')
+                                          else "")
+
+    # -- save ----------------------------------------------------------------------
+    def begin_save(self):
+        """Save button: ask the render thread for a consistent cut NOW; the
+        title/note form opens when it arrives (the cut is already fixed)."""
+        self.status = ""
+        self._cut_pending = True
+        self.engine.request_cut()
+
+    def confirm_save(self):
+        form, self.save_form = self.save_form, None
+        self.mode = 'live'
+        if form is None:
+            return
+        self.status = "Saving..."
+
+        def work():
+            try:
+                rid = self.catalog.save(form['cut'], form['title'], form['note'])
+                self.status = f"Saved: {form['title'] or rid}  [{form['cut'].seconds:.1f} s]"
+            except CatalogError as e:
+                self.status = f"Save failed: {e}"
+        self._save_thread = threading.Thread(target=work, daemon=True)
+        self._save_thread.start()
+
+    def cancel_save(self):
+        self.save_form = None
+        self.mode = 'live'
+        self.status = "Save cancelled"
+
+    def text_input(self, text):
+        f = self.save_form
+        if f is not None:
+            f[f['field']] += text
+
+    def _key_save_form(self, name):
+        f = self.save_form
+        if name in ('return', 'enter', 'kp_enter'):
+            self.confirm_save()
+            return 'save:ok'
+        if name == 'escape':
+            self.cancel_save()
+            return 'save:cancel'
+        if name == 'tab':
+            f['field'] = 'note' if f['field'] == 'title' else 'title'
+            return 'save:field'
+        if name == 'backspace':
+            f[f['field']] = f[f['field']][:-1]
+            return 'save:edit'
+        return None
+
+    def _save_form_rects(self):
+        x, y, w = MARGIN + 40, TOP_H + 60, 560
+        return dict(title=(x + 70, y + 40, w - 90, 26), note=(x + 70, y + 80, w - 90, 26),
+                    ok=(x + 20, y + 130, 120, 30), cancel=(x + 160, y + 130, 120, 30),
+                    box=(x, y, w, 180))
+
+    def _press_save_form(self, pos, button):
+        if button != 1:
+            return None
+        r = self._save_form_rects()
+        if self._inside(r['ok'], pos):
+            self.confirm_save()
+            return 'save:ok'
+        if self._inside(r['cancel'], pos):
+            self.cancel_save()
+            return 'save:cancel'
+        for field in ('title', 'note'):
+            if self._inside(r[field], pos):
+                self.save_form['field'] = field
+                return f'save:{field}'
+        return None
+
+    def _draw_save_form(self, screen, font, small):
+        import pygame
+        r = self._save_form_rects()
+        f = self.save_form
+        pygame.draw.rect(screen, C_PANEL, r['box'], border_radius=6)
+        pygame.draw.rect(screen, C_ACCENT, r['box'], 1, border_radius=6)
+        bx, by = r['box'][0], r['box'][1]
+        screen.blit(font.render(f"Save experiment  ({f['cut'].seconds:.1f} s recorded)",
+                                True, C_TXT), (bx + 20, by + 10))
+        for field, label in (('title', 'Title'), ('note', 'Note')):
+            rect = r[field]
+            screen.blit(small.render(label, True, C_DIM), (bx + 20, rect[1] + 5))
+            on = (f['field'] == field)
+            pygame.draw.rect(screen, C_BG, rect, border_radius=3)
+            pygame.draw.rect(screen, C_ACCENT if on else C_EDGE, rect, 1, border_radius=3)
+            txt = f[field] + ('|' if on else '')
+            screen.blit(small.render(txt[-70:], True, C_TXT), (rect[0] + 6, rect[1] + 5))
+        for key, label in (('ok', 'Save (Enter)'), ('cancel', 'Cancel (Esc)')):
+            rect = r[key]
+            pygame.draw.rect(screen, C_BTN_ON if key == 'ok' else C_BTN, rect, border_radius=4)
+            pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
+            t = small.render(label, True, C_TXT)
+            screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
+                            rect[1] + (rect[3] - t.get_height()) // 2))
+        screen.blit(small.render("Tab switches field. The recording end is already fixed.",
+                                 True, C_DIM), (bx + 20, by + 165 - 8))
+
+    # -- catalog ------------------------------------------------------------------
+    def open_catalog(self):
+        self.mode = 'catalog'
+        self.refresh_catalog()
+
+    def refresh_catalog(self):
+        self.cat['entries'] = self.catalog.list()
+        if self.cat['sel'] is not None and self.cat['sel'] >= len(self.cat['entries']):
+            self.cat['sel'] = None
+
+    def close_catalog(self):
+        self.engine.stop_play()
+        self.mode = 'live'
+
+    def select_record(self, idx):
+        self.cat['sel'] = idx
+        self.cat['result'] = None
+        self.cat['play_label'] = ""
+        self.status = ""
+
+    def selected_record(self):
+        i = self.cat['sel']
+        if i is None or i >= len(self.cat['entries']):
+            return None
+        return self.cat['entries'][i][0]
+
+    def play_record(self, output, replay=False):
+        rec = self.selected_record()
+        if rec is None:
+            return False
+        if not self.engine.device_ok:
+            self.status = "No audio device: cannot play"
+            return False
+        try:
+            if replay:
+                from casynth_lab.catalog import read_wav
+                pcm = read_wav(os.path.join(rec.dir, 'replay', f"{output}.wav"))
+            else:
+                pcm = rec.pcm(output)
+        except CatalogError as e:
+            self.status = f"Cannot play: {e}"
+            return False
+        self.engine.play_pcm(pcm)
+        self.status = f"Playing {'replay ' if replay else ''}{output}: {rec.title}"
+        return True
+
+    def start_replay(self):
+        rec = self.selected_record()
+        if rec is None or self.cat['thread'] is not None:
+            return False
+        self.cat['cancel'].clear()
+        self.cat['result'] = None
+        self.cat['progress'] = 0.0
+        self.cat['play_label'] = ""
+        self.status = "Replaying from start..."
+
+        def prog(f):
+            self.cat['progress'] = f
+
+        def work():
+            self.cat['result'] = self.catalog.replay_in_subprocess(
+                rec.id, progress=prog, cancel=self.cat['cancel'].is_set)
+        th = threading.Thread(target=work, daemon=True)
+        self.cat['thread'] = th
+        th.start()
+        return True
+
+    def cancel_replay(self):
+        self.cat['cancel'].set()
+
+    def _catalog_rects(self):
+        px = self.panel_x
+        y = TOP_H + 8
+        rects = dict(back=(px, y, 90, 26), play_A=(px, y + 40, 90, 26),
+                     play_B=(px + 96, y + 40, 90, 26), play_mon=(px, y + 72, 186, 26),
+                     stop=(px + 192, y + 40, 70, 58), replay=(px, y + 130, 186, 28),
+                     cancel=(px + 192, y + 130, 70, 28), play_replay=(px, y + 190, 186, 26))
+        return rects
+
+    def _list_rect(self, i):
+        return (MARGIN, TOP_H + 34 + i * ROW_LIST_H, self.field_w, ROW_LIST_H - 4)
+
+    def _press_catalog(self, pos, button):
+        if button != 1:
+            return None
+        r = self._catalog_rects()
+        if self._inside(r['back'], pos):
+            self.close_catalog()
+            return 'back'
+        for i in range(len(self.cat['entries'])):
+            if self._inside(self._list_rect(i), pos):
+                self.select_record(i)
+                return f'record:{i}'
+        if self._inside(r['play_A'], pos):
+            self.play_record('A')
+            return 'play:A'
+        if self._inside(r['play_B'], pos):
+            self.play_record('B')
+            return 'play:B'
+        if self._inside(r['play_mon'], pos):
+            self.play_record('monitor')
+            return 'play:monitor'
+        if self._inside(r['stop'], pos):
+            self.engine.stop_play()
+            self.status = ""
+            return 'play:stop'
+        if self._inside(r['replay'], pos):
+            self.start_replay()
+            return 'replay'
+        if self._inside(r['cancel'], pos):
+            self.cancel_replay()
+            return 'replay:cancel'
+        if self._inside(r['play_replay'], pos) and self.cat['play_label']:
+            self.play_record('monitor', replay=True)
+            return 'play:replay'
+        return None
+
+    def _draw_catalog(self, screen, font, small):
+        import pygame
+        pygame.draw.rect(screen, C_BG, (0, TOP_H, self.width, self.height - TOP_H))
+        screen.blit(font.render("Catalog (local records, newest first)", True, C_TXT),
+                    (MARGIN, TOP_H + 8))
+        entries = self.cat['entries']
+        if not entries:
+            screen.blit(small.render("No records yet. Press Save in the live view.",
+                                     True, C_DIM), (MARGIN, TOP_H + 40))
+        for i, (rec, err) in enumerate(entries[:12]):
+            rect = self._list_rect(i)
+            on = (i == self.cat['sel'])
+            pygame.draw.rect(screen, C_BTN_ON if on else C_PANEL, rect, border_radius=4)
+            pygame.draw.rect(screen, C_ACCENT if on else C_EDGE, rect, 1, border_radius=4)
+            if rec is None:
+                screen.blit(small.render(f"(broken record) {err}"[:80], True, C_ERR),
+                            (rect[0] + 8, rect[1] + 12))
+                continue
+            screen.blit(small.render(rec.title[:60], True, C_TXT), (rect[0] + 8, rect[1] + 4))
+            la, lb = rec.engine_labels()
+            line = (f"{rec.created.replace('T', ' ')}   {rec.seconds:.1f} s   "
+                    f"A: {la}  B: {lb}   Local")
+            screen.blit(small.render(line, True, C_DIM), (rect[0] + 8, rect[1] + 22))
+        r = self._catalog_rects()
+        labels = dict(back='Back (Esc)', play_A='Play A', play_B='Play B',
+                      play_mon='Play as heard', stop='Stop', replay='Replay from start',
+                      cancel='Cancel', play_replay=self.cat['play_label'])
+        rec = self.selected_record()
+        for key, rect in r.items():
+            if key == 'play_replay' and not labels[key]:
+                continue
+            if key != 'back' and rec is None:
+                continue
+            hot = (key == 'stop' and self.engine.playing) or                   (key == 'cancel' and self.cat['thread'] is not None)
+            pygame.draw.rect(screen, C_BTN_ON if hot else C_BTN, rect, border_radius=4)
+            pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
+            t = small.render(labels[key], True, C_TXT)
+            screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
+                            rect[1] + (rect[3] - t.get_height()) // 2))
+        px = self.panel_x
+        if rec is not None:
+            y = r['play_replay'][1] + 40
+            screen.blit(small.render("Note:", True, C_DIM), (px, y))
+            for j, line in enumerate(_wrap(rec.note, small, PANEL_W)[:6]):
+                screen.blit(small.render(line, True, C_TXT), (px, y + 18 + j * 17))
+            y2 = y + 130
+            if self.cat['thread'] is not None:
+                pygame.draw.rect(screen, C_EDGE, (px, y2, 180, 8), border_radius=3)
+                pygame.draw.rect(screen, C_ACCENT, (px, y2, int(180 * self.cat['progress']), 8),
+                                 border_radius=3)
+            res = self.cat['result']
+            if res is not None:
+                col = C_OK if res.status == 'match' else C_ERR
+                for j, line in enumerate(_wrap(res.text, small, PANEL_W)[:4]):
+                    screen.blit(small.render(line, True, col), (px, y2 + 16 + j * 17))
+            if self.engine.playing:
+                pos, n = self.engine.play_pos
+                screen.blit(small.render(f"playing {pos / 44100:.1f} / {n / 44100:.1f} s",
+                                         True, C_ACCENT), (px, y2 + 90))
+
+
+def _wrap(text, font, width):
+    words, lines, cur = (text or '').split(), [], ''
+    for w in words:
+        t = (cur + ' ' + w).strip()
+        if font.size(t)[0] > width and cur:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = t
+    if cur:
+        lines.append(cur)
+    return lines
 
 
 def run_ui(scene, vol):
     import pygame
     from casynth_lab.audio_out import LiveEngine
+    catalog = Catalog()
+    os.makedirs(catalog.tmp_root, exist_ok=True)
     runner = DemoRunner(scene, vol=vol)
-    engine = LiveEngine(runner)
+    engine = LiveEngine(runner, record_root=catalog.tmp_root)
     engine.start()
     print(f"[audio] {engine.status_text()}")
     pygame.init()
-    app = BenchApp(scene, engine)
+    app = BenchApp(scene, engine, catalog=catalog)
     app.vol = vol
     screen = pygame.display.set_mode((app.width, app.height))
     pygame.display.set_caption(f"CASynth demo bench - {scene.title}")
@@ -355,10 +724,13 @@ def run_ui(scene, vol):
             for ev in pygame.event.get():
                 if ev.type == pygame.QUIT:
                     alive = False
-                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+                elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE \
+                        and app.mode == 'live':
                     alive = False
                 elif ev.type == pygame.KEYDOWN:
                     app.key(pygame.key.name(ev.key))
+                elif ev.type == pygame.TEXTINPUT:
+                    app.text_input(ev.text)
                 elif ev.type == pygame.MOUSEBUTTONDOWN:
                     app.press(ev.pos, ev.button)
                 elif ev.type == pygame.MOUSEMOTION and (ev.buttons[0] or ev.buttons[2]):

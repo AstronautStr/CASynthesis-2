@@ -23,6 +23,7 @@ import numpy as np
 from casynth_config import SR, AUDIO_LOOKAHEAD_CHUNKS
 from .runner import BLOCK, CHANNELS
 from .engine_api import EngineBlockError
+from .recorder import Recorder
 
 TRANSPORT_FADE_BLOCKS = 3      # ~24 ms fade-in after reset
 
@@ -37,11 +38,17 @@ def _default_output_factory(callback):
 
 class LiveEngine:
     def __init__(self, runner, output_factory=_default_output_factory,
-                 sink=None, lookahead=AUDIO_LOOKAHEAD_CHUNKS):
+                 sink=None, lookahead=AUDIO_LOOKAHEAD_CHUNKS, record_root=None):
         """output_factory(callback) -> object with .stop()/.close(); raises if
         no device.  sink(monitor_buf, block) -- test hook: receives every block
-        (monitor as heard + the full Block with raw A/B) instead of a device."""
+        (monitor as heard + the full Block with raw A/B) instead of a device.
+        record_root: temp dir for the streaming Recorder (None = no recording)."""
         self.runner = runner
+        self._record_root = record_root
+        self.recorder = None
+        self._cut_req = False
+        self._cut_q = queue.Queue()
+        self._player = None            # {'pcm': int16 (n,2), 'pos': int} while a record plays
         self._factory = output_factory
         self._sink = sink
         self._lookahead = lookahead
@@ -63,6 +70,8 @@ class LiveEngine:
     # -- lifecycle ------------------------------------------------------------
     def start(self):
         self._alive = True
+        if self._record_root is not None:
+            self.recorder = Recorder(self.runner, self._record_root)
         if self._sink is None:
             try:
                 silent = np.zeros((BLOCK, CHANNELS), np.int16)
@@ -90,6 +99,55 @@ class LiveEngine:
                 self._stream.close()
             except Exception:                # noqa: BLE001
                 pass
+        if self.recorder is not None:
+            self.recorder.discard()
+
+    # -- recording / cut (S4) ----------------------------------------------------
+    def diagnostics(self):
+        s = self._snap
+        return dict(device_ok=self.device_ok, device_error=self.device_error,
+                    underruns=self.underruns, block_errors=self.block_errors,
+                    last_error=self.last_error, clip_blocks=dict(s['clip_blocks']),
+                    record_error=(self.recorder.error if self.recorder else None))
+
+    def request_cut(self):
+        """Ask the render thread for a consistent cut at the next completed
+        block boundary; fetch it with take_cut()."""
+        self._cut_req = True
+
+    def take_cut(self, timeout=None):
+        """-> ('ok', Cut) | ('none', None) (nothing started yet) | None (not yet)."""
+        try:
+            return self._cut_q.get(timeout=timeout) if timeout else self._cut_q.get_nowait()
+        except queue.Empty:
+            return None
+
+    def cut_now(self, timeout=5.0):
+        """Convenience for tests / scripts: request + wait."""
+        self.request_cut()
+        return self.take_cut(timeout=timeout)
+
+    # -- record playback through the same output (S4) ------------------------------
+    def play_pcm(self, pcm):
+        """Play an int16 (n, 2) array instead of the live monitor.  The live
+        experiment keeps running (its blocks are drained) but is muted, so the
+        record and the synth never sound together."""
+        pcm = np.ascontiguousarray(pcm, dtype=np.int16)
+        if pcm.ndim != 2 or pcm.shape[1] != CHANNELS:
+            raise ValueError("play_pcm expects (n, 2) int16")
+        self._player = {'pcm': pcm, 'pos': 0}
+
+    def stop_play(self):
+        self._player = None
+
+    @property
+    def playing(self):
+        return self._player is not None
+
+    @property
+    def play_pos(self):
+        p = self._player
+        return (p['pos'], len(p['pcm'])) if p else (0, 0)
 
     # -- UI side --------------------------------------------------------------
     def post(self, kind, at=None, **args):
@@ -151,6 +209,13 @@ class LiveEngine:
                 buf = (buf.astype(np.float64) * ramp[:, None]).astype(np.int16)
                 self._fade_left -= 1
             self._snap = r.snapshot()
+            if self.recorder is not None:
+                self.recorder.on_block(blk, r.running, r.out_samples - BLOCK)
+            if self._cut_req:
+                self._cut_req = False
+                cut = (self.recorder.cut(self.diagnostics())
+                       if self.recorder is not None else None)
+                self._cut_q.put(('ok', cut) if cut is not None else ('none', None))
             if self._sink is not None:
                 self._sink(buf, blk)
             else:
@@ -160,6 +225,20 @@ class LiveEngine:
     def _audio_cb(self, outdata, frames, time_info, status):
         if status and getattr(status, 'output_underflow', False):
             self.underruns += 1
+        player = self._player
+        if player is not None:
+            # record playback: the live monitor is drained (kept running) but
+            # NOT mixed in; the record's PCM goes to the device alone
+            self._drain_live(frames)
+            pcm, pos = player['pcm'], player['pos']
+            take = min(frames, len(pcm) - pos)
+            outdata[:take] = pcm[pos:pos + take]
+            if take < frames:
+                outdata[take:] = 0
+            player['pos'] = pos + take
+            if player['pos'] >= len(pcm):
+                self._player = None
+            return
         filled = 0
         while filled < frames:
             if self._resid['buf'] is None:
@@ -175,6 +254,25 @@ class LiveEngine:
             outdata[filled:filled + take] = buf[pos:pos + take]
             filled += take
             pos += take
+            if pos >= len(buf):
+                self._resid['buf'] = None
+            else:
+                self._resid['pos'] = pos
+
+    def _drain_live(self, frames):
+        """Consume `frames` of live blocks without outputting them."""
+        left = frames
+        while left > 0:
+            if self._resid['buf'] is None:
+                try:
+                    self._resid['buf'] = self._blk_q.get_nowait()
+                    self._resid['pos'] = 0
+                except queue.Empty:
+                    return
+            buf, pos = self._resid['buf'], self._resid['pos']
+            take = min(left, len(buf) - pos)
+            pos += take
+            left -= take
             if pos >= len(buf):
                 self._resid['buf'] = None
             else:
