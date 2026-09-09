@@ -41,8 +41,11 @@ WAVs (raw A, raw B, monitor = as heard, incl. the A/B crossfade).  The live
 experiment keeps running.  Records live in `lab_catalog/local/<id>/`
 (`record.json` + `A.wav` `B.wav` `monitor.wav`; user data, gitignored).
 
-**Catalog** lists the records (newest first): select one -> **Play A / Play B /
-Play as heard** (the live synth is muted meanwhile), **Replay from start**
+**Catalog** is a separate screen (the live view is hidden; Esc / Back returns).
+Select a record -> **Open in bench** loads its END state (field, engines and
+parameters of A and B, selected side, volume) into a fresh live session that
+you start manually; **Play A / Play B / Play as heard** (the live synth is
+muted meanwhile); **Replay from start**
 recomputes the experiment in a separate process from the embedded conditions
 and compares it byte-exact with the stored WAVs: "Replay matched" /
 "Replay differs" / a reason why it is unavailable (e.g. the engine is not

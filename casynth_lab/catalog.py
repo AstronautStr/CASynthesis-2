@@ -12,6 +12,7 @@ Integrity: a record is assembled in <root>/<id>.partial/ and renamed to
 Listing tolerates corrupted entries (they are reported, not fatal).
 No window, no device: everything here is testable headless.
 """
+import copy
 import datetime as _dt
 import hashlib
 import json
@@ -151,6 +152,33 @@ class Record:
         return tuple(out)
 
 
+def bench_scene(rec):
+    """Scene document + volume that put the bench into the record's END state
+    (field, engines/params of both sides, selected side).  The user starts it
+    manually.  CatalogError for records without state_at_end."""
+    meta = rec.meta
+    st = meta.get('state_at_end')
+    if not st or 'settings_at_end' not in meta:
+        raise CatalogError(f"{rec.id}: record has no end state to open")
+    d = copy.deepcopy(meta['scene'])
+    d['format'] = 2
+    d.pop('engine_id', None)
+    d.pop('engine_params', None)
+    d['id'] = f"{d.get('id', 'demo')}@{rec.id}"
+    d['title'] = rec.title
+    d['cells'] = [list(c) for c in st['cells']]
+    d['variants'] = {side: {'engine_id': v['engine_id'],
+                            'engine_params': dict(v['engine_params'])}
+                     for side, v in meta['settings_at_end'].items()}
+    d['initial_side'] = meta.get('selected_at_end', 'A')
+    d.setdefault('listen', '')
+    try:
+        scene = scene_from_doc(d)
+    except SceneError as e:
+        raise CatalogError(f"{rec.id}: cannot open in bench: {e}")
+    return scene, float(st.get('vol', VOL_DEFAULT))
+
+
 class ReplayResult:
     def __init__(self, status, reason='', outputs=None, replay_dir=None):
         self.status = status              # 'match' | 'mismatch' | 'unavailable' | 'cancelled'
@@ -262,6 +290,7 @@ class Catalog:
                 'settings_at_end': {side: {'engine_id': eid, 'engine_params': p}
                                     for side, (eid, p) in cut.side_settings.items()},
                 'selected_at_end': cut.selected,
+                'state_at_end': cut.state_at_end,
                 'diagnostics': cut.diagnostics,
             }
             tmp_json = os.path.join(partial, 'record.json')

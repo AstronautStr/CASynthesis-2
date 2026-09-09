@@ -27,7 +27,7 @@ from casynth_config import (VOL_DEFAULT, C_BG, C_GRID, C_PANEL, C_EDGE, C_TXT,
                             C_DIM, C_BTN, C_ACCENT)                    # noqa: E402
 from casynth_lab import (load_scene, SceneError, DemoRunner, SIDES, registry,
                          describe_difference, validate_param)           # noqa: E402
-from casynth_lab.catalog import Catalog, CatalogError                  # noqa: E402
+from casynth_lab.catalog import Catalog, CatalogError, bench_scene     # noqa: E402
 
 # -- layout ------------------------------------------------------------------
 CELL = 16
@@ -272,6 +272,10 @@ class BenchApp:
     def draw(self, screen, font, small):
         import pygame
         self.tick()
+        if self.mode == 'catalog':
+            screen.fill(C_BG)
+            self._draw_catalog(screen, font, small)
+            return
         snap = self.engine.snapshot()
         screen.fill(C_BG)
         pygame.draw.rect(screen, C_PANEL, (0, 0, self.width, TOP_H))
@@ -381,8 +385,6 @@ class BenchApp:
                 screen.blit(small.render(self.status[:90], True, col), (MARGIN + 300, TOP_H - 26))
         if self.mode == 'save':
             self._draw_save_form(screen, font, small)
-        elif self.mode == 'catalog':
-            self._draw_catalog(screen, font, small)
 
     # =====================================================================
     # S4: save / catalog / player / replay
@@ -555,6 +557,38 @@ class BenchApp:
         self.status = f"Playing {'replay ' if replay else ''}{output}: {rec.title}"
         return True
 
+    def open_in_bench(self):
+        """Load the selected record's END state (field, both sides' engine +
+        params, selected side, volume) into a fresh live session; the user
+        starts it manually."""
+        rec = self.selected_record()
+        if rec is None:
+            return False
+        try:
+            scene, vol = bench_scene(rec)
+        except CatalogError as e:
+            self.status = f"Cannot open: {e}"
+            return False
+        self.engine.stop_play()
+        self.replace_session(scene, vol)
+        self.mode = 'live'
+        self.status = f"Opened in bench: {rec.title}  (press Start)"
+        return True
+
+    def replace_session(self, scene, vol):
+        """Swap the live session for a new DemoRunner/LiveEngine on `scene`."""
+        from casynth_lab.audio_out import LiveEngine
+        old = self.engine
+        old.stop()
+        runner = DemoRunner(scene, vol=vol)
+        eng = LiveEngine(runner, output_factory=old._factory, sink=old._sink,
+                         record_root=old._record_root)
+        eng.start()
+        self.scene = scene
+        self.engine = eng
+        self.vol = vol
+        self.message = ""
+
     def start_replay(self):
         rec = self.selected_record()
         if rec is None or self.cat['thread'] is not None:
@@ -579,17 +613,21 @@ class BenchApp:
     def cancel_replay(self):
         self.cat['cancel'].set()
 
+    CAT_TOP = 56
+
     def _catalog_rects(self):
         px = self.panel_x
-        y = TOP_H + 8
-        rects = dict(back=(px, y, 90, 26), play_A=(px, y + 40, 90, 26),
-                     play_B=(px + 96, y + 40, 90, 26), play_mon=(px, y + 72, 186, 26),
-                     stop=(px + 192, y + 40, 70, 58), replay=(px, y + 130, 186, 28),
-                     cancel=(px + 192, y + 130, 70, 28), play_replay=(px, y + 190, 186, 26))
+        y = self.CAT_TOP
+        rects = dict(back=(MARGIN, 12, 110, 30),
+                     open=(px, y, 262, 34),
+                     play_A=(px, y + 50, 90, 26), play_B=(px + 96, y + 50, 90, 26),
+                     play_mon=(px, y + 82, 186, 26), stop=(px + 192, y + 50, 70, 58),
+                     replay=(px, y + 140, 186, 28), cancel=(px + 192, y + 140, 70, 28),
+                     play_replay=(px, y + 200, 186, 26))
         return rects
 
     def _list_rect(self, i):
-        return (MARGIN, TOP_H + 34 + i * ROW_LIST_H, self.field_w, ROW_LIST_H - 4)
+        return (MARGIN, self.CAT_TOP + i * ROW_LIST_H, self.field_w, ROW_LIST_H - 4)
 
     def _press_catalog(self, pos, button):
         if button != 1:
@@ -602,6 +640,9 @@ class BenchApp:
             if self._inside(self._list_rect(i), pos):
                 self.select_record(i)
                 return f'record:{i}'
+        if self._inside(r['open'], pos):
+            self.open_in_bench()
+            return 'open'
         if self._inside(r['play_A'], pos):
             self.play_record('A')
             return 'play:A'
@@ -628,13 +669,16 @@ class BenchApp:
 
     def _draw_catalog(self, screen, font, small):
         import pygame
-        pygame.draw.rect(screen, C_BG, (0, TOP_H, self.width, self.height - TOP_H))
-        screen.blit(font.render("Catalog (local records, newest first)", True, C_TXT),
-                    (MARGIN, TOP_H + 8))
+        screen.blit(font.render("Catalog  (local records, newest first)", True, C_TXT),
+                    (MARGIN + 130, 18))
+        if self.status:
+            col = C_ERR if self.status.lower().startswith(('cannot', 'no audio', 'replay unavail',
+                                                             'replay differs')) else C_OK
+            screen.blit(small.render(self.status[:70], True, col), (MARGIN + 420, 20))
         entries = self.cat['entries']
         if not entries:
             screen.blit(small.render("No records yet. Press Save in the live view.",
-                                     True, C_DIM), (MARGIN, TOP_H + 40))
+                                     True, C_DIM), (MARGIN, self.CAT_TOP + 6))
         for i, (rec, err) in enumerate(entries[:12]):
             rect = self._list_rect(i)
             on = (i == self.cat['sel'])
@@ -650,7 +694,7 @@ class BenchApp:
                     f"A: {la}  B: {lb}   Local")
             screen.blit(small.render(line, True, C_DIM), (rect[0] + 8, rect[1] + 22))
         r = self._catalog_rects()
-        labels = dict(back='Back (Esc)', play_A='Play A', play_B='Play B',
+        labels = dict(back='Back (Esc)', open='Open in bench', play_A='Play A', play_B='Play B',
                       play_mon='Play as heard', stop='Stop', replay='Replay from start',
                       cancel='Cancel', play_replay=self.cat['play_label'])
         rec = self.selected_record()
@@ -659,7 +703,8 @@ class BenchApp:
                 continue
             if key != 'back' and rec is None:
                 continue
-            hot = (key == 'stop' and self.engine.playing) or                   (key == 'cancel' and self.cat['thread'] is not None)
+            hot = ((key == 'stop' and self.engine.playing) or key == 'open'
+                   or (key == 'cancel' and self.cat['thread'] is not None))
             pygame.draw.rect(screen, C_BTN_ON if hot else C_BTN, rect, border_radius=4)
             pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
             t = small.render(labels[key], True, C_TXT)
