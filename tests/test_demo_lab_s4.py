@@ -510,8 +510,8 @@ def test_ui_headless_save_catalog_player_replay():
         assert _wait(lambda: (app.tick(), app.status.startswith("Nothing to save"))[1])
         assert app.mode == 'live' and cat.ids() == []
 
-        rect = app.buttons['start'][0]
-        app.press((rect[0] + 3, rect[1] + 3), 1)
+        rect = app.buttons['pause'][0]
+        app.press((rect[0] + 3, rect[1] + 3), 1)              # release pause = go
         assert _wait(lambda: eng.snapshot()['gen'] >= 2, 30)
         app.set_param('harm', 0.5)
         assert app.key('2') == 'select:B'
@@ -607,8 +607,8 @@ def test_ui_headless_save_catalog_player_replay():
                 time.sleep(512 / SR)
         th2 = threading.Thread(target=pull2, daemon=True)
         th2.start()
-        rect = app.buttons['start'][0]
-        app.press((rect[0] + 3, rect[1] + 3), 1)
+        rect = app.buttons['pause'][0]
+        app.press((rect[0] + 3, rect[1] + 3), 1)              # release pause = go
         assert _wait(lambda: eng.snapshot()['gen'] >= 1, 30)
         stop_pull.set()
         th2.join(timeout=2)

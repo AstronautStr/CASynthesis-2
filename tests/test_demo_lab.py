@@ -352,7 +352,14 @@ def test_stop_returns_to_initial_silent_scene():
     r.post('vol', at=r.out_samples + 10 * BLOCK, value=0.1)      # future -> dropped
     r.post('stop')
     b = r.next_block()
-    assert not r.running and r.gen == 0 and r.ca_samples == 0 and not b.monitor.any()
+    assert not r.running and r.paused and r.gen == 0 and r.ca_samples == 0
+    assert not b.monitor.any()
+    # releasing the pause of a stopped scene starts it (from the beginning)
+    r.post('pause', on=False)
+    r.next_block()
+    assert r.running and not r.paused
+    r.post('stop')
+    r.next_block()
     assert not r._pending
     assert np.array_equal(r.grid, SCENE.initial_grid())
     r.post('start')
@@ -836,9 +843,11 @@ def test_ui_headless_smoke_buttons_and_painting():
         snap = eng.snapshot()
         assert not snap['running'] and snap['gen'] == 0 and snap['selected'] == 'A'
 
-        rect = app.buttons['start'][0]
-        assert app.press((rect[0] + 5, rect[1] + 5), 1) == 'start'
-        assert _wait(lambda: eng.snapshot()['gen'] >= 2, 30), "no evolution after Start"
+        assert snap['paused'], "bench must open on pause"
+        rect = app.buttons['pause'][0]
+        assert app.press((rect[0] + 5, rect[1] + 5), 1) == 'pause'   # release = go
+        assert _wait(lambda: eng.snapshot()['running'] and not eng.snapshot()['paused'])
+        assert _wait(lambda: eng.snapshot()['gen'] >= 2, 30), "no evolution after un-pause"
 
         # A/B tab: listen + edit side B, field keeps going
         g_before = eng.snapshot()['gen']
@@ -881,7 +890,7 @@ def test_ui_headless_smoke_buttons_and_painting():
         assert app.key('2') == 'select:B'
         assert _wait(lambda: eng.snapshot()['selected'] == 'B')
         assert app.key('space') == 'pause'
-        assert _wait(lambda: eng.snapshot()['paused'])
+        assert _wait(lambda: eng.snapshot()['paused'] and eng.snapshot()['running'])
         assert app.key('space') == 'pause'
         assert _wait(lambda: not eng.snapshot()['paused'])
         assert app.set_param('harm', 0.5)
@@ -916,13 +925,18 @@ def test_ui_headless_smoke_buttons_and_painting():
         assert len(got) > n_before, "audio stopped during pause"
         assert eng.snapshot()['gen'] == g0, "field evolved while paused"
 
-        rect = app.buttons['start'][0]
+        rect = app.buttons['stop'][0]
         assert app.press((rect[0] + 5, rect[1] + 5), 1) == 'stop'
-        assert _wait(lambda: (not eng.snapshot()['running'] and eng.snapshot()['gen'] == 0
+        assert _wait(lambda: (not eng.snapshot()['running'] and eng.snapshot()['paused']
+                              and eng.snapshot()['gen'] == 0
                               and eng.snapshot()['grid'].sum() == 5))
         s = eng.snapshot()
         assert s['selected'] == 'B' and s['sides']['B'][0] == 'fft2d'   # settings kept
-        assert app.press((rect[0] + 5, rect[1] + 5), 1) == 'start'
+        assert app.key('space') == 'pause'                               # un-pause = go
+        assert _wait(lambda: eng.snapshot()['running'] and not eng.snapshot()['paused'])
+        assert app.key('s') == 'stop'
+        assert _wait(lambda: not eng.snapshot()['running'] and eng.snapshot()['paused'])
+        assert app.key('space') == 'pause'
         assert _wait(lambda: eng.snapshot()['running'])
 
         rect = app.buttons['reset'][0]

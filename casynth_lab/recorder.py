@@ -82,12 +82,15 @@ class Recorder:
         return self.runner.out_samples - min(self.frames_since_origin, self.ring_frames)
 
     def _is_new_origin(self, running, out_sample_before):
-        """A Restart, or a Start that turned a stopped scene on, at this boundary."""
+        """A Restart at this boundary, or the scene turning on (Start, or the
+        pause of a stopped scene released)."""
+        if running and not self._prev_running:
+            return True
         journal = self.runner.journal
         for t, _seq, kind, _args in reversed(journal):
             if t != out_sample_before:
                 break
-            if kind == 'reset' or (kind == 'start' and not self._prev_running):
+            if kind == 'reset':
                 return True
         return False
 

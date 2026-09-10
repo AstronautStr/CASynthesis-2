@@ -140,7 +140,7 @@ class DemoRunner:
         self.t_samples = 0
         self.ca_samples = 0
         self.running = False
-        self.paused = False
+        self.paused = True             # a stopped scene stands on pause
         self.step_samples = SR / sc.rate_hz
         for s in self.sides.values():
             s.restart(self.grid, self.exc, self._gain())
@@ -213,8 +213,14 @@ class DemoRunner:
     def _apply(self, kind, args):
         if kind == 'start':
             self.running = True
+            self.paused = False
         elif kind == 'pause':
-            self.paused = bool(args.get('on', not self.paused))
+            on = bool(args.get('on', not self.paused))
+            if not on and not self.running:
+                # releasing the pause of a stopped scene STARTS it (transport
+                # model: Stop = reset + pause + silence; un-pause = go)
+                self.running = True
+            self.paused = on
         elif kind == 'set_cell':
             r, c, v = int(args['r']), int(args['c']), int(bool(args['v']))
             if not (0 <= r < self.grid.shape[0] and 0 <= c < self.grid.shape[1]):
@@ -227,9 +233,10 @@ class DemoRunner:
         elif kind == 'reset':
             self._init_scene_state()
             self.running = True
+            self.paused = False
         elif kind == 'stop':
-            # Full stop (player semantics): back to the initial scene, silent,
-            # not running -- Start begins again from the beginning.
+            # Full stop: back to the initial scene, silent, on pause --
+            # releasing the pause begins again from the beginning.
             self._init_scene_state()
         elif kind == 'vol':
             self.vol = float(min(max(args['value'], 0.0), 1.0))

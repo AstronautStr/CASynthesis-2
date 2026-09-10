@@ -303,7 +303,7 @@ class Catalog:
         """Assemble a record from a Cut.  Returns the new id.  Any failure
         raises CatalogError and leaves no partial record."""
         if cut is None:
-            raise CatalogError("nothing to save yet: press Start first")
+            raise CatalogError("nothing to save yet: release Pause CA first")
         if cut.record_error:
             raise CatalogError(f"recording failed: {cut.record_error}")
         if cut.n_frames <= 0:

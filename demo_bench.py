@@ -8,9 +8,10 @@ Window: shared field, demo title + listening hint, transport (Start|Stop /
 Pause CA / Restart), volume, generation, audio state; a side panel with the
 A/B tabs (select = listen + edit), the selected side's engine and its registry
 knobs, and a one-line summary of how A and B differ.  LMB paints, RMB erases.
-Startup is silent and frozen; Start launches automaton + sound (and turns into
-Stop = full stop, initial scene); Pause CA freezes only the automaton; Restart
-starts again immediately.  Stop/Restart keep engines, params, volume and side.
+Startup stands on pause (silent); releasing Pause CA starts automaton + sound.
+Stop (S) = reset + pause + silence; Pause CA freezes only the automaton while
+running; Restart (R) starts again immediately.  Stop/Restart keep engines,
+params, volume and side.
 
 All computation lives in casynth_lab (DemoRunner); this file is UI + CLI only.
 The offline path imports neither pygame nor sounddevice.
@@ -87,7 +88,7 @@ class BenchApp:
         self.height = TOP_H + max(self.field_h, 420) + MARGIN
         self.buttons = {}
         x = MARGIN
-        for key, label in (('start', 'Start'), ('pause', 'Pause CA (Space)'), ('reset', 'Restart (R)')):
+        for key, label in (('stop', 'Stop (S)'), ('pause', 'Pause CA (Space)'), ('reset', 'Restart (R)')):
             self.buttons[key] = ((x, BTN_Y, BTN_W, BTN_H), label)
             x += BTN_W + 10
         self.vol_rect = (MARGIN + 92, BTN_Y + BTN_H + 14, VOL_W, 10)
@@ -164,8 +165,6 @@ class BenchApp:
         if button == 1:
             for key, (rect, _label) in self.buttons.items():
                 if self._inside(rect, pos):
-                    if key == 'start' and self.engine.snapshot()['running']:
-                        key = 'stop'
                     self._post(key)
                     return key
             vx, vy, vw, vh = self.vol_rect
@@ -230,6 +229,9 @@ class BenchApp:
         if name == 'r':
             self._post('reset')
             return 'reset'
+        if name == 's':
+            self._post('stop')
+            return 'stop'
         if name == 'space':
             self._post('pause')
             return 'pause'
@@ -283,10 +285,7 @@ class BenchApp:
         if self.scene.listen:
             screen.blit(small.render(self.scene.listen, True, C_DIM), (MARGIN, 34))
         for key, (rect, label) in self.buttons.items():
-            on = ((key == 'start' and snap['running']) or
-                  (key == 'pause' and snap['paused']))
-            if key == 'start' and snap['running']:
-                label = 'Stop'
+            on = (key == 'pause' and snap['paused'])
             pygame.draw.rect(screen, C_BTN_ON if on else C_BTN, rect, border_radius=4)
             pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
             t = font.render(label, True, C_TXT)
@@ -398,7 +397,7 @@ class BenchApp:
                 self._cut_pending = False
                 kind, cut = got
                 if kind == 'none' or cut is None:
-                    self.status = "Nothing to save yet: press Start first"
+                    self.status = "Nothing to save yet: release Pause CA first"
                 else:
                     self.save_form = dict(cut=cut, field='title', note='',
                                           title=Catalog.default_title(self.scene.title))

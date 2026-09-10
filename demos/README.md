@@ -10,13 +10,13 @@ Offline render, no window / no audio device:
 
 Dependencies: `pip install -r requirements.txt` (numpy, scipy, pygame-ce, sounddevice).
 
-Transport: **Start** (field evolves + sound; while running the same button is
-**Stop** = full stop, back to the initial silent scene), **Pause CA** (only the
-automaton freezes; painting and sound continue), **Restart** (initial scene,
-clocks and all audio tails reset, scene starts again).  Stop/Restart keep the
+Transport: the bench opens ON PAUSE (silent) -- release **Pause CA** to go
+(field evolves + sound); while running Pause CA freezes only the automaton
+(painting and sound continue).  **Stop** (S) = initial scene + pause + silence;
+**Restart** (R) = initial scene, clocks and all audio tails reset, runs again.  Stop/Restart keep the
 engines, parameters, volume and the selected side.  LMB paints, RMB erases.
 
-Hotkeys: **R** = Restart, **Space** = Pause CA, **1** / **2** = select A / B.  `<<` / `>>` copy ALL settings (engine + params) B->A / A->B;
+Hotkeys: **S** = Stop, **R** = Restart, **Space** = Pause CA, **1** / **2** = select A / B.  `<<` / `>>` copy ALL settings (engine + params) B->A / A->B;
 **Factory A+B** restores both sides to the scene defaults; a `*` next to A or B
 marks a side that differs from those defaults.
 
