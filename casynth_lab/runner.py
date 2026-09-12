@@ -30,7 +30,7 @@ import numpy as np
 from casynth_config import SR, CHUNK_S, MASTER_GAIN, VOL_DEFAULT
 from casynth_engine import step, events_field
 from . import registry
-from .engine_api import EngineContext, check_block
+from .engine_api import EngineContext, check_block, supports_snapshot
 
 BLOCK = int(CHUNK_S * SR)          # samples per audio block (== engine chunk)
 CHANNELS = 2
@@ -40,6 +40,7 @@ XFADE_MS = 20.0                    # A/B switch crossfade (output mixer only)
 XFADE_SAMPLES = int(round(XFADE_MS / 1000.0 * SR))   # 882
 COMMANDS = ('start', 'stop', 'pause', 'set_cell', 'reset', 'vol',
             'select', 'set_param', 'set_engine', 'copy_side', 'factory')
+RUNNER_STATE_VERSION = 1           # export_state() / from_state() format
 
 # re-exported for callers that only import the runner
 validate_param = registry.validate_param
@@ -83,6 +84,29 @@ class SideState:
         if n_clip > 0:
             self.clip_blocks += 1
         return buf
+
+    @property
+    def snapshot_ok(self):
+        return supports_snapshot(self.engine)
+
+    def export_state(self):
+        """engine_id, params, diagnostics + the engine's own state (None when
+        the engine class has no snapshot support)."""
+        return dict(engine_id=self.engine_id, params=dict(self.params),
+                    peak=float(self.peak), clip_blocks=int(self.clip_blocks),
+                    engine_state_version=(type(self.engine).STATE_VERSION
+                                          if self.snapshot_ok else None),
+                    engine=(self.engine.export_state() if self.snapshot_ok else None))
+
+    def restore(self, st, grid, exc):
+        if not self.snapshot_ok:
+            raise ValueError(f"engine {self.engine_id!r} has no snapshot support")
+        if st.get('engine') is None:
+            raise ValueError(f"side {self.name}: no engine state in the snapshot")
+        self.engine.restore_state(grid, exc, st['engine'])
+        self.params = dict(self.engine.params)
+        self.peak = float(st.get('peak', 0.0))
+        self.clip_blocks = int(st.get('clip_blocks', 0))
 
 
 class Block:
@@ -281,7 +305,14 @@ class DemoRunner:
         self._memory[(s.name, eid)] = dict(s.params)
 
     def _begin_xfade(self, from_side):
-        """Start a mixer crossfade from `from_side` (None = from silence)."""
+        """Start a mixer crossfade from `from_side` (None = from silence).
+        Nothing to fade from while the scene is not running (the mixer is
+        idle): a switch made before Start / after Stop starts clean -- and a
+        fresh-conditions replay (which has no mixer memory) stays exact."""
+        if not self.running:
+            self._xfade_from = None
+            self._xfade_pos = 0
+            return
         self._xfade_from = from_side if from_side is not None else 'silence'
         self._xfade_pos = 0
 
@@ -327,6 +358,139 @@ class DemoRunner:
         if not self.paused:
             self.ca_samples += BLOCK
         return Block(raw['A'], raw['B'], mon)
+
+    # -- snapshot (S5) ------------------------------------------------------------
+    def snapshot_support(self):
+        """(ok, reason): False when a side's engine cannot be exported."""
+        bad = [f"{n}: {s.engine_id}" for n, s in self.sides.items() if not s.snapshot_ok]
+        if bad:
+            return False, "engine without snapshot support: " + ", ".join(bad)
+        return True, ""
+
+    def export_state(self):
+        """Complete, explicit state at the current block boundary: everything
+        the next next_block() reads.  Arrays are copied (the live runner may go
+        on).  Not included: the journal (a continuation starts a new one) and
+        nothing outside the runner (device queues, UI).  Raises ValueError when
+        an engine has no snapshot support (see snapshot_support())."""
+        ok, why = self.snapshot_support()
+        if not ok:
+            raise ValueError(why)
+        return dict(
+            version=RUNNER_STATE_VERSION,
+            scene=self.scene.doc,
+            ctx=dict(sr=SR, block=BLOCK, channels=CHANNELS, f0=self.ctx.f0,
+                     level=self.ctx.level, rate_hz=self.ctx.rate_hz),
+            grid=self.grid.copy(),
+            exc=(None if self.exc is None else np.asarray(self.exc, np.float64).copy()),
+            gen=int(self.gen), out_samples=int(self.out_samples),
+            t_samples=int(self.t_samples), ca_samples=int(self.ca_samples),
+            running=bool(self.running), paused=bool(self.paused),
+            vol=float(self.vol), selected=self.selected,
+            xfade_from=self._xfade_from, xfade_pos=int(self._xfade_pos),
+            seq=int(self._seq),
+            pending=[dict(seq=int(q), at=(None if at is None else int(at)), kind=k,
+                          args=dict(a)) for (q, at, k, a) in self._pending],
+            memory={n: {eid: dict(pp) for (nn, eid), pp in self._memory.items() if nn == n}
+                    for n in SIDES},
+            sides={n: s.export_state() for n, s in self.sides.items()},
+        )
+
+    @classmethod
+    def from_state(cls, state, scene=None):
+        """A runner whose next next_block() equals the exported runner's.
+        The state is validated completely BEFORE anything is built; any
+        problem raises ValueError (nothing half-restored is returned)."""
+        from .scene import scene_from_doc, SceneError
+        if not isinstance(state, dict):
+            raise ValueError("snapshot: not a mapping")
+        if state.get('version') != RUNNER_STATE_VERSION:
+            raise ValueError(f"snapshot: runner state version {state.get('version')!r} "
+                             f"!= {RUNNER_STATE_VERSION}")
+        for key in ('scene', 'ctx', 'grid', 'gen', 'out_samples', 't_samples', 'ca_samples',
+                    'running', 'paused', 'vol', 'selected', 'seq', 'pending', 'memory', 'sides'):
+            if key not in state:
+                raise ValueError(f"snapshot: missing '{key}'")
+        if scene is None:
+            try:
+                scene = scene_from_doc(state['scene'])
+            except SceneError as e:
+                raise ValueError(f"snapshot: scene: {e}")
+        ctx = state['ctx']
+        if not isinstance(ctx, dict):
+            raise ValueError("snapshot: ctx must be a mapping")
+        want = dict(sr=SR, block=BLOCK, channels=CHANNELS)
+        got = {k: ctx.get(k) for k in want}
+        if got != want:
+            raise ValueError(f"snapshot: render context {got} != {want}")
+        if (ctx.get('f0'), ctx.get('level'), ctx.get('rate_hz')) != \
+                (scene.f0_hz, scene.level, scene.rate_hz):
+            raise ValueError("snapshot: audio context does not match the scene")
+        grid = state['grid']
+        if not isinstance(grid, np.ndarray) or grid.shape != (scene.rows, scene.cols):
+            raise ValueError(f"snapshot: grid shape {getattr(grid, 'shape', None)} != "
+                             f"{(scene.rows, scene.cols)}")
+        exc = state.get('exc')
+        if exc is not None and (not isinstance(exc, np.ndarray) or exc.shape != grid.shape):
+            raise ValueError("snapshot: exc shape does not match the grid")
+        if state['selected'] not in SIDES:
+            raise ValueError(f"snapshot: selected side {state['selected']!r}")
+        if state.get('xfade_from') not in (None, 'silence', 'A', 'B'):
+            raise ValueError(f"snapshot: xfade_from {state.get('xfade_from')!r}")
+        sides = state['sides']
+        if not isinstance(sides, dict) or sorted(sides) != sorted(SIDES):
+            raise ValueError("snapshot: sides must be A and B")
+        for n in SIDES:
+            eid = sides[n].get('engine_id')
+            if eid not in registry.REGISTRY:
+                raise ValueError(f"snapshot: side {n}: engine {eid!r} is not registered")
+            spec = registry.get(eid)
+            params = sides[n].get('params')
+            if not isinstance(params, dict) or sorted(params) != sorted(spec.defaults()):
+                raise ValueError(f"snapshot: side {n}: parameters of {eid} do not match "
+                                 f"the registry")
+            for k, v in params.items():
+                registry.validate_param(eid, k, v)
+        if not isinstance(state['memory'], dict):
+            raise ValueError("snapshot: memory must be a mapping")
+        for n, per_engine in state['memory'].items():
+            if n not in SIDES or not isinstance(per_engine, dict):
+                raise ValueError("snapshot: memory keys must be sides A/B")
+        # build: a plain runner on the scene, then overwrite everything
+        r = cls(scene, vol=state['vol'])
+        r.grid = np.ascontiguousarray(grid, dtype=np.uint8).copy()
+        r.exc = None if exc is None else np.ascontiguousarray(exc, np.float64).copy()
+        r.gen = int(state['gen'])
+        r.out_samples = int(state['out_samples'])
+        r.t_samples = int(state['t_samples'])
+        r.ca_samples = int(state['ca_samples'])
+        r.running = bool(state['running'])
+        r.paused = bool(state['paused'])
+        r.vol = float(state['vol'])
+        r.selected = state['selected']
+        r._xfade_from = state.get('xfade_from')
+        r._xfade_pos = int(state.get('xfade_pos', 0))
+        r._seq = int(state['seq'])
+        r._memory = {}
+        for n, per_engine in state['memory'].items():
+            for eid, pp in per_engine.items():
+                if eid in registry.REGISTRY:
+                    r._memory[(n, eid)] = dict(pp)
+        r.journal = []
+        r._pending = []
+        for n in SIDES:
+            st = sides[n]
+            side = SideState(n, st['engine_id'], st['params'], r.ctx)
+            side.restore(st, r.grid, r.exc)
+            r.sides[n] = side
+        # queued-but-not-yet-applied commands keep their time and order
+        for c in state['pending']:
+            kind, args = c.get('kind'), dict(c.get('args') or {})
+            if kind not in COMMANDS:
+                raise ValueError(f"snapshot: pending command {kind!r}")
+            args = r._check(kind, args)
+            r._pending.append((int(c['seq']), c.get('at'), kind, args))
+        return r
 
     # -- introspection ----------------------------------------------------------
     def param_memory(self):

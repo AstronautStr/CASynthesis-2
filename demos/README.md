@@ -46,10 +46,11 @@ running.  Records live in `lab_catalog/local/<id>/`
 
 **Catalog** is a separate screen: the CA is paused and the live synth muted
 while it is open (only records may sound there); Esc / Back returns and resumes.
-Select a record -> **Open in bench** loads its END state (field, engines and
-parameters of A and B, selected side, volume) into a fresh live session that
-you start manually; **Play A / Play B / Play as heard** (the live synth is
-muted meanwhile); **Replay from start**
+Select a record -> **Continue** (S5, see below), or **Open field anew** loads
+its END state (field, engines and parameters of A and B, selected side,
+volume) into a fresh live session -- fresh sound, CA paused -- that you start
+manually; **Play A / Play B / Play as heard** (the live synth is
+muted meanwhile); **Check reproducibility**
 recomputes the experiment in a separate process from the embedded conditions
 (from the recording's start; the saved window is compared) byte-exact with the
 stored WAVs: "Replay matched" /
@@ -58,6 +59,47 @@ registered any more -- the WAVs still play).  The replay output can be
 listened to (**Play replay**); the originals are never modified.
 Esc / Back returns to the live view.  Headless use:
 `python -m casynth_lab.catalog replay lab_catalog/local <id>`.
+
+## Continuing a find and branching (S5)
+
+Every **Save** also stores a full **snapshot** of the runner at the same block
+where the WAVs and the journal end (`state_end.json` + `state_end.npz`:
+field, excitation, generation, all clocks, running/paused, volume, both sides'
+engine + parameters + per-engine memory, the A/B monitor crossfade, every
+oscillator phase / amplitude / tail slot / envelope of both engines, and the
+commands already accepted for the future).  In the catalog **Continue**
+restores that snapshot into the live session and carries on from the next
+audio block -- no history is replayed, nothing is re-analysed with zeroed
+phases: the following blocks and generations equal an uninterrupted run
+(checked byte-exact by `tests/test_demo_lab_s5.py` for all five engines).  A
+saved Pause CA stays paused (sound continues), a saved Stop stays stopped.
+The session is replaced only after the snapshot has been validated; a
+corrupt / incompatible / missing snapshot leaves the current session as it is
+and says why ("Continue unavailable: ..." -- the WAVs still play, **Open field
+anew** still works).  S4 records (no snapshot) are read as before, without
+migration.
+
+A continued session records from the snapshot on (the 30 s window starts
+empty; the parent's audio is not glued in).  Its **Save** makes a **branch**:
+an independent record with its own copy of the origin snapshot, its own
+journal, three WAVs, end snapshot and `parent_record_id`.  The card shows
+**Derived from: <title>** (click = jump to the parent); the parent is never
+modified and a branch stays reproducible even when the parent folder is gone.
+**Check reproducibility** of a branch restores its origin snapshot and applies
+its journal.  Several Saves from one continued session share the same parent
+and start point; continuing a branch makes the branch the parent.  Stop /
+Restart in a continued session begin a fresh recording (fresh conditions, as
+in S4) that still carries the parent link.  **Continue** on the same record
+always starts from its unchanged snapshot and creates no record by itself.
+
+Engines take part through two optional methods of the S3 interface
+(`export_state()` / `restore_state(grid, exc, state)` + a class
+`STATE_VERSION`, see `casynth_lab/engine_api.py`); the five built-in methods
+get them from the shared adapter.  An engine without them still works and
+saves WAVs, but its records are honestly marked as not continuable.
+Formats: `record.json` `format` 2 (1 = S4, still read), runner state version
+1 (`casynth_lab/runner.py`), engine state version per class, snapshot file
+version 1 (`casynth_lab/snapshot.py`: JSON + npz, no pickle).
 
 ## Adding a sound engine (S3 interface)
 
@@ -75,6 +117,9 @@ turns the field into stereo blocks.
        def set_params(self, params): ...           # full validated dict (call super())
        def render(self, gain, t_samples): ...      # -> (int16 (ctx.block, 2), peak, n_clip)
        def reset(self, gain): ...                  # == init on the same field
+       STATE_VERSION = 1                            # optional (S5): exact continuation
+       def export_state(self): ...                 # -> dict of scalars/lists + ndarrays
+       def restore_state(self, grid, exc, state): ...  # rebuild so render() continues exactly
    ```
    `self.ctx` gives `sr`, `block`, `channels`, `f0`, `level`, `rate_hz`.  Apply
    `gain` once (pre-clip).  No wall-clock time, never write to `grid`.

@@ -8,13 +8,22 @@ the bench only sees blocks.
 """
 import numpy as np
 
-from casynth_config import (CHUNK_S, TOTAL_SLOTS, GEN_ATTACK_DEFAULT,
-                            GEN_DECAY_DEFAULT, GEN_SUSTAIN_DEFAULT,
-                            GEN_RELEASE_DEFAULT)
+from casynth_config import (CHUNK_S, TOTAL_SLOTS, MAX_VOICES, MAX_MODES_PER_OBJ,
+                            GEN_ATTACK_DEFAULT, GEN_DECAY_DEFAULT,
+                            GEN_SUSTAIN_DEFAULT, GEN_RELEASE_DEFAULT)
 from casynth_engine import analyse, SlotPool, render_chunk_laplacian
 from .engine_api import SoundEngine
 
 PAN_CENTER = 0.5                   # both channels identical (S1 rule)
+
+# Snapshot (S5): everything render() reads besides grid/exc/params.  `voices`
+# is NOT stored: it is a pure function of (grid, exc, params) recomputed by
+# restore_state through the same analyse() call -- the arrays below are the
+# only audio memory.  Slot arrays: (TOTAL_SLOTS + 1,); _freq_prev: (MAX_VOICES,
+# MAX_MODES_PER_OBJ).
+_SLOT_ARRAYS = ('phase', 'amp_cur', 'pan_cur')
+_POOL_ARRAYS = ('freq_slots', 'amp_tgt', 'pan_tgt', '_release_cnt', '_release_amp0',
+                '_release_len', '_env_phase', '_env_level', '_amp_smooth')
 
 
 def _gen_chunks(frac, interval_s):
@@ -66,6 +75,56 @@ class LegacySynthEngine(SoundEngine):
 
     def reset(self, gain=0.0):
         self.init(self._grid, self._exc, gain)
+
+    # -- snapshot -----------------------------------------------------------------
+    STATE_VERSION = 1
+
+    def export_state(self):
+        st = dict(version=self.STATE_VERSION, engine_id=self.engine_id,
+                  params=dict(self.params), gain_prev=float(self.gain_prev),
+                  steals=int(self.pool.steals), steal_amp_max=float(self.pool.steal_amp_max),
+                  slots=int(TOTAL_SLOTS), voices=int(MAX_VOICES), modes=int(MAX_MODES_PER_OBJ))
+        for name in _SLOT_ARRAYS:
+            st[name] = getattr(self, name).copy()
+        for name in _POOL_ARRAYS:
+            st[name] = getattr(self.pool, name).copy()
+        st['_freq_prev'] = self.pool._freq_prev.copy()
+        return st
+
+    def restore_state(self, grid, exc, state):
+        if not isinstance(state, dict) or state.get('version') != self.STATE_VERSION:
+            raise ValueError(f"engine {self.engine_id}: state version "
+                             f"{state.get('version') if isinstance(state, dict) else state!r} "
+                             f"!= {self.STATE_VERSION}")
+        if state.get('engine_id') != self.engine_id:
+            raise ValueError(f"engine state is for {state.get('engine_id')!r}, "
+                             f"not {self.engine_id!r}")
+        if (state.get('slots'), state.get('voices'), state.get('modes')) !=                 (TOTAL_SLOTS, MAX_VOICES, MAX_MODES_PER_OBJ):
+            raise ValueError(f"engine {self.engine_id}: slot layout "
+                             f"{state.get('slots')}/{state.get('voices')}/{state.get('modes')}"
+                             f" != {TOTAL_SLOTS}/{MAX_VOICES}/{MAX_MODES_PER_OBJ}")
+        sz = TOTAL_SLOTS + 1
+        arrays = {}
+        for name in _SLOT_ARRAYS + _POOL_ARRAYS + ('_freq_prev',):
+            a = state.get(name)
+            want = (MAX_VOICES, MAX_MODES_PER_OBJ) if name == '_freq_prev' else (sz,)
+            if not isinstance(a, np.ndarray) or a.shape != want:
+                raise ValueError(f"engine {self.engine_id}: state array {name!r} missing or "
+                                 f"shape {getattr(a, 'shape', None)} != {want}")
+            if not np.all(np.isfinite(a)):
+                raise ValueError(f"engine {self.engine_id}: state array {name!r} not finite")
+            arrays[name] = a
+        # fresh pool + arrays, then overwrite (dtypes of the live pool are kept)
+        self._clear_audio(float(state['gain_prev']))
+        for name in _SLOT_ARRAYS:
+            getattr(self, name)[:] = arrays[name]
+        for name in _POOL_ARRAYS:
+            getattr(self.pool, name)[:] = arrays[name]
+        self.pool._freq_prev[:] = arrays['_freq_prev']
+        self.pool.steals = int(state.get('steals', 0))
+        self.pool.steal_amp_max = float(state.get('steal_amp_max', 0.0))
+        self.params = dict(state['params'])
+        self.update_field(grid, exc)          # voices = analyse(grid, exc, params)
 
     # -- internals --------------------------------------------------------------
     def _clear_audio(self, gain):

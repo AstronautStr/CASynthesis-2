@@ -14,6 +14,13 @@ current block boundary, keeping at most `window_seconds`.
 A cut = (origin state, journal since the origin, the PCM window
 [audio_start_sample, end_sample), diagnostics) -- one interval, one truth.
 Replay recomputes from the origin and compares the saved window byte-exact.
+
+S5: a session CONTINUED from a record's end snapshot starts its recording at
+that snapshot (origin_kind = 'snapshot', origin_snapshot = the pristine loaded
+state, parent_record_id = the record); a later Restart / Start-after-Stop
+begins a fresh recording again (origin_kind = 'fresh') but keeps the parent
+link.  Every cut also carries the runner's END snapshot (export_state at the
+cut boundary) when all engines support it -- the next "Continue" point.
 """
 import uuid
 
@@ -55,8 +62,12 @@ def _origin_state(runner):
 
 
 class Recorder:
-    def __init__(self, runner, tmp_root=None, window_seconds=WINDOW_SECONDS_DEFAULT):
+    def __init__(self, runner, tmp_root=None, window_seconds=WINDOW_SECONDS_DEFAULT,
+                 origin_snapshot=None, parent_record_id=None):
         self.runner = runner
+        self.parent_record_id = parent_record_id
+        self.origin_kind = None            # 'fresh' | 'snapshot' while started
+        self.origin_snapshot = None        # pristine state (snapshot origins only)
         self.session_id = uuid.uuid4().hex[:8]
         self.window_seconds = float(window_seconds)
         n_blocks = max(1, int(np.ceil(self.window_seconds * SR / BLOCK)))
@@ -68,8 +79,14 @@ class Recorder:
         self.frames_since_origin = 0
         self.error = None                  # set by close(): recording stopped
         self.scene_doc = runner.scene.doc
-        self._prev_running = False
+        self._prev_running = bool(runner.running)
         self._closed = False
+        if origin_snapshot is not None and runner.running:
+            # continuation: the recording starts right here, at the snapshot
+            self.origin_sample = runner.out_samples
+            self.origin_state = _origin_state(runner)
+            self.origin_kind = 'snapshot'
+            self.origin_snapshot = origin_snapshot
 
     @property
     def started(self):
@@ -102,6 +119,8 @@ class Recorder:
         if self._is_new_origin(running, out_sample_before):
             self.origin_sample = out_sample_before
             self.origin_state = _origin_state(self.runner)
+            self.origin_kind = 'fresh'
+            self.origin_snapshot = None
             self.frames_since_origin = 0
             self._w = 0
         self._prev_running = running
@@ -134,7 +153,14 @@ class Recorder:
         r = self.runner
         end = r.out_samples
         n = min(self.frames_since_origin, self.ring_frames)
+        snap_ok, snap_why = r.snapshot_support()
+        end_snapshot = r.export_state() if snap_ok else None
         return Cut(
+            origin_kind=self.origin_kind,
+            origin_snapshot=self.origin_snapshot,
+            parent_record_id=self.parent_record_id,
+            end_snapshot=end_snapshot,
+            end_snapshot_reason=snap_why,
             session_id=self.session_id,
             scene_doc=self.scene_doc,
             origin_sample=self.origin_sample,

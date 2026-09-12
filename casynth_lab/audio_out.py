@@ -39,14 +39,18 @@ def _default_output_factory(callback):
 class LiveEngine:
     def __init__(self, runner, output_factory=_default_output_factory,
                  sink=None, lookahead=AUDIO_LOOKAHEAD_CHUNKS, record_root=None,
-                 record_seconds=None):
+                 record_seconds=None, origin_snapshot=None, parent_record_id=None):
         """output_factory(callback) -> object with .stop()/.close(); raises if
         no device.  sink(monitor_buf, block) -- test hook: receives every block
         (monitor as heard + the full Block with raw A/B) instead of a device.
-        record_root: temp dir for the streaming Recorder (None = no recording)."""
+        record_root: temp dir for the streaming Recorder (None = no recording).
+        origin_snapshot / parent_record_id (S5): the runner was restored from
+        that record's snapshot -- the recording starts at the snapshot."""
         self.runner = runner
         self._record_root = record_root
         self._record_seconds = record_seconds
+        self._origin_snapshot = origin_snapshot
+        self._parent_record_id = parent_record_id
         self.muted = False           # live output silenced (catalog screen)
         self.recorder = None
         self._cut_req = False
@@ -75,7 +79,9 @@ class LiveEngine:
         self._alive = True
         if self._record_root is not None:
             kw = {} if self._record_seconds is None else {'window_seconds': self._record_seconds}
-            self.recorder = Recorder(self.runner, self._record_root, **kw)
+            self.recorder = Recorder(self.runner, self._record_root,
+                                     origin_snapshot=self._origin_snapshot,
+                                     parent_record_id=self._parent_record_id, **kw)
         if self._sink is None:
             try:
                 silent = np.zeros((BLOCK, CHANNELS), np.int16)

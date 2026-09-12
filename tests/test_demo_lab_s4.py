@@ -357,8 +357,10 @@ def test_errors_no_false_success_no_lost_records():
         f.write("{corrupt")
     entries = cat.list()
     assert len(entries) == 2
-    assert entries[0][0] is None and 'unreadable' in entries[0][1]
-    assert entries[1][0].id == good
+    # (ids within the same second sort by their random suffix: look up by id)
+    broken = [err for rec, err in entries if rec is None]
+    assert len(broken) == 1 and 'unreadable' in broken[0] and second in broken[0]
+    assert [rec.id for rec, _e in entries if rec is not None] == [good]
     with open(bad_json, 'w') as f:
         json.dump(cat.load(good).meta | {'id': second}, f)
     wav_b = os.path.join(cat.root, second, 'B.wav')
@@ -595,7 +597,7 @@ def test_ui_headless_save_catalog_player_replay():
               for cc in range(scene.cols)] for rr in range(scene.rows)], np.uint8))
         assert snap['sides']['A'][1]['harm'] == 0.5 and snap['selected'] == 'B'
         assert abs(snap['vol'] - rec.meta['state_at_end']['vol']) < 1e-9
-        assert app.status.startswith("Opened in bench")
+        assert app.status.startswith("Opened field anew")      # S5 relabel of Open in bench
         app.draw(screen, font, small)
         # the new session needs its blocks pulled like a device would
         stop_pull.clear()
@@ -627,6 +629,8 @@ def _run():
             print(f"  PASS  {t.__name__}")
         except AssertionError as e:
             failed += 1
+            import traceback
+            traceback.print_exc()
             print(f"  FAIL  {t.__name__}: {e}")
         except Exception as e:           # noqa: BLE001
             failed += 1

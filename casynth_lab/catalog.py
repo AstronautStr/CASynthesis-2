@@ -4,6 +4,8 @@ read their WAVs, and REPLAY a record from the start with a byte-exact check.
 Layout (default root lab_catalog/local/, user data, gitignored):
     <root>/<id>/record.json      metadata + embedded scene + applied journal
     <root>/<id>/A.wav B.wav monitor.wav
+    <root>/<id>/state_end.json + .npz     (S5) runner snapshot at the cut end
+    <root>/<id>/state_origin.json + .npz  (S5) the snapshot a branch started from
     <root>/<id>/replay/...       last replay output (originals never touched)
     <root>/.tmp/<session>/       streaming raw PCM of live sessions
 
@@ -29,10 +31,13 @@ import numpy as np
 
 from casynth_config import SR, VOL_DEFAULT
 from . import registry
-from .runner import BLOCK, CHANNELS, OUTPUTS, DemoRunner
+from .runner import BLOCK, CHANNELS, OUTPUTS, DemoRunner, RUNNER_STATE_VERSION
 from .scene import SceneError, scene_from_doc
+from .snapshot import SnapshotError, save_state, load_state
 
-RECORD_FORMAT = 1
+RECORD_FORMAT = 2                         # 2 = S5 (snapshots, origin_kind, parent)
+RECORD_FORMATS_READ = (1, 2)              # S4 records open without migration
+STATE_END, STATE_ORIGIN = 'state_end', 'state_origin'
 DEFAULT_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             'lab_catalog', 'local')
 REPLAY_COMMANDS_SKIP = ('step',)          # journal entries computed by the CA, not input
@@ -165,6 +170,34 @@ class Record:
                 out.append(f"{eid} (missing)")
         return tuple(out)
 
+    # -- S5 --------------------------------------------------------------------
+    @property
+    def parent_id(self):
+        return self.meta.get('parent_record_id')
+
+    @property
+    def origin_kind(self):
+        return self.meta.get('origin_kind') or 'fresh'
+
+    def can_continue(self):
+        """(ok, reason) -- whether "Continue" is offered.  A light check
+        (files, versions, engines); the full validation happens on load."""
+        for side, eid in self.meta.get('engines', {}).items():
+            if eid not in registry.REGISTRY:
+                return False, f"engine {eid!r} ({side}) is not registered"
+        snap = self.meta.get('snapshot') or {}
+        end = snap.get('end')
+        if self.meta.get('format', 1) < 2 or not end:
+            why = snap.get('end_reason') or "record has no end snapshot (S4 record)"
+            return False, why
+        if snap.get('runner_state_version') != RUNNER_STATE_VERSION:
+            return False, (f"snapshot version {snap.get('runner_state_version')} "
+                           f"!= {RUNNER_STATE_VERSION}")
+        for name in (end.get('json'), end.get('npz')):
+            if not name or not os.path.isfile(os.path.join(self.dir, name)):
+                return False, f"snapshot file missing: {name}"
+        return True, ""
+
 
 def end_state_by_replay(meta, progress=None):
     """Run the record's journal (no audio comparison) and return the runner's
@@ -278,9 +311,46 @@ class Catalog:
         for key in ('format', 'scene', 'journal', 'audio', 'audio_start_sample', 'end_sample'):
             if key not in meta:
                 raise CatalogError(f"{rid}: record.json missing '{key}'")
-        if meta['format'] != RECORD_FORMAT:
+        if meta['format'] not in RECORD_FORMATS_READ:
             raise CatalogError(f"{rid}: record format {meta['format']} not supported")
         return Record(self.root, rid, meta)
+
+    def parent_of(self, rec):
+        """(title, present) of the record's parent; title = id when the
+        parent is gone (a missing parent never breaks the catalog)."""
+        pid = rec.parent_id
+        if not pid:
+            return None, False
+        try:
+            return self.load(pid).title, True
+        except CatalogError:
+            return pid, False
+
+    # -- continuation (S5) ------------------------------------------------------------
+    def end_state(self, rid):
+        """The END snapshot state tree of a record (CatalogError if absent /
+        unreadable)."""
+        rec = self.load(rid)
+        ok, why = rec.can_continue()
+        if not ok:
+            raise CatalogError(f"{rid}: cannot continue: {why}")
+        try:
+            return load_state(rec.dir, STATE_END)
+        except SnapshotError as e:
+            raise CatalogError(f"{rid}: snapshot unreadable: {e}")
+
+    def continue_runner(self, rid):
+        """(runner, pristine_state, record): a DemoRunner restored from the
+        record's end snapshot, fully validated -- nothing else is touched, so
+        the caller's current session stays intact on failure (CatalogError).
+        The clocks of the restored runner do not advance until it is driven."""
+        rec = self.load(rid)
+        state = self.end_state(rid)
+        try:
+            runner = DemoRunner.from_state(state)
+        except (ValueError, KeyError, TypeError) as e:
+            raise CatalogError(f"{rid}: cannot continue: {e}")
+        return runner, state, rec
 
     def list(self):
         """[(Record or None, error or None)] newest first; a broken record
@@ -322,9 +392,30 @@ class Catalog:
                 if frames != cut.n_frames:
                     raise CatalogError(f"{o}: wrote {frames} frames, expected {cut.n_frames}")
                 audio[o] = {'file': f"{o}.wav", 'samples': frames, 'sha256': sha}
+            snapshot = {'runner_state_version': RUNNER_STATE_VERSION,
+                        'end': None, 'end_reason': '', 'origin': None, 'origin_seq': None}
+            origin_kind = getattr(cut, 'origin_kind', None) or 'fresh'
+            if getattr(cut, 'end_snapshot', None) is not None:
+                j, a = save_state(partial, STATE_END, cut.end_snapshot)
+                snapshot['end'] = {'json': j, 'npz': a}
+                snapshot['engine_state_versions'] = {
+                    side: s.get('engine_state_version')
+                    for side, s in cut.end_snapshot['sides'].items()}
+            else:
+                snapshot['end_reason'] = (getattr(cut, 'end_snapshot_reason', '')
+                                          or "engine without snapshot support")
+            if origin_kind == 'snapshot':
+                if getattr(cut, 'origin_snapshot', None) is None:
+                    raise CatalogError("snapshot origin without a snapshot")
+                j, a = save_state(partial, STATE_ORIGIN, cut.origin_snapshot)
+                snapshot['origin'] = {'json': j, 'npz': a}
+                snapshot['origin_seq'] = int(cut.origin_snapshot['seq'])
             meta = {
                 'format': RECORD_FORMAT,
                 'id': rid,
+                'origin_kind': origin_kind,
+                'parent_record_id': getattr(cut, 'parent_record_id', None),
+                'snapshot': snapshot,
                 'created': now.isoformat(timespec='seconds'),
                 'title': title,
                 'note': note or '',
@@ -371,27 +462,48 @@ class Catalog:
         except CatalogError as e:
             return ReplayResult('unavailable', str(e))
         meta = rec.meta
-        try:
-            scene = scene_from_doc(meta['scene'])
-        except (SceneError, KeyError, TypeError, ValueError) as e:
-            return ReplayResult('unavailable', f"scene cannot be rebuilt: {e}")
         rs = meta.get('runner', {})
         if (rs.get('sr', SR) != SR or rs.get('block', BLOCK) != BLOCK
                 or rs.get('channels', CHANNELS) != CHANNELS):
             return ReplayResult('unavailable',
                                 f"render settings differ (SR/BLOCK/channels): {rs}")
-        try:
-            runner = DemoRunner(scene, vol=rs.get('vol_initial', VOL_DEFAULT))
-        except (ValueError, KeyError) as e:
-            return ReplayResult('unavailable', f"engine unavailable: {e}")
         origin = meta.get('origin_sample', 0)
-        start, end = meta['audio_start_sample'] - origin, meta['end_sample'] - origin
-        cmds = [dict(j, out_sample=j['out_sample'] - origin) for j in meta['journal']
-                if j['kind'] not in REPLAY_COMMANDS_SKIP and j['out_sample'] >= origin]
+        if (meta.get('origin_kind') or 'fresh') == 'snapshot':
+            # branch: restore the ORIGIN snapshot (clocks included -> absolute
+            # times); commands the snapshot already had queued (seq <= origin
+            # seq) are re-applied by the runner itself, not from the journal
+            snap = meta.get('snapshot') or {}
+            if snap.get('runner_state_version') != RUNNER_STATE_VERSION or not snap.get('origin'):
+                return ReplayResult('unavailable', "origin snapshot missing or of another version")
+            try:
+                runner = DemoRunner.from_state(load_state(rec.dir, STATE_ORIGIN))
+            except (SnapshotError, ValueError, KeyError, TypeError) as e:
+                return ReplayResult('unavailable', f"origin snapshot cannot be restored: {e}")
+            if runner.out_samples != origin:
+                return ReplayResult('unavailable', "origin snapshot clock != origin_sample")
+            origin_seq = snap.get('origin_seq') or 0
+            shift = 0
+            keep = lambda j: j['seq'] > origin_seq          # noqa: E731
+        else:
+            try:
+                scene = scene_from_doc(meta['scene'])
+            except (SceneError, KeyError, TypeError, ValueError) as e:
+                return ReplayResult('unavailable', f"scene cannot be rebuilt: {e}")
+            try:
+                runner = DemoRunner(scene, vol=rs.get('vol_initial', VOL_DEFAULT))
+            except (ValueError, KeyError) as e:
+                return ReplayResult('unavailable', f"engine unavailable: {e}")
+            shift = origin
+            keep = lambda j: True                            # noqa: E731
+        start, end = meta['audio_start_sample'] - shift, meta['end_sample'] - shift
+        cmds = [dict(j, out_sample=j['out_sample'] - shift) for j in meta['journal']
+                if j['kind'] not in REPLAY_COMMANDS_SKIP and j['out_sample'] >= origin
+                and keep(j)]
         cmds.sort(key=lambda j: (j['out_sample'], j['seq']))
         got = {o: [] for o in OUTPUTS}
         i = 0
-        total = max(end, 1)
+        total = max(end - runner.out_samples, 1)
+        first = runner.out_samples
         try:
             while runner.out_samples < end:
                 # feed the commands of THIS boundary just before the block, in
@@ -408,7 +520,7 @@ class Catalog:
                 if cancel is not None and cancel():
                     return ReplayResult('cancelled')
                 if progress is not None and (before // BLOCK) % 50 == 0:
-                    progress(min(before / total, 1.0))
+                    progress(min((before - first) / total, 1.0))
                 if yield_cpu and (before // BLOCK) % 4 == 0:
                     time.sleep(0.002)     # leave the GIL to a live render thread
         except Exception as e:                 # noqa: BLE001

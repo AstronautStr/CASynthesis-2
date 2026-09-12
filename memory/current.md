@@ -22,13 +22,13 @@ _Снапшот живого состояния (консолидирован /d
 | `gol_vocoder.py` | Offline GoL-вокодер (SA-ресинтез) — **SHELVED 2026-07-14** |
 | `laplacian_explainer/`, `frontiers_explainer/` | Обучалки (JS дублирует ядро — известный trade-off) |
 | `patterns.py` | 29 паттернов в 9 категориях |
-| `demo_bench.py` + `casynth_lab/` + `demos/` | **Demo-стенд S1–S4** (2026-09-07/09): `DemoRunner` (единый live/offline исполнитель, общее поле + две стороны A/B, часы в сэмплах, очередь команд + журнал, crossfade 20 мс в мониторе), `LiveEngine` (render-поток + sounddevice), сцены JSON v1/v2; движки через `registry.py` (интерфейс `engine_api.SoundEngine`, адаптер `legacy_engine.py`); каталог опытов `recorder.py`/`catalog.py`; запуск `run_demo_bench.bat` (`laplace_ab.json`) |
+| `demo_bench.py` + `casynth_lab/` + `demos/` | **Demo-стенд S1–S4** (2026-09-07/09): `DemoRunner` (единый live/offline исполнитель, общее поле + две стороны A/B, часы в сэмплах, очередь команд + журнал, crossfade 20 мс в мониторе), `LiveEngine` (render-поток + sounddevice), сцены JSON v1/v2; движки через `registry.py` (интерфейс `engine_api.SoundEngine`, адаптер `legacy_engine.py`); каталог опытов `recorder.py`/`catalog.py`; **снепшоты S5** (2026-09-12): `snapshot.py` (JSON+npz, без pickle), `export_state`/`restore_state` в интерфейсе движка и адаптере, `DemoRunner.export_state/from_state`, «Continue» / ветки с `parent_record_id`; запуск `run_demo_bench.bat` (`laplace_ab.json`) |
 | `check.py` | **Все гейты одной командой** (см. «Гейты») |
-| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (39 тестов S1–S3) + `test_demo_lab_s4.py` (7 тестов S4) + `golden/` (эталоны golden-master и UI) |
+| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (39 тестов S1–S3) + `test_demo_lab_s4.py` (9 тестов S4) + `test_demo_lab_s5.py` (6 тестов S5) + `golden/` (эталоны golden-master и UI) |
 
 ## Гейты (обязательны после каждого изменения)
 
-`python check.py` = 59 юнит-тестов + 39 + 7 тестов demo-стенда S1–S4 + golden-master аудио (байт-в-байт,
+`python check.py` = 59 юнит-тестов + 39 + 9 + 6 тестов demo-стенда S1–S5 + golden-master аудио (байт-в-байт,
 sha256[:16]=cd3126907ad13b6c) + UI-кадр (пиксель-в-пиксель vs `tests/golden/ui_frame.png`)
 + import/init smoke. Эталоны ВЕРСИОНИРУЮТСЯ в `tests/golden/` (переехали из gitignored
 `artifacts/` 2026-07-14). Легитимное изменение UI → `python check.py --bless-ui` в том же
@@ -130,7 +130,18 @@ _(A/B стенд `ab_bench.py` с пресетами (клавиши 1–9, `ab_
   повтор в подпроцессе. **Принят Пользователем 2026-09-10** после доработок: каталог —
   отдельный экран (КА на паузе, живой звук заглушён), Open in bench (конечное состояние),
   запись = кольцо последних 30 с с началом на Start/Restart, транспорт Stop (S) / Pause CA /
-  Restart без кнопки Start (стенд открывается на паузе). Следующий спринт S5 — по ТЗ.
+  Restart без кнопки Start (стенд открывается на паузе). **S5 (точное продолжение
+  снепшота + ответвления, ТЗ `req-demo-lab-s5.md`) сдан 2026-09-12, ЖДЁТ ПРИЁМКИ
+  Пользователя** (`memory/log/2026-09-12-demo-lab-s5.md`): Save пишет полный снепшот
+  исполнителя на границе среза (`state_end.json/.npz`); в каталоге **Continue**
+  (продолжение со следующего блока, байт-в-байт с непрерывным расчётом для 5 движков),
+  **Open field anew** (бывший Open in bench), **Check reproducibility** (бывший Replay
+  from start), ссылка **Derived from** на родителя; ветка = своя копия исходного
+  снепшота + журнал + 3 WAV + конечный снепшот + `parent_record_id`; формат записи 2
+  (S4 = формат 1 читается без миграции). Попутно закрыта дыра S4-реплея: кроссфейд,
+  взведённый на остановленной сцене, больше не ждёт Start. Ручная приёмка — 3 шага из
+  ТЗ («Исходная S5» harm B=0.25 → Continue → «Вариант S5» harm B=0.75 → по ссылке
+  снова Continue исходной). Следующий спринт S6 (Git-слой каталога) — по ТЗ.
 
 - **`acc` (событийные акценты, громкостный канал ветки ДИНАМИКА)** — дизайн принят
   2026-07-06 (REQ с критериями A–G в `decisions.md`), ЖДЁТ РЕАЛИЗАЦИИ. Переиспользует

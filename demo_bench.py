@@ -576,10 +576,35 @@ class BenchApp:
         self.status = f"Playing {'replay ' if replay else ''}{output}: {rec.title}"
         return True
 
+    def continue_record(self):
+        """S5 Continue: restore the selected record's END snapshot into a
+        live session that carries on from the next block (no history is
+        replayed).  The current session is replaced only after the snapshot
+        has been validated; on failure it stays as it is."""
+        rec = self.selected_record()
+        if rec is None or self.cat['thread'] is not None:
+            return False
+        ok, why = rec.can_continue()
+        if not ok:
+            self.status = f"Cannot continue: {why}"
+            return False
+        try:
+            runner, state, rec = self.catalog.continue_runner(rec.id)
+        except CatalogError as e:
+            self.status = f"Cannot continue: {e}"
+            return False
+        self.engine.stop_play()
+        self.replace_session(runner=runner, origin_snapshot=state, parent_record_id=rec.id)
+        self.engine.muted = False
+        self.mode = 'live'
+        how = ("stopped" if not runner.running else "CA paused" if runner.paused else "running")
+        self.status = f"Continued: {rec.title}  ({how})"
+        return True
+
     def open_in_bench(self):
-        """Load the selected record's END state (field, both sides' engine +
-        params, selected side, volume) into a fresh live session; the user
-        starts it manually."""
+        """Open field anew: load the selected record's END state (field, both
+        sides' engine + params, selected side, volume) into a fresh live
+        session (fresh sound, CA paused); the user starts it manually."""
         rec = self.selected_record()
         if rec is None or self.cat['thread'] is not None:
             return False
@@ -614,24 +639,30 @@ class BenchApp:
         except CatalogError as e:
             self.status = f"Cannot open: {e}"
             return False
-        self.replace_session(scene, vol)
+        self.replace_session(scene, vol, parent_record_id=rec.id)
         self.engine.muted = False
         self.mode = 'live'
-        self.status = f"Opened in bench: {rec.title}  (press Start)"
+        self.status = f"Opened field anew: {rec.title}  (release Pause CA to start)"
         return True
 
-    def replace_session(self, scene, vol):
-        """Swap the live session for a new DemoRunner/LiveEngine on `scene`."""
+    def replace_session(self, scene=None, vol=None, runner=None, origin_snapshot=None,
+                        parent_record_id=None):
+        """Swap the live session for a new LiveEngine: on a fresh DemoRunner
+        for `scene` (Open field anew) or on an already restored `runner`
+        (Continue; its recording starts at `origin_snapshot`).  New records of
+        the session point to `parent_record_id`."""
         from casynth_lab.audio_out import LiveEngine
         old = self.engine
         old.stop()
-        runner = DemoRunner(scene, vol=vol)
+        if runner is None:
+            runner = DemoRunner(scene, vol=vol)
         eng = LiveEngine(runner, output_factory=old._factory, sink=old._sink,
-                         record_root=old._record_root, record_seconds=old._record_seconds)
+                         record_root=old._record_root, record_seconds=old._record_seconds,
+                         origin_snapshot=origin_snapshot, parent_record_id=parent_record_id)
         eng.start()
-        self.scene = scene
+        self.scene = runner.scene
         self.engine = eng
-        self.vol = vol
+        self.vol = runner.vol
         self.message = ""
 
     def start_replay(self):
@@ -642,7 +673,7 @@ class BenchApp:
         self.cat['result'] = None
         self.cat['progress'] = 0.0
         self.cat['play_label'] = ""
-        self.status = "Replaying from start..."
+        self.status = "Checking reproducibility..."
 
         def prog(f):
             self.cat['progress'] = f
@@ -663,12 +694,16 @@ class BenchApp:
     def _catalog_rects(self):
         px = self.panel_x
         y = self.CAT_TOP
-        rects = dict(back=(MARGIN, 12, 110, 30),
-                     open=(px, y, 262, 34),
-                     play_A=(px, y + 50, 90, 26), play_B=(px + 96, y + 50, 90, 26),
-                     play_mon=(px, y + 82, 186, 26), stop=(px + 192, y + 50, 70, 58),
-                     replay=(px, y + 140, 186, 28), cancel=(px + 192, y + 140, 70, 28),
-                     play_replay=(px, y + 200, 186, 26))
+        rects = {}
+        rects['continue'] = (px, y, 262, 34)
+        y += 40
+        rects.update(dict(back=(MARGIN, 12, 110, 30),
+                          open=(px, y, 262, 28),
+                          play_A=(px, y + 44, 90, 26), play_B=(px + 96, y + 44, 90, 26),
+                          play_mon=(px, y + 76, 186, 26), stop=(px + 192, y + 44, 70, 58),
+                          replay=(px, y + 134, 186, 28), cancel=(px + 192, y + 134, 70, 28),
+                          play_replay=(px, y + 194, 186, 26),
+                          parent=(px, y + 232, 262, 18)))
         return rects
 
     def _list_rect(self, i):
@@ -685,9 +720,14 @@ class BenchApp:
             if self._inside(self._list_rect(i), pos):
                 self.select_record(i)
                 return f'record:{i}'
+        if self._inside(r['continue'], pos):
+            self.continue_record()
+            return 'continue'
         if self._inside(r['open'], pos):
             self.open_in_bench()
             return 'open'
+        if self._inside(r['parent'], pos) and self.goto_parent():
+            return 'parent'
         if self._inside(r['play_A'], pos):
             self.play_record('A')
             return 'play:A'
@@ -712,6 +752,18 @@ class BenchApp:
             return 'play:replay'
         return None
 
+    def goto_parent(self):
+        """Select the parent record of the selected one (if it is listed)."""
+        rec = self.selected_record()
+        if rec is None or not rec.parent_id:
+            return False
+        for i, (r, _err) in enumerate(self.cat['entries']):
+            if r is not None and r.id == rec.parent_id:
+                self.select_record(i)
+                return True
+        self.status = "Parent record is not in the catalog"
+        return False
+
     def _draw_catalog(self, screen, font, small):
         import pygame
         screen.blit(font.render("Catalog  (local records, newest first)", True, C_TXT),
@@ -735,21 +787,38 @@ class BenchApp:
                 continue
             screen.blit(small.render(rec.title[:60], True, C_TXT), (rect[0] + 8, rect[1] + 4))
             la, lb = rec.engine_labels()
+            tag = "branch" if rec.parent_id else "Local"
             line = (f"{rec.created.replace('T', ' ')}   {rec.seconds:.1f} s   "
-                    f"A: {la}  B: {lb}   Local")
+                    f"A: {la}  B: {lb}   {tag}")
             screen.blit(small.render(line, True, C_DIM), (rect[0] + 8, rect[1] + 22))
         r = self._catalog_rects()
-        labels = dict(back='Back (Esc)', open='Open in bench', play_A='Play A', play_B='Play B',
-                      play_mon='Play as heard', stop='Stop', replay='Replay from start',
-                      cancel='Cancel', play_replay=self.cat['play_label'])
+        labels = {'back': 'Back (Esc)', 'continue': 'Continue', 'open': 'Open field anew',
+                  'play_A': 'Play A', 'play_B': 'Play B', 'play_mon': 'Play as heard',
+                  'stop': 'Stop', 'replay': 'Check reproducibility', 'cancel': 'Cancel',
+                  'play_replay': self.cat['play_label'], 'parent': ''}
         rec = self.selected_record()
+        can_cont, cont_why = rec.can_continue() if rec is not None else (False, '')
+        if rec is not None:
+            ptitle, present = self.catalog.parent_of(rec)
+            if ptitle:
+                labels['parent'] = f"Derived from: {ptitle}" + ("" if present else " (missing)")
         for key, rect in r.items():
-            if key == 'play_replay' and not labels[key]:
+            if key in ('play_replay', 'parent') and not labels[key]:
                 continue
             if key != 'back' and rec is None:
                 continue
-            hot = ((key == 'stop' and self.engine.playing) or key == 'open'
+            if key == 'parent':
+                t = small.render(labels[key][:44], True, C_ACCENT)
+                screen.blit(t, (rect[0], rect[1]))
+                continue
+            hot = ((key == 'stop' and self.engine.playing) or (key == 'continue' and can_cont)
                    or (key == 'cancel' and self.cat['thread'] is not None))
+            if key == 'continue' and not can_cont:
+                pygame.draw.rect(screen, C_PANEL, rect, border_radius=4)
+                pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
+                t = small.render(f"Continue unavailable: {cont_why}"[:40], True, C_DIM)
+                screen.blit(t, (rect[0] + 8, rect[1] + (rect[3] - t.get_height()) // 2))
+                continue
             pygame.draw.rect(screen, C_BTN_ON if hot else C_BTN, rect, border_radius=4)
             pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
             t = small.render(labels[key], True, C_TXT)
@@ -757,7 +826,7 @@ class BenchApp:
                             rect[1] + (rect[3] - t.get_height()) // 2))
         px = self.panel_x
         if rec is not None:
-            y = r['play_replay'][1] + 40
+            y = r['parent'][1] + 24
             screen.blit(small.render("Note:", True, C_DIM), (px, y))
             for j, line in enumerate(_wrap(rec.note, small, PANEL_W)[:6]):
                 screen.blit(small.render(line, True, C_TXT), (px, y + 18 + j * 17))

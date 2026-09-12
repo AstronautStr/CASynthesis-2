@@ -10,6 +10,7 @@ Gates (any FAIL -> exit 1):
   1. unit tests        python tests/test_casynth_core.py          (core invariants)
   1b. demo lab tests   python tests/test_demo_lab.py              (S1-S3 demo bench)
   1c. demo lab S4      python tests/test_demo_lab_s4.py           (catalog / replay)
+  1d. demo lab S5      python tests/test_demo_lab_s5.py           (snapshot / continue)
   2. golden master     python tests/golden/golden_master.py       (audio, byte-exact)
   3. ui frame + smoke  CASYNTH_DUMPFRAME render of gol_synth.py   (pixel-exact vs
                        tests/golden/ui_frame.png; doubles as the import/init smoke)
@@ -76,6 +77,12 @@ def main():
 
     results.append(("demo lab tests (S4 catalog)",
                     _run("demo lab S4 tests", [py, os.path.join("tests", "test_demo_lab_s4.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"},
+                         timeout=600)))
+
+    results.append(("demo lab tests (S5 continue)",
+                    _run("demo lab S5 tests", [py, os.path.join("tests", "test_demo_lab_s5.py")],
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"},
                          timeout=600)))

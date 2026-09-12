@@ -19,6 +19,22 @@ Contract (all calls on the render thread, in journal order, block-aligned):
     engine.reset()                     # == init on the same field, all memory gone
 The bench validates every returned block (check_block) before it can reach
 the audio output or a WAV.
+
+Snapshot (S5, optional -- an engine without it still works in the bench, it
+just cannot be continued exactly):
+    state = engine.export_state()      # plain dict: JSON scalars/lists/dicts +
+                                       # numpy arrays (no objects); copied, so the
+                                       # live engine may keep rendering afterwards
+    engine.restore_state(grid, exc, state)
+                                       # rebuild the instance so that the next
+                                       # render() equals the one the exported
+                                       # engine would have produced; ValueError
+                                       # on an incompatible state.  Caches may be
+                                       # recomputed from grid/exc/params only if
+                                       # that cannot change the output.
+    engine.STATE_VERSION               # class attribute, part of the state
+Both calls run on the render thread at a block boundary (never in the audio
+callback).  supports_snapshot(engine) tells whether a class implements them.
 """
 import numpy as np
 
@@ -57,6 +73,24 @@ class SoundEngine:
 
     def reset(self):
         raise NotImplementedError
+
+    # -- snapshot (optional) ----------------------------------------------------
+    STATE_VERSION = None       # set by engines that implement export/restore
+
+    def export_state(self):
+        raise NotImplementedError
+
+    def restore_state(self, grid, exc, state):
+        raise NotImplementedError
+
+
+def supports_snapshot(engine):
+    """True when the engine CLASS overrides both snapshot methods and
+    declares a STATE_VERSION."""
+    cls = type(engine)
+    return (cls.export_state is not SoundEngine.export_state
+            and cls.restore_state is not SoundEngine.restore_state
+            and getattr(cls, 'STATE_VERSION', None) is not None)
 
 
 class EngineBlockError(RuntimeError):
