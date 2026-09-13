@@ -61,20 +61,25 @@ def _versions():
     return v
 
 
-def read_wav(path):
-    """int16 (n, channels) array of a record WAV (CatalogError if unreadable)."""
+def read_wav(path, with_info=False):
+    """int16 (n, channels) array of a record WAV (CatalogError if unreadable).
+    with_info=True -> (array, {'sr', 'channels', 'sampwidth'}) -- the format
+    as stored, so a caller can refuse an incomparable pair explicitly."""
     try:
         with wave.open(path, 'rb') as w:
             if w.getsampwidth() != 2:
                 raise CatalogError(f"{path}: not 16-bit")
-            n, ch = w.getnframes(), w.getnchannels()
+            n, ch, sr = w.getnframes(), w.getnchannels(), w.getframerate()
             data = w.readframes(n)
     except (wave.Error, EOFError, OSError) as e:
         raise CatalogError(f"{path}: unreadable WAV ({e})")
     arr = np.frombuffer(data, np.int16)
     if len(arr) != n * ch:
         raise CatalogError(f"{path}: truncated WAV")
-    return arr.reshape(-1, ch)
+    arr = arr.reshape(-1, ch)
+    if with_info:
+        return arr, {'sr': sr, 'channels': ch, 'sampwidth': 2}
+    return arr
 
 
 def _pcm_to_wav(pcm, wav_path):
@@ -307,6 +312,16 @@ def bench_scene(rec, state=None):
     except SceneError as e:
         raise CatalogError(f"{rec.id}: cannot open in bench: {e}")
     return scene, float(st.get('vol', VOL_DEFAULT))
+
+
+class RecomputeResult:
+    """Output of Catalog.recompute(): the three tracks of the saved window as
+    the current code renders them (no comparison, no files)."""
+
+    def __init__(self, status, reason='', pcm=None):
+        self.status = status              # 'ok' | 'unavailable' | 'cancelled'
+        self.reason = reason
+        self.pcm = pcm or {}              # output -> int16 (n, 2)
 
 
 class ReplayResult:
@@ -628,22 +643,25 @@ class Catalog:
             raise CatalogError(f"save failed: {e}")
         return rid
 
-    # -- replay ---------------------------------------------------------------
-    def replay(self, rid, progress=None, cancel=None, yield_cpu=True):
-        """Recompute a record from its embedded conditions + journal and compare
-        with the stored WAVs byte-exact.  progress(frac) is called during the
-        render; cancel() -> True aborts.  Writes <id>/replay/*.wav; the
-        originals are never modified."""
+    # -- recompute / replay -------------------------------------------------------
+    def recompute(self, rid, progress=None, cancel=None, yield_cpu=True):
+        """THE journal replay: rebuild the record's start conditions (embedded
+        scene, or the origin snapshot of a branch), apply the recorded commands
+        with the current code and render exactly the saved window
+        [audio_start_sample, end_sample) of A, B and monitor.  Nothing is
+        written.  -> RecomputeResult(status 'ok' | 'unavailable' | 'cancelled',
+        reason, pcm={output: int16 (n, 2)}).  Both the single check (replay)
+        and the catalog check (verify) use this one path."""
         try:
             rec = self.load(rid)
         except CatalogError as e:
-            return ReplayResult('unavailable', str(e))
+            return RecomputeResult('unavailable', str(e))
         meta = rec.meta
         rs = meta.get('runner', {})
         if (rs.get('sr', SR) != SR or rs.get('block', BLOCK) != BLOCK
                 or rs.get('channels', CHANNELS) != CHANNELS):
-            return ReplayResult('unavailable',
-                                f"render settings differ (SR/BLOCK/channels): {rs}")
+            return RecomputeResult('unavailable',
+                                   f"render settings differ (SR/BLOCK/channels): {rs}")
         origin = meta.get('origin_sample', 0)
         if (meta.get('origin_kind') or 'fresh') == 'snapshot':
             # branch: restore the ORIGIN snapshot (clocks included -> absolute
@@ -651,13 +669,14 @@ class Catalog:
             # seq) are re-applied by the runner itself, not from the journal
             snap = meta.get('snapshot') or {}
             if snap.get('runner_state_version') != RUNNER_STATE_VERSION or not snap.get('origin'):
-                return ReplayResult('unavailable', "origin snapshot missing or of another version")
+                return RecomputeResult('unavailable',
+                                       "origin snapshot missing or of another version")
             try:
                 runner = DemoRunner.from_state(load_state(rec.dir, STATE_ORIGIN))
             except (SnapshotError, ValueError, KeyError, TypeError) as e:
-                return ReplayResult('unavailable', f"origin snapshot cannot be restored: {e}")
+                return RecomputeResult('unavailable', f"origin snapshot cannot be restored: {e}")
             if runner.out_samples != origin:
-                return ReplayResult('unavailable', "origin snapshot clock != origin_sample")
+                return RecomputeResult('unavailable', "origin snapshot clock != origin_sample")
             origin_seq = snap.get('origin_seq') or 0
             shift = 0
             keep = lambda j: j['seq'] > origin_seq          # noqa: E731
@@ -665,18 +684,21 @@ class Catalog:
             try:
                 scene = scene_from_doc(meta['scene'])
             except (SceneError, KeyError, TypeError, ValueError) as e:
-                return ReplayResult('unavailable', f"scene cannot be rebuilt: {e}")
+                return RecomputeResult('unavailable', f"scene cannot be rebuilt: {e}")
             try:
                 runner = DemoRunner(scene, vol=rs.get('vol_initial', VOL_DEFAULT))
             except (ValueError, KeyError) as e:
-                return ReplayResult('unavailable', f"engine unavailable: {e}")
+                return RecomputeResult('unavailable', f"engine unavailable: {e}")
             shift = origin
             keep = lambda j: True                            # noqa: E731
         start, end = meta['audio_start_sample'] - shift, meta['end_sample'] - shift
-        cmds = [dict(j, out_sample=j['out_sample'] - shift) for j in meta['journal']
-                if j['kind'] not in REPLAY_COMMANDS_SKIP and j['out_sample'] >= origin
-                and keep(j)]
-        cmds.sort(key=lambda j: (j['out_sample'], j['seq']))
+        try:
+            cmds = [dict(j, out_sample=j['out_sample'] - shift) for j in meta['journal']
+                    if j['kind'] not in REPLAY_COMMANDS_SKIP and j['out_sample'] >= origin
+                    and keep(j)]
+            cmds.sort(key=lambda j: (j['out_sample'], j['seq']))
+        except (KeyError, TypeError) as e:
+            return RecomputeResult('unavailable', f"journal unreadable: {e}")
         got = {o: [] for o in OUTPUTS}
         i = 0
         total = max(end - runner.out_samples, 1)
@@ -695,23 +717,36 @@ class Catalog:
                     for o in OUTPUTS:
                         got[o].append(blk.get(o))
                 if cancel is not None and cancel():
-                    return ReplayResult('cancelled')
+                    return RecomputeResult('cancelled')
                 if progress is not None and (before // BLOCK) % 50 == 0:
                     progress(min((before - first) / total, 1.0))
                 if yield_cpu and (before // BLOCK) % 4 == 0:
                     time.sleep(0.002)     # leave the GIL to a live render thread
         except Exception as e:                 # noqa: BLE001
-            return ReplayResult('unavailable', f"replay failed: {e}")
+            return RecomputeResult('unavailable', f"replay failed: {e}")
         if i < len(cmds):
-            return ReplayResult('unavailable', f"{len(cmds) - i} journal commands "
-                                               f"beyond the recorded end")
+            return RecomputeResult('unavailable', f"{len(cmds) - i} journal commands "
+                                                  f"beyond the recorded end")
         n = end - start
+        pcm = {o: (np.concatenate(got[o], axis=0)[:n] if got[o]
+                   else np.zeros((0, CHANNELS), np.int16)) for o in OUTPUTS}
+        if progress is not None:
+            progress(1.0)
+        return RecomputeResult('ok', pcm=pcm)
+
+    def replay(self, rid, progress=None, cancel=None, yield_cpu=True):
+        """Single check (S4): recompute() + byte-exact comparison with the
+        stored WAVs.  Writes <id>/replay/*.wav (the last single check's
+        output; the originals are never modified)."""
+        rc = self.recompute(rid, progress=progress, cancel=cancel, yield_cpu=yield_cpu)
+        if rc.status != 'ok':
+            return ReplayResult(rc.status, rc.reason)
+        rec = self.load(rid)
         outputs, replay_dir = {}, os.path.join(rec.dir, 'replay')
         try:
             os.makedirs(replay_dir, exist_ok=True)
             for o in OUTPUTS:
-                pcm = (np.concatenate(got[o], axis=0)[:n] if got[o]
-                       else np.zeros((0, CHANNELS), np.int16))
+                pcm = rc.pcm[o]
                 with wave.open(os.path.join(replay_dir, f"{o}.wav"), 'wb') as w:
                     w.setnchannels(CHANNELS)
                     w.setsampwidth(2)
@@ -724,8 +759,6 @@ class Catalog:
                 outputs[o] = bool(ref.shape == pcm.shape and np.array_equal(ref, pcm))
         except OSError as e:
             return ReplayResult('unavailable', f"cannot write replay output: {e}")
-        if progress is not None:
-            progress(1.0)
         status = 'match' if all(outputs.values()) else 'mismatch'
         return ReplayResult(status, outputs=outputs, replay_dir=replay_dir)
 

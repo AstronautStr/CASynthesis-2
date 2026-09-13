@@ -22,13 +22,13 @@ _Снапшот живого состояния (консолидирован /d
 | `gol_vocoder.py` | Offline GoL-вокодер (SA-ресинтез) — **SHELVED 2026-07-14** |
 | `laplacian_explainer/`, `frontiers_explainer/` | Обучалки (JS дублирует ядро — известный trade-off) |
 | `patterns.py` | 29 паттернов в 9 категориях |
-| `demo_bench.py` + `casynth_lab/` + `demos/` | **Demo-стенд S1–S4** (2026-09-07/09): `DemoRunner` (единый live/offline исполнитель, общее поле + две стороны A/B, часы в сэмплах, очередь команд + журнал, crossfade 20 мс в мониторе), `LiveEngine` (render-поток + sounddevice), сцены JSON v1/v2; движки через `registry.py` (интерфейс `engine_api.SoundEngine`, адаптер `legacy_engine.py`); каталог опытов `recorder.py`/`catalog.py`; **снепшоты S5** (2026-09-12): `snapshot.py` (JSON+npz, без pickle), `export_state`/`restore_state` в интерфейсе движка и адаптере, `DemoRunner.export_state/from_state`, «Continue» / ветки с `parent_record_id`; **версии S6** (2026-09-13): `provenance.py` (отпечаток runtime-набора, git-соответствие, окружение), `versions.py` (кэш worktree + дочерний стенд по договору `--catalog/--record/--action`), статусы Pinned/Local, Pin, «Continue in version»; запуск `run_demo_bench.bat` (`laplace_ab.json`) |
+| `demo_bench.py` + `casynth_lab/` + `demos/` | **Demo-стенд S1–S4** (2026-09-07/09): `DemoRunner` (единый live/offline исполнитель, общее поле + две стороны A/B, часы в сэмплах, очередь команд + журнал, crossfade 20 мс в мониторе), `LiveEngine` (render-поток + sounddevice), сцены JSON v1/v2; движки через `registry.py` (интерфейс `engine_api.SoundEngine`, адаптер `legacy_engine.py`); каталог опытов `recorder.py`/`catalog.py`; **снепшоты S5** (2026-09-12): `snapshot.py` (JSON+npz, без pickle), `export_state`/`restore_state` в интерфейсе движка и адаптере, `DemoRunner.export_state/from_state`, «Continue» / ветки с `parent_record_id`; **версии S6** (2026-09-13): `provenance.py` (отпечаток runtime-набора, git-соответствие, окружение), `versions.py` (кэш worktree + дочерний стенд по договору `--catalog/--record/--action`), статусы Pinned/Local, Pin, «Continue in version»; **проверка каталога S7** (2026-09-13): `verify.py` (`Catalog.recompute` — единый путь реплея; `compare_pcm`, `Verifier.run`/`run_in_subprocess`, отчёты `lab_catalog/local/.verify/<run>/`, отметки на слух, проверка пар по отпечаткам), плеер пары Saved/Recomputed на одном курсоре (`audio_out.play_pair`), экран отчёта в `demo_bench.py`; демо-каталог `tests/s7_demo_catalog.py`; запуск `run_demo_bench.bat` (`laplace_ab.json`) |
 | `check.py` | **Все гейты одной командой** (см. «Гейты») |
-| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (39 тестов S1–S3) + `test_demo_lab_s4.py` (9 тестов S4) + `test_demo_lab_s5.py` (6 тестов S5) + `test_demo_lab_s6.py` (6 тестов S6, изолированные git-репо в `artifacts/_s6/`) + `golden/` (эталоны golden-master и UI) |
+| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (39 тестов S1–S3) + `test_demo_lab_s4.py` (9 тестов S4) + `test_demo_lab_s5.py` (6 тестов S5) + `test_demo_lab_s6.py` (6 тестов S6, изолированные git-репо в `artifacts/_s6/`) + `test_demo_lab_s7.py` (6 тестов S7, `artifacts/_s7/`; демо-каталог `s7_demo_catalog.py`) + `golden/` (эталоны golden-master и UI) |
 
 ## Гейты (обязательны после каждого изменения)
 
-`python check.py` = 59 юнит-тестов + 39 + 9 + 6 + 6 тестов demo-стенда S1–S6 + golden-master аудио (байт-в-байт,
+`python check.py` = 59 юнит-тестов + 39 + 9 + 6 + 6 + 6 тестов demo-стенда S1–S7 + golden-master аудио (байт-в-байт,
 sha256[:16]=cd3126907ad13b6c) + UI-кадр (пиксель-в-пиксель vs `tests/golden/ui_frame.png`)
 + import/init smoke. Эталоны ВЕРСИОНИРУЮТСЯ в `tests/golden/` (переехали из gitignored
 `artifacts/` 2026-07-14). Легитимное изменение UI → `python check.py --bless-ui` в том же
@@ -153,7 +153,19 @@ _(A/B стенд `ab_bench.py` с пресетами (клавиши 1–9, `ab_
   (только ревизии ≥ S6 знают договор запуска). Ручная приёмка — 3 шага из ТЗ на
   подготовленных демо-записях. Форма Save: автоповтор клавиш + Ctrl+Backspace (638d407); поле самодельное поверх
   pygame — переход на `pygame_gui` только если форм станет больше (обсуждено 2026-09-13).
-  Следующий спринт S7 (массовая проверка изменившихся опытов) — по ТЗ.
+  **S7 (проверка каталога после изменения кода, ТЗ `req-demo-lab-s7.md`) сдан 2026-09-13,
+  ЖДЁТ ПРИЁМКИ Пользователя** (`memory/log/2026-09-13-demo-lab-s7.md`): «Check catalog» =
+  один worker-процесс (его происхождение = цель отчёта) пересчитывает все записи тем же
+  путём, что одиночная проверка (`Catalog.recompute`), по дорожкам A / B / monitor →
+  exact / differs (доля сэмплов, max |d| без переполнения, длина отдельно) / failed
+  (причина) / unchecked; смена runtime-набора посреди прогона останавливает его без
+  смешения версий; отмена сохраняет готовое; отчёт `.verify/<run>/` переживает закрытие
+  («Last report», older/newer), пары проверяются по отпечаткам, одиночная проверка пару не
+  трогает; прослушивание Saved/Recomputed на одном курсоре (Space), отметка «Can't hear /
+  Hear it / Not rated» на пару и дорожку, без автоматического «не слышно». Ручная приёмка —
+  3 шага из ТЗ на `lab_catalog/s7_demo` (`python tests/s7_demo_catalog.py`,
+  `run_demo_bench.bat --catalog lab_catalog\s7_demo`). Следующий спринт S8 (пакетный
+  прогон демо) — после приёмки, по ТЗ.
 
 - **`acc` (событийные акценты, громкостный канал ветки ДИНАМИКА)** — дизайн принят
   2026-07-06 (REQ с критериями A–G в `decisions.md`), ЖДЁТ РЕАЛИЗАЦИИ. Переиспользует

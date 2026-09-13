@@ -26,6 +26,8 @@ from .engine_api import EngineBlockError
 from .recorder import Recorder
 
 TRANSPORT_FADE_BLOCKS = 3      # ~24 ms fade-in after reset
+PAIR_XFADE_MS = 10.0           # S7 pair player: saved <-> recomputed switch (player only)
+PAIR_XFADE_SAMPLES = int(round(PAIR_XFADE_MS / 1000.0 * SR))   # 441
 
 
 def _default_output_factory(callback):
@@ -147,6 +149,48 @@ class LiveEngine:
             raise ValueError("play_pcm expects (n, 2) int16")
         self._player = {'pcm': pcm, 'pos': 0}
 
+    # -- pair playback: saved / recomputed on ONE cursor (S7) ------------------------
+    def play_pair(self, saved, recomputed, which='saved', pos=0):
+        """Play one of two int16 (n, 2) versions of the same track, both on a
+        shared position: switch_version() continues from the same sample, it
+        never restarts.  Beyond the end of the shorter version that version is
+        silence (nothing is stretched or hidden); playback ends at the end of
+        the longer one.  Unity gain for both, no normalisation; the live synth
+        is drained, never mixed in."""
+        vers = {}
+        for name, pcm in (('saved', saved), ('recomputed', recomputed)):
+            pcm = np.ascontiguousarray(pcm, dtype=np.int16)
+            if pcm.ndim != 2 or pcm.shape[1] != CHANNELS:
+                raise ValueError("play_pair expects (n, 2) int16 arrays")
+            vers[name] = pcm
+        if which not in vers:
+            raise ValueError(f"unknown version {which!r}")
+        n = max(len(v) for v in vers.values())
+        self._player = {'pcm': None, 'versions': vers, 'which': which,
+                        'pos': int(min(max(pos, 0), n)), 'n': n,
+                        'fade_from': None, 'fade_left': 0}
+
+    def switch_version(self, which):
+        """Switch the pair player to 'saved' / 'recomputed' at the current
+        sample (a short player-only crossfade smooths the switch; the PCM
+        being compared is untouched).  Returns the position, or None when no
+        pair is playing."""
+        p = self._player
+        if p is None or 'versions' not in p:
+            return None
+        if which not in p['versions']:
+            raise ValueError(f"unknown version {which!r}")
+        if which != p['which']:
+            p['fade_from'] = p['which']
+            p['fade_left'] = PAIR_XFADE_SAMPLES
+            p['which'] = which
+        return p['pos']
+
+    @property
+    def pair_version(self):
+        p = self._player
+        return p['which'] if p is not None and 'versions' in p else None
+
     def stop_play(self):
         self._player = None
 
@@ -157,7 +201,11 @@ class LiveEngine:
     @property
     def play_pos(self):
         p = self._player
-        return (p['pos'], len(p['pcm'])) if p else (0, 0)
+        if not p:
+            return (0, 0)
+        if 'versions' in p:
+            return (p['pos'], p['n'])
+        return (p['pos'], len(p['pcm']))
 
     # -- UI side --------------------------------------------------------------
     def post(self, kind, at=None, **args):
@@ -244,6 +292,9 @@ class LiveEngine:
             # record playback: the live monitor is drained (kept running) but
             # NOT mixed in; the record's PCM goes to the device alone
             self._drain_live(frames)
+            if 'versions' in player:
+                self._pair_fill(player, outdata, frames)
+                return
             pcm, pos = player['pcm'], player['pos']
             take = min(frames, len(pcm) - pos)
             outdata[:take] = pcm[pos:pos + take]
@@ -272,6 +323,36 @@ class LiveEngine:
                 self._resid['buf'] = None
             else:
                 self._resid['pos'] = pos
+
+    @staticmethod
+    def _slice_or_silence(pcm, pos, frames):
+        """`frames` samples of pcm from pos, zero-padded past its end."""
+        take = max(0, min(frames, len(pcm) - pos))
+        if take == frames:
+            return pcm[pos:pos + frames]
+        out = np.zeros((frames, CHANNELS), np.int16)
+        if take > 0:
+            out[:take] = pcm[pos:pos + take]
+        return out
+
+    def _pair_fill(self, player, outdata, frames):
+        pos = player['pos']
+        cur = self._slice_or_silence(player['versions'][player['which']], pos, frames)
+        left = player['fade_left']
+        if left > 0 and player['fade_from'] is not None:
+            old = self._slice_or_silence(player['versions'][player['fade_from']], pos, frames)
+            done = PAIR_XFADE_SAMPLES - left
+            x = np.minimum((np.arange(frames) + done + 1) / float(PAIR_XFADE_SAMPLES), 1.0)[:, None]
+            mix = old.astype(np.float64) * (1.0 - x) + cur.astype(np.float64) * x
+            outdata[:] = np.rint(mix).astype(np.int16)
+            player['fade_left'] = max(0, left - frames)
+            if player['fade_left'] == 0:
+                player['fade_from'] = None
+        else:
+            outdata[:] = cur
+        player['pos'] = pos + frames
+        if player['pos'] >= player['n']:
+            self._player = None
 
     def _drain_live(self, frames):
         """Consume `frames` of live blocks without outputting them."""

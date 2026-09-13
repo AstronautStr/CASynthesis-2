@@ -32,6 +32,11 @@ from casynth_lab import (load_scene, SceneError, DemoRunner, SIDES, registry,
 from casynth_lab.catalog import Catalog, CatalogError, bench_scene     # noqa: E402
 from casynth_lab import provenance as prov                             # noqa: E402
 from casynth_lab.versions import VersionError                          # noqa: E402
+from casynth_lab import verify as verify_mod                           # noqa: E402
+from casynth_lab.verify import (Verifier, VerifyError, TRACK_EXACT, TRACK_DIFFERS,   # noqa: E402
+                                TRACK_FAILED, TRACK_UNCHECKED, TRACK_RESULTS,
+                                TRACK_LABELS, RESULT_LABELS, MARK_SAME, MARK_DIFFERENT,
+                                track_text)
 
 # -- layout ------------------------------------------------------------------
 CELL = 16
@@ -70,14 +75,20 @@ class BenchApp:
         self.scene = scene
         self.engine = engine
         self.catalog = catalog            # Catalog or None (S4 disabled)
+        self.verifier = Verifier(catalog) if catalog is not None else None   # S7
         self.child = None                 # ChildBench of another version (S6)
-        self.mode = 'live'                # 'live' | 'save' | 'catalog'
+        self.mode = 'live'                # 'live' | 'save' | 'catalog' | 'report'
         self.status = ""                  # save / replay status line
         self.save_form = None             # {'cut', 'title', 'note', 'field'}
         self._cut_pending = False
         self._save_thread = None
         self.cat = dict(entries=[], sel=None, result=None, thread=None,
                         progress=0.0, cancel=threading.Event(), play_label="")
+        # S7: catalog check state + the report screen
+        self.verify = dict(thread=None, cancel=threading.Event(), progress=0.0, index=0,
+                           total=0, current='', target='', done=None, error=None,
+                           run=None, group=TRACK_DIFFERS, sel=None, track='monitor',
+                           version='saved', details=False)
         self.vol = VOL_DEFAULT
         self.paint_value = None          # None / 1 (LMB) / 0 (RMB) while dragging
         self.drag_vol = False
@@ -158,6 +169,8 @@ class BenchApp:
             return self._press_save_form(pos, button)
         if self.mode == 'catalog':
             return self._press_catalog(pos, button)
+        if self.mode == 'report':
+            return self._press_report(pos, button)
         if button == 1 and self.catalog is not None:
             for key, rect in self.lab_buttons.items():
                 if self._inside(rect, pos):
@@ -231,6 +244,15 @@ class BenchApp:
                 self.close_catalog()
                 return 'back'
             return None
+        if self.mode == 'report':
+            if name == 'escape':
+                self.close_report()
+                return 'report:back'
+            if name == 'space':
+                v = 'recomputed' if self.verify['version'] == 'saved' else 'saved'
+                self.set_version(v)
+                return f'version:{v}'
+            return None
         if name == 'r':
             self._post('reset')
             return 'reset'
@@ -282,6 +304,10 @@ class BenchApp:
         if self.mode == 'catalog':
             screen.fill(C_BG)
             self._draw_catalog(screen, font, small)
+            return
+        if self.mode == 'report':
+            screen.fill(C_BG)
+            self._draw_report(screen, font, small)
             return
         snap = self.engine.snapshot()
         screen.fill(C_BG)
@@ -417,6 +443,16 @@ class BenchApp:
                 got = child.provenance or {}
                 self.status = f"Version bench closed ({prov.short(got.get('commit')) or '?'})"
             self.refresh_catalog()
+        vth = self.verify['thread']
+        if vth is not None and not vth.is_alive():
+            self.verify['thread'] = None
+            err, run = self.verify['error'], self.verify['done']
+            if err is not None:
+                self.status = f"Check failed: {err}"
+            elif run is not None:
+                self.status = f"Check {run.status_label}: {run.summary()}"
+                if self.mode == 'catalog':
+                    self.open_report(run)
         th = self.cat['thread']
         if th is not None and not th.is_alive():
             self.cat['thread'] = None
@@ -729,6 +765,9 @@ class BenchApp:
         rec = self.selected_record()
         if rec is None or self.cat['thread'] is not None:
             return False
+        if self.checking:
+            self.status = "Catalog check running: no single check meanwhile"
+            return False
         self.cat['cancel'].clear()
         self.cat['result'] = None
         self.cat['progress'] = 0.0
@@ -758,6 +797,8 @@ class BenchApp:
         rects['continue'] = (px, y, 262, 34)
         y += 40
         rects.update(dict(back=(MARGIN, 12, 110, 30),
+                          check=(MARGIN + 120, 12, 130, 30),       # S7: Check catalog / Cancel
+                          report=(MARGIN + 260, 12, 110, 30),      # S7: Last report
                           open=(px, y, 262, 28),
                           play_A=(px, y + 44, 90, 26), play_B=(px + 96, y + 44, 90, 26),
                           play_mon=(px, y + 76, 186, 26), stop=(px + 192, y + 44, 70, 58),
@@ -778,6 +819,18 @@ class BenchApp:
         if self.child is not None and self.child.alive:
             self.status = "A separate version bench is running: close it first"
             return 'busy'
+        if self._inside(r['check'], pos):
+            if self.checking:
+                self.cancel_check()
+                return 'check:cancel'
+            self.start_check()
+            return 'check'
+        if self.checking:
+            self.status = "Catalog check running: wait or cancel it first"
+            return 'busy'
+        if self._inside(r['report'], pos):
+            self.open_report()
+            return 'report'
         if self._inside(r['back'], pos):
             self.close_catalog()
             return 'back'
@@ -835,16 +888,38 @@ class BenchApp:
 
     def _draw_catalog(self, screen, font, small):
         import pygame
-        screen.blit(font.render("Catalog  (local records, newest first)", True, C_TXT),
-                    (MARGIN + 130, 18))
+        r = self._catalog_rects()
+        for key, label in (('check', 'Cancel check' if self.checking else 'Check catalog'),
+                           ('report', 'Last report')):
+            rect = r[key]
+            hot = (key == 'check' and self.checking)
+            pygame.draw.rect(screen, C_BTN_ON if hot else C_BTN, rect, border_radius=4)
+            pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
+            t = small.render(label, True, C_TXT)
+            screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
+                            rect[1] + (rect[3] - t.get_height()) // 2))
         if self.status:
             col = C_ERR if self.status.lower().startswith(('cannot', 'no audio', 'replay unavail',
-                                                             'replay differs')) else C_OK
-            screen.blit(small.render(self.status[:70], True, col), (MARGIN + 420, 20))
+                                                             'replay differs', 'check failed')) \
+                else C_OK
+            screen.blit(small.render(self.status[:64], True, col), (MARGIN + 390, 20))
+        else:
+            screen.blit(small.render("Catalog (local records, newest first)", True, C_DIM),
+                        (MARGIN + 390, 20))
         entries = self.cat['entries']
         if not entries:
             screen.blit(small.render("No records yet. Press Save in the live view.",
                                      True, C_DIM), (MARGIN, self.CAT_TOP + 6))
+        if self.checking:
+            v = self.verify
+            y = self.height - 52
+            line = (f"Checking {v['index'] + 1} of {v['total']}: {v['current']}"
+                    if v['total'] else "Checking catalog: starting...")
+            screen.blit(small.render(line[:70], True, C_ACCENT), (MARGIN, y))
+            screen.blit(small.render(f"with {v['target']}"[:70], True, C_DIM), (MARGIN, y + 18))
+            pygame.draw.rect(screen, C_EDGE, (MARGIN + 320, y + 4, 180, 8), border_radius=3)
+            pygame.draw.rect(screen, C_ACCENT, (MARGIN + 320, y + 4, int(180 * v['progress']), 8),
+                             border_radius=3)
         for i, (rec, err) in enumerate(entries[:12]):
             rect = self._list_rect(i)
             on = (i == self.cat['sel'])
@@ -863,12 +938,11 @@ class BenchApp:
                     f"A: {la}  B: {lb}   {tag}")
             screen.blit(small.render(line, True, C_OK if rec.status == 'pinned' else C_DIM),
                         (rect[0] + 8, rect[1] + 22))
-        r = self._catalog_rects()
         labels = {'back': 'Back (Esc)', 'continue': 'Continue', 'open': 'Open field anew',
                   'play_A': 'Play A', 'play_B': 'Play B', 'play_mon': 'Play as heard',
                   'stop': 'Stop', 'replay': 'Check reproducibility', 'cancel': 'Cancel',
                   'play_replay': self.cat['play_label'], 'parent': '', 'version': '',
-                  'pin': 'Pin to commit'}
+                  'pin': 'Pin to commit', 'check': '', 'report': ''}
         rec = self.selected_record()
         can_cont, cont_why = rec.can_continue() if rec is not None else (False, '')
         plan = None
@@ -893,7 +967,7 @@ class BenchApp:
             if ptitle:
                 labels['parent'] = f"Derived from: {ptitle}" + ("" if present else " (missing)")
         for key, rect in r.items():
-            if key in ('play_replay', 'parent') and not labels[key]:
+            if key in ('play_replay', 'parent', 'check', 'report') and not labels[key]:
                 continue
             if key != 'back' and rec is None:
                 continue
@@ -952,6 +1026,407 @@ class BenchApp:
                 pos, n = self.engine.play_pos
                 screen.blit(small.render(f"playing {pos / 44100:.1f} / {n / 44100:.1f} s",
                                          True, C_ACCENT), (px, y2 + 90))
+
+
+    # =====================================================================
+    # S7: catalog check + report screen (saved / recomputed listening)
+    # =====================================================================
+    @property
+    def checking(self):
+        th = self.verify['thread']
+        return th is not None and th.is_alive()
+
+    def start_check(self):
+        """Check catalog: every record listed now is recomputed by ONE worker
+        process (its code + environment = the report's target); this bench
+        stays responsive in the catalog screen.  One check at a time."""
+        if self.verifier is None or self.checking:
+            return False
+        if self.cat['thread'] is not None:
+            self.status = "A single check is running: wait for it first"
+            return False
+        if not self.catalog.ids():
+            self.status = "Catalog is empty: nothing to check"
+            return False
+        v = self.verify
+        v['cancel'].clear()
+        v.update(progress=0.0, index=0, total=0, current='', target='', done=None, error=None)
+        self.engine.stop_play()
+        self.status = "Checking catalog..."
+
+        def on_record(i, n, rid):
+            title = rid
+            for rec, _e in self.cat['entries']:
+                if rec is not None and rec.id == rid:
+                    title = rec.title
+            v.update(index=i, total=n, current=title, progress=0.0)
+
+        def on_line(f):
+            v['progress'] = f
+
+        def work():
+            try:
+                v['done'] = self.verifier.run_in_subprocess(
+                    progress=on_line, cancel=v['cancel'].is_set, on_record=on_record)
+            except VerifyError as e:
+                v['error'] = str(e)
+        th = threading.Thread(target=work, daemon=True)
+        v['thread'] = th
+        th.start()
+        return True
+
+    def cancel_check(self):
+        self.verify['cancel'].set()
+        self.status = "Cancelling the check..."
+
+    # -- report screen ----------------------------------------------------------
+    def open_report(self, run=None):
+        """Show a report (default: the latest).  No render happens here."""
+        if self.verifier is None:
+            return False
+        if run is None:
+            try:
+                run = self.verifier.latest()
+            except VerifyError as e:
+                self.status = f"Cannot open the report: {e}"
+                return False
+            if run is None:
+                self.status = "No catalog check yet"
+                return False
+        self.engine.stop_play()
+        v = self.verify
+        v['run'] = run
+        g = run.groups()
+        v['group'] = next((k for k in TRACK_RESULTS if g[k]), TRACK_DIFFERS)
+        v['sel'] = None
+        v['details'] = False
+        self.mode = 'report'
+        if g[v['group']]:
+            self.select_report_record(0)
+        self.status = f"Check {run.status_label}: {run.summary()}"
+        return True
+
+    def close_report(self):
+        self.engine.stop_play()
+        self.mode = 'catalog'
+        self.refresh_catalog()
+
+    def open_report_neighbour(self, step):
+        """Older (+1) / newer (-1) report than the one shown."""
+        ids = self.verifier.run_ids()
+        cur = self.verify['run']
+        if cur is None or cur.id not in ids:
+            return False
+        i = ids.index(cur.id) + step
+        if not (0 <= i < len(ids)):
+            return False
+        try:
+            run = self.verifier.load_run(ids[i])
+        except VerifyError as e:
+            self.status = f"Cannot open the report: {e}"
+            return False
+        return self.open_report(run)
+
+    def report_group_ids(self):
+        run = self.verify['run']
+        return run.groups()[self.verify['group']] if run is not None else []
+
+    def set_report_group(self, group):
+        self.verify['group'] = group
+        self.verify['sel'] = None
+        self.engine.stop_play()
+        if self.report_group_ids():
+            self.select_report_record(0)
+
+    def report_record_id(self):
+        ids = self.report_group_ids()
+        i = self.verify['sel']
+        return ids[i] if i is not None and i < len(ids) else None
+
+    def report_entry(self):
+        rid = self.report_record_id()
+        return self.verify['run'].result(rid) if rid else None
+
+    def select_report_record(self, idx):
+        """Select a record of the shown group: the first track opened is the
+        changed monitor, else the first changed A/B track; version = saved."""
+        self.engine.stop_play()
+        v = self.verify
+        v['sel'] = idx
+        rid = self.report_record_id()
+        if rid is None:
+            return
+        v['track'] = v['run'].default_track(rid)
+        v['version'] = 'saved'
+
+    def set_track(self, output):
+        """A / B / As heard.  A playing pair goes on at the same position."""
+        v = self.verify
+        if output == v['track']:
+            return
+        was = self.engine.playing
+        pos = self.engine.play_pos[0] if was else 0
+        self.engine.stop_play()
+        v['track'] = output
+        if was:
+            self.play_pair(pos)
+
+    def set_version(self, version):
+        """Saved / Recomputed: the SAME cursor continues (never a restart)."""
+        v = self.verify
+        v['version'] = version
+        if self.engine.pair_version is not None:
+            self.engine.switch_version(version)
+
+    def _pair_for(self, rid, output):
+        """(saved, recomputed) PCM of the selected track, checked against the
+        report's fingerprints; an exact track plays the original for both."""
+        run = self.verify['run']
+        t = run.result(rid)['tracks'].get(output) or {}
+        if t.get('result') == TRACK_DIFFERS:
+            return self.verifier.pair(run.id, rid, output)
+        rec = self.catalog.load(rid)
+        ref = rec.pcm(output)
+        if t.get('result') == TRACK_EXACT:
+            if verify_mod.pcm_sha(ref) != t.get('ref_sha256'):
+                raise VerifyError("the original WAV changed since the check")
+            return ref, ref
+        return ref, None            # failed / unchecked: only the original exists
+
+    def play_pair(self, pos=0):
+        rid = self.report_record_id()
+        if rid is None:
+            return False
+        if not self.engine.device_ok:
+            self.status = "No audio device: cannot play"
+            return False
+        v = self.verify
+        try:
+            saved, new = self._pair_for(rid, v['track'])
+        except (VerifyError, CatalogError) as e:
+            self.status = f"Cannot play: {e}"
+            return False
+        if new is None:
+            if v['version'] == 'recomputed':
+                self.status = "No recomputed version for this track (see its result)"
+                return False
+            new = saved
+        try:
+            self.engine.play_pair(saved, new, which=v['version'], pos=pos)
+        except ValueError as e:
+            self.status = f"Cannot play: {e}"
+            return False
+        self.status = f"Playing {TRACK_LABELS[v['track']]} ({v['version']})"
+        return True
+
+    def stop_pair(self):
+        self.engine.stop_play()
+        self.status = ""
+
+    def set_mark(self, mark):
+        """Listening mark for THIS report's pair of the shown track:
+        'same' (can't hear a difference) / 'different' / None (not rated)."""
+        rid = self.report_record_id()
+        v = self.verify
+        if rid is None:
+            return False
+        try:
+            marks = self.verifier.set_mark(v['run'].id, rid, v['track'], mark)
+        except VerifyError as e:
+            self.status = f"Cannot mark: {e}"
+            return False
+        v['run'].marks = marks
+        self.status = "Mark saved" if mark else "Mark cleared"
+        return True
+
+    REPORT_LIST_TOP = 96
+
+    def _report_rects(self):
+        px = self.panel_x
+        rects = dict(back=(MARGIN, 12, 110, 30),
+                     older=(self.width - MARGIN - 150, 12, 70, 30),
+                     newer=(self.width - MARGIN - 74, 12, 74, 30))
+        x = MARGIN
+        for k in TRACK_RESULTS:
+            rects[f'group:{k}'] = (x, self.CAT_TOP, 124, 30)
+            x += 128
+        y = self.CAT_TOP + 120
+        rects.update({'track:A': (px, y, 80, 28), 'track:B': (px + 84, y, 80, 28),
+                      'track:monitor': (px + 168, y, 94, 28),
+                      'version:saved': (px, y + 36, 129, 30),
+                      'version:recomputed': (px + 133, y + 36, 129, 30),
+                      'play': (px, y + 72, 100, 30), 'stop': (px + 104, y + 72, 100, 30),
+                      'mark:same': (px, y + 150, 84, 26), 'mark:different': (px + 88, y + 150, 84, 26),
+                      'mark:none': (px + 176, y + 150, 86, 26),
+                      'details': (px, y + 186, 100, 24)})
+        return rects
+
+    def _report_list_rect(self, i):
+        return (MARGIN, self.REPORT_LIST_TOP + i * ROW_LIST_H, self.field_w, ROW_LIST_H - 4)
+
+    def _press_report(self, pos, button):
+        if button != 1:
+            return None
+        r = self._report_rects()
+        if self._inside(r['back'], pos):
+            self.close_report()
+            return 'report:back'
+        if self._inside(r['older'], pos):
+            self.open_report_neighbour(+1)
+            return 'report:older'
+        if self._inside(r['newer'], pos):
+            self.open_report_neighbour(-1)
+            return 'report:newer'
+        for k in TRACK_RESULTS:
+            if self._inside(r[f'group:{k}'], pos):
+                self.set_report_group(k)
+                return f'group:{k}'
+        ids = self.report_group_ids()
+        for i in range(min(len(ids), 11)):
+            if self._inside(self._report_list_rect(i), pos):
+                self.select_report_record(i)
+                return f'report:{i}'
+        if self.report_record_id() is None:
+            return None
+        for o in ('A', 'B', 'monitor'):
+            if self._inside(r[f'track:{o}'], pos):
+                self.set_track(o)
+                return f'track:{o}'
+        for ver in ('saved', 'recomputed'):
+            if self._inside(r[f'version:{ver}'], pos):
+                self.set_version(ver)
+                return f'version:{ver}'
+        if self._inside(r['play'], pos):
+            self.play_pair()
+            return 'play'
+        if self._inside(r['stop'], pos):
+            self.stop_pair()
+            return 'stop'
+        for key, mark in (('mark:same', MARK_SAME), ('mark:different', MARK_DIFFERENT),
+                          ('mark:none', None)):
+            if self._inside(r[key], pos):
+                self.set_mark(mark)
+                return key
+        if self._inside(r['details'], pos):
+            self.verify['details'] = not self.verify['details']
+            return 'details'
+        return None
+
+    def _draw_report(self, screen, font, small):
+        import pygame
+        v = self.verify
+        run = v['run']
+        r = self._report_rects()
+
+        def button(rect, label, hot=False, dim=False):
+            pygame.draw.rect(screen, C_BTN_ON if hot else (C_PANEL if dim else C_BTN), rect,
+                             border_radius=4)
+            pygame.draw.rect(screen, C_ACCENT if hot else C_EDGE, rect, 1, border_radius=4)
+            t = small.render(label, True, C_DIM if dim else C_TXT)
+            screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
+                            rect[1] + (rect[3] - t.get_height()) // 2))
+        button(r['back'], 'Back (Esc)')
+        button(r['older'], '< older')
+        button(r['newer'], 'newer >')
+        if run is None:
+            screen.blit(small.render("No report", True, C_DIM), (MARGIN + 130, 20))
+            return
+        head = f"Check {run.id}   {run.status_label}"
+        col = C_OK if run.status == 'complete' else C_WARN
+        screen.blit(small.render(head[:60], True, col), (MARGIN + 130, 12))
+        screen.blit(small.render(f"with {run.target_label}"[:64], True, C_DIM), (MARGIN + 130, 30))
+        counts = run.counts()
+        names = {TRACK_DIFFERS: 'Differs', TRACK_EXACT: 'Exact', TRACK_FAILED: 'Failed',
+                 TRACK_UNCHECKED: 'Unchecked'}
+        for k in TRACK_RESULTS:
+            button(r[f'group:{k}'], f"{names[k]} ({counts[k]})", hot=(k == v['group']))
+        ids = self.report_group_ids()
+        if not ids:
+            screen.blit(small.render("Nothing in this group.", True, C_DIM),
+                        (MARGIN, self.REPORT_LIST_TOP + 6))
+        for i, rid in enumerate(ids[:11]):
+            e = run.result(rid)
+            rect = self._report_list_rect(i)
+            on = (i == v['sel'])
+            pygame.draw.rect(screen, C_BTN_ON if on else C_PANEL, rect, border_radius=4)
+            pygame.draw.rect(screen, C_ACCENT if on else C_EDGE, rect, 1, border_radius=4)
+            screen.blit(small.render(e.get('title', rid)[:60], True, C_TXT),
+                        (rect[0] + 8, rect[1] + 4))
+            tr = e['tracks']
+            line = "   ".join(f"{TRACK_LABELS[o]}: {RESULT_LABELS[tr[o]['result']].lower()}"
+                              for o in ('A', 'B', 'monitor') if o in tr)
+            if e['status'] in (TRACK_FAILED, TRACK_UNCHECKED) and e.get('reason'):
+                line = f"{RESULT_LABELS[e['status']]}: {e['reason']}"
+            screen.blit(small.render(line[:88], True, C_DIM), (rect[0] + 8, rect[1] + 22))
+        rid = self.report_record_id()
+        if rid is None:
+            return
+        e = run.result(rid)
+        px, y = self.panel_x, self.CAT_TOP
+        screen.blit(font.render(e.get('title', rid)[:30], True, C_TXT), (px, y))
+        origin = e.get('origin') or {}
+        if origin.get('status') == 'pinned':
+            olab, ocol = f"Origin: Pinned {prov.short(origin.get('commit'))}", C_OK
+        elif origin:
+            olab, ocol = f"Origin: Local: {origin.get('status_reason') or '?'}", C_WARN
+        else:
+            olab, ocol = "Origin: unknown", C_DIM
+        for j, line in enumerate(_wrap(olab, small, PANEL_W)[:2]):
+            screen.blit(small.render(line, True, ocol), (px, y + 24 + j * 17))
+        for j, o in enumerate(('A', 'B', 'monitor')):
+            t = e['tracks'].get(o)
+            if t and t['result'] == TRACK_DIFFERS:
+                what = (f"differs: {100.0 * (t['frac_diff'] or 0):.1f}% smp, max {t['max_abs_diff']}"
+                        + ("; length!" if t.get('length_mismatch') else ""))
+            else:
+                what = track_text(t) if t else 'not checked'
+            txt = f"{TRACK_LABELS[o]}: {what}"
+            tcol = {TRACK_EXACT: C_OK, TRACK_DIFFERS: C_WARN, TRACK_FAILED: C_ERR}.get(
+                t['result'] if t else None, C_DIM)
+            screen.blit(small.render(txt[:44], True, tcol), (px, y + 62 + j * 17))
+        for o in ('A', 'B', 'monitor'):
+            button(r[f'track:{o}'], TRACK_LABELS[o], hot=(o == v['track']))
+        t = e['tracks'].get(v['track']) or {}
+        has_new = t.get('result') == TRACK_DIFFERS
+        for ver, label in (('saved', 'Saved'), ('recomputed', 'Recomputed')):
+            button(r[f'version:{ver}'], label, hot=(ver == v['version']),
+                   dim=(ver == 'recomputed' and not has_new and t.get('result') != TRACK_EXACT))
+        button(r['play'], 'Play', hot=self.engine.playing)
+        button(r['stop'], 'Stop')
+        yy = r['play'][1] + 36
+        if self.engine.playing:
+            pos, n = self.engine.play_pos
+            screen.blit(small.render(f"{pos / 44100:.1f} / {n / 44100:.1f} s  "
+                                     f"({self.engine.pair_version or v['version']})",
+                                     True, C_ACCENT), (px, yy))
+        elif t.get('length_mismatch'):
+            screen.blit(small.render(f"lengths differ: saved {t['n_ref']}, "
+                                     f"recomputed {t['n_new']} samples", True, C_WARN), (px, yy))
+        screen.blit(small.render("Listening mark (this pair, this report):", True, C_DIM),
+                    (px, yy + 24))
+        if has_new:
+            mark = run.mark(rid, v['track'])
+            button(r['mark:same'], "Can't hear", hot=(mark == MARK_SAME))
+            button(r['mark:different'], "Hear it", hot=(mark == MARK_DIFFERENT))
+            button(r['mark:none'], "Not rated", hot=(mark is None))
+        else:
+            screen.blit(small.render("(only for a differing track)", True, C_DIM),
+                        (px, yy + 44))
+        button(r['details'], 'Details', hot=v['details'])
+        if v['details']:
+            dy = r['details'][1] + 30
+            for j, o in enumerate(('A', 'B', 'monitor')):
+                tt = e['tracks'].get(o) or {}
+                if tt.get('n_ref') is None:
+                    line = f"{TRACK_LABELS[o]}: {tt.get('reason') or '-'}"
+                else:
+                    line = (f"{TRACK_LABELS[o]}: {tt['n_ref']}/{tt['n_new']} smp  "
+                            f"{100.0 * (tt['frac_diff'] or 0):.2f}% differ  max|d| {tt['max_abs_diff']}")
+                screen.blit(small.render(line[:46], True, C_TXT), (px, dy + j * 17))
+        if self.status:
+            col = C_ERR if self.status.lower().startswith(('cannot', 'no audio', 'no recomputed',
+                                                             'check failed')) else C_OK
+            screen.blit(small.render(self.status[:44], True, col), (px, self.height - 30))
 
 
 def _wrap(text, font, width):
@@ -1029,6 +1504,9 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
         pygame.quit()
         if app.child is not None:
             app.child.terminate()
+        if app.checking:                   # S7: the worker stops, its report closes as cancelled
+            app.cancel_check()
+            app.verify['thread'].join(timeout=10)
     return 0
 
 

@@ -142,6 +142,63 @@ Formats: `record.json` `format` 2 (1 = S4, still read), runner state version
 1 (`casynth_lab/runner.py`), engine state version per class, snapshot file
 version 1 (`casynth_lab/snapshot.py`: JSON + npz, no pickle).
 
+## Checking the catalog after a code change (S7)
+
+**Check catalog** (catalog screen) recomputes EVERY record listed at that
+moment -- pinned, local and old ones alike -- with the code of ONE worker
+process (its provenance and environment are the report's target: `Pinned
+<sha>` or `Local: <reason>`), applying the recorded conditions and journal
+exactly as the single **Check reproducibility** does (same replay path, no
+second algorithm; a branch starts from its origin snapshot, a plain record
+from its start conditions; nothing is normalised or time-shifted).  All three
+tracks of the saved window are compared with the stored WAVs: **A**, **B**
+and **As heard** (monitor), each on its own.  The bench stays responsive
+(progress "N of M", the current record, **Cancel**); one check at a time --
+no single check and no second worker meanwhile.  An error in one record does
+not stop the others; a cancel keeps the finished results and marks the rest
+"not checked".  If the runtime set on disk changes during the run the run
+stops: what was finished is kept, the record in progress and the rest are
+"not checked" (one report never mixes two versions).
+
+Per track the report holds one of:
+- **Exact match** -- same format, length and every PCM sample (WAV header
+  details are irrelevant);
+- **Differs numerically** -- a comparable pair with sample or length
+  differences; details: the share of differing samples and the maximum
+  absolute difference in PCM units (computed without int16 overflow), a length
+  mismatch is shown as such (the tail is never cut);
+- **Could not check** -- no valid pair, with the concrete reason (engine no
+  longer registered, snapshot of another version, unreadable WAV, ...);
+  "not reproducible" is never replaced by a fresh start from the field;
+- **Not checked** -- not reached, cancelled, or the target version was lost.
+
+Reports live in `lab_catalog/local/.verify/<run>/` (`run.json` + the
+recomputed WAVs of DIFFERING tracks only + `marks.json`), survive closing the
+application (**Last report**, `< older` / `newer >`), and are never
+recomputed on viewing.  Records, their WAVs, snapshots, Git links and parent
+links are untouched; a new check makes a new report; the single check's
+`<record>/replay/` never overwrites a report's pair.  Every pair is
+fingerprinted: a replaced or lost file is detected when you open it and the
+old verdict is not shown as valid for it.
+
+The report screen groups records into **Differs / Exact / Failed /
+Unchecked**; opening a differing record selects the changed **As heard**
+track (else the first changed A/B).  Listening: track **A / B / As heard**,
+version **Saved / Recomputed** (Space toggles), **Play / Stop** -- both
+versions run on ONE cursor: switching continues from the same sample, never
+restarts; the switch itself is smoothed by a 10 ms fade inside the player
+only (the compared PCM is untouched); same gain for both, no automatic level
+matching, no live synth mixed in; with different lengths the shorter version
+is silence after its end.  A small numeric difference never gets an
+automatic "inaudible" label: the optional **listening mark** -- *Can't hear /
+Hear it / Not rated* -- belongs to that report's pair of that track, survives
+a restart and is not copied to a new report.  No major-version, golden-master
+or "old version needed" decision is made for you.
+
+Headless: `python -m casynth_lab.verify run lab_catalog/local` (JSON lines).
+Demo catalog for the acceptance: `python tests/s7_demo_catalog.py`, then
+`run_demo_bench.bat --catalog lab_catalog\s7_demo`.
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B
