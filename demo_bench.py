@@ -980,7 +980,7 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
     engine = LiveEngine(runner, record_root=catalog.tmp_root, origin_snapshot=origin_snapshot,
                         parent_record_id=parent_record_id)
     engine.start()
-    print(f"[audio] {engine.status_text()}")
+    print(f"[audio] {engine.status_text()}", flush=True)     # (a parent bench reads the pipe)
     pygame.init()
     app = BenchApp(runner.scene, engine, catalog=catalog)
     app.vol = runner.vol
