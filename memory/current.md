@@ -22,13 +22,13 @@ _Снапшот живого состояния (консолидирован /d
 | `gol_vocoder.py` | Offline GoL-вокодер (SA-ресинтез) — **SHELVED 2026-07-14** |
 | `laplacian_explainer/`, `frontiers_explainer/` | Обучалки (JS дублирует ядро — известный trade-off) |
 | `patterns.py` | 29 паттернов в 9 категориях |
-| `demo_bench.py` + `casynth_lab/` + `demos/` | **Demo-стенд S1–S4** (2026-09-07/09): `DemoRunner` (единый live/offline исполнитель, общее поле + две стороны A/B, часы в сэмплах, очередь команд + журнал, crossfade 20 мс в мониторе), `LiveEngine` (render-поток + sounddevice), сцены JSON v1/v2; движки через `registry.py` (интерфейс `engine_api.SoundEngine`, адаптер `legacy_engine.py`); каталог опытов `recorder.py`/`catalog.py`; **снепшоты S5** (2026-09-12): `snapshot.py` (JSON+npz, без pickle), `export_state`/`restore_state` в интерфейсе движка и адаптере, `DemoRunner.export_state/from_state`, «Continue» / ветки с `parent_record_id`; запуск `run_demo_bench.bat` (`laplace_ab.json`) |
+| `demo_bench.py` + `casynth_lab/` + `demos/` | **Demo-стенд S1–S4** (2026-09-07/09): `DemoRunner` (единый live/offline исполнитель, общее поле + две стороны A/B, часы в сэмплах, очередь команд + журнал, crossfade 20 мс в мониторе), `LiveEngine` (render-поток + sounddevice), сцены JSON v1/v2; движки через `registry.py` (интерфейс `engine_api.SoundEngine`, адаптер `legacy_engine.py`); каталог опытов `recorder.py`/`catalog.py`; **снепшоты S5** (2026-09-12): `snapshot.py` (JSON+npz, без pickle), `export_state`/`restore_state` в интерфейсе движка и адаптере, `DemoRunner.export_state/from_state`, «Continue» / ветки с `parent_record_id`; **версии S6** (2026-09-13): `provenance.py` (отпечаток runtime-набора, git-соответствие, окружение), `versions.py` (кэш worktree + дочерний стенд по договору `--catalog/--record/--action`), статусы Pinned/Local, Pin, «Continue in version»; запуск `run_demo_bench.bat` (`laplace_ab.json`) |
 | `check.py` | **Все гейты одной командой** (см. «Гейты») |
-| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (39 тестов S1–S3) + `test_demo_lab_s4.py` (9 тестов S4) + `test_demo_lab_s5.py` (6 тестов S5) + `golden/` (эталоны golden-master и UI) |
+| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (39 тестов S1–S3) + `test_demo_lab_s4.py` (9 тестов S4) + `test_demo_lab_s5.py` (6 тестов S5) + `test_demo_lab_s6.py` (6 тестов S6, изолированные git-репо в `artifacts/_s6/`) + `golden/` (эталоны golden-master и UI) |
 
 ## Гейты (обязательны после каждого изменения)
 
-`python check.py` = 59 юнит-тестов + 39 + 9 + 6 тестов demo-стенда S1–S5 + golden-master аудио (байт-в-байт,
+`python check.py` = 59 юнит-тестов + 39 + 9 + 6 + 6 тестов demo-стенда S1–S6 + golden-master аудио (байт-в-байт,
 sha256[:16]=cd3126907ad13b6c) + UI-кадр (пиксель-в-пиксель vs `tests/golden/ui_frame.png`)
 + import/init smoke. Эталоны ВЕРСИОНИРУЮТСЯ в `tests/golden/` (переехали из gitignored
 `artifacts/` 2026-07-14). Легитимное изменение UI → `python check.py --bless-ui` в том же
@@ -144,7 +144,15 @@ _(A/B стенд `ab_bench.py` с пресетами (клавиши 1–9, `ab_
   снова Continue исходной). Открытый UX-вопрос: нужна ли кнопка Open field anew для обычных
   записей (единственный её сценарий — холодный старт с найденного поля; решить после 2–3
   реальных демо, предложение — показывать только там, где Continue недоступен).
-  Каталог автотестов: `tests/README.md`. Следующий спринт S6 (Git-слой каталога) — по ТЗ.
+  Каталог автотестов: `tests/README.md`. **S6 (версии кода: закреплённые/локальные записи,
+  запуск исходной версии, ТЗ `req-demo-lab-s6.md`) сдан 2026-09-13, ЖДЁТ ПРИЁМКИ**
+  (`memory/log/2026-09-13-demo-lab-s6.md`): формат записи 3; происхождение = явный
+  runtime-набор + отпечаток + git-соответствие (CRLF-безопасно) + окружение, захват один
+  раз на процесс; pin-ref `refs/casynth/pins/<commit>`; «Pin to commit» для локальных;
+  «Continue in version <sha>» = дочерний стенд из кэша worktree `lab_catalog/worktrees/`
+  (только ревизии ≥ S6 знают договор запуска). Ручная приёмка — 3 шага из ТЗ на
+  подготовленных демо-записях. Следующий спринт S7 (массовая проверка изменившихся
+  опытов) — по ТЗ.
 
 - **`acc` (событийные акценты, громкостный канал ветки ДИНАМИКА)** — дизайн принят
   2026-07-06 (REQ с критериями A–G в `decisions.md`), ЖДЁТ РЕАЛИЗАЦИИ. Переиспользует

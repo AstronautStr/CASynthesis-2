@@ -18,6 +18,7 @@ The offline path imports neither pygame nor sounddevice.
 stdout stays ASCII (Windows console codepage).
 """
 import argparse
+import json
 import os
 import sys
 import threading
@@ -29,6 +30,8 @@ from casynth_config import (VOL_DEFAULT, C_BG, C_GRID, C_PANEL, C_EDGE, C_TXT,
 from casynth_lab import (load_scene, SceneError, DemoRunner, SIDES, registry,
                          describe_difference, validate_param)           # noqa: E402
 from casynth_lab.catalog import Catalog, CatalogError, bench_scene     # noqa: E402
+from casynth_lab import provenance as prov                             # noqa: E402
+from casynth_lab.versions import VersionError                          # noqa: E402
 
 # -- layout ------------------------------------------------------------------
 CELL = 16
@@ -67,6 +70,7 @@ class BenchApp:
         self.scene = scene
         self.engine = engine
         self.catalog = catalog            # Catalog or None (S4 disabled)
+        self.child = None                 # ChildBench of another version (S6)
         self.mode = 'live'                # 'live' | 'save' | 'catalog'
         self.status = ""                  # save / replay status line
         self.save_form = None             # {'cut', 'title', 'note', 'field'}
@@ -402,6 +406,16 @@ class BenchApp:
                     self.save_form = dict(cut=cut, field='title', note='',
                                           title=Catalog.default_title(self.scene.title))
                     self.mode = 'save'
+        child = getattr(self, 'child', None)
+        if child is not None and not child.alive:
+            child.wait(1.0)
+            self.child = None
+            if child.error:
+                self.status = f"Version bench failed: {child.error}"
+            else:
+                got = child.provenance or {}
+                self.status = f"Version bench closed ({prov.short(got.get('commit')) or '?'})"
+            self.refresh_catalog()
         th = self.cat['thread']
         if th is not None and not th.is_alive():
             self.cat['thread'] = None
@@ -584,6 +598,12 @@ class BenchApp:
         rec = self.selected_record()
         if rec is None or self.cat['thread'] is not None:
             return False
+        plan = self.catalog.source_plan(rec)
+        if plan['mode'] is None:
+            self.status = f"Cannot continue: {plan['reason']}"
+            return False
+        if plan['mode'] == 'worktree':
+            return self.continue_in_version(rec, plan)
         ok, why = rec.can_continue()
         if not ok:
             self.status = f"Cannot continue: {why}"
@@ -598,7 +618,38 @@ class BenchApp:
         self.engine.muted = False
         self.mode = 'live'
         how = ("stopped" if not runner.running else "CA paused" if runner.paused else "running")
-        self.status = f"Continued: {rec.title}  ({how})"
+        self.status = f"Continued: {rec.title}  ({how}; {plan['label']})"
+        return True
+
+    def continue_in_version(self, rec, plan):
+        """S6: the record is pinned to another version -> a separate bench of
+        that version is started from its cached checkout (it sees the same
+        catalog).  This bench stays in the catalog screen, muted, until the
+        child exits; a failure keeps the session and explains."""
+        self.engine.stop_play()
+        self.status = f"Checking out version {prov.short(plan['commit'])}..."
+        try:
+            child = self.catalog.run_version(rec, 'continue')
+        except (VersionError, CatalogError) as e:
+            self.status = f"Cannot continue in {prov.short(plan['commit'])}: {e}"
+            return False
+        self.child = child
+        self.status = f"Running version {prov.short(plan['commit'])} in a separate bench..."
+        return True
+
+    def pin_record(self):
+        """S6 Pin: attach a local record to the commit whose runtime files have
+        exactly its fingerprint (only the provenance/status fields change)."""
+        rec = self.selected_record()
+        if rec is None:
+            return False
+        try:
+            commit = self.catalog.pin(rec.id)
+        except CatalogError as e:
+            self.status = f"Cannot pin: {e}"
+            return False
+        self.status = f"Pinned to {prov.short(commit)}: {rec.title}"
+        self.refresh_catalog()
         return True
 
     def open_in_bench(self):
@@ -703,7 +754,9 @@ class BenchApp:
                           play_mon=(px, y + 76, 186, 26), stop=(px + 192, y + 44, 70, 58),
                           replay=(px, y + 134, 186, 28), cancel=(px + 192, y + 134, 70, 28),
                           play_replay=(px, y + 194, 186, 26),
-                          parent=(px, y + 232, 262, 18)))
+                          parent=(px, y + 232, 262, 18),
+                          version=(px, y + 252, 262, 18),
+                          pin=(px, y + 274, 120, 24)))
         return rects
 
     def _list_rect(self, i):
@@ -713,6 +766,9 @@ class BenchApp:
         if button != 1:
             return None
         r = self._catalog_rects()
+        if self.child is not None and self.child.alive:
+            self.status = "A separate version bench is running: close it first"
+            return 'busy'
         if self._inside(r['back'], pos):
             self.close_catalog()
             return 'back'
@@ -728,6 +784,10 @@ class BenchApp:
             return 'open'
         if self._inside(r['parent'], pos) and self.goto_parent():
             return 'parent'
+        rec = self.selected_record()
+        if rec is not None and rec.status != 'pinned' and self._inside(r['pin'], pos):
+            self.pin_record()
+            return 'pin'
         if self._inside(r['play_A'], pos):
             self.play_record('A')
             return 'play:A'
@@ -787,17 +847,38 @@ class BenchApp:
                 continue
             screen.blit(small.render(rec.title[:60], True, C_TXT), (rect[0] + 8, rect[1] + 4))
             la, lb = rec.engine_labels()
-            tag = "branch" if rec.parent_id else "Local"
+            tag = ("Pinned " + prov.short(rec.commit)) if rec.status == 'pinned' else "Local"
+            if rec.parent_id:
+                tag += ", branch"
             line = (f"{rec.created.replace('T', ' ')}   {rec.seconds:.1f} s   "
                     f"A: {la}  B: {lb}   {tag}")
-            screen.blit(small.render(line, True, C_DIM), (rect[0] + 8, rect[1] + 22))
+            screen.blit(small.render(line, True, C_OK if rec.status == 'pinned' else C_DIM),
+                        (rect[0] + 8, rect[1] + 22))
         r = self._catalog_rects()
         labels = {'back': 'Back (Esc)', 'continue': 'Continue', 'open': 'Open field anew',
                   'play_A': 'Play A', 'play_B': 'Play B', 'play_mon': 'Play as heard',
                   'stop': 'Stop', 'replay': 'Check reproducibility', 'cancel': 'Cancel',
-                  'play_replay': self.cat['play_label'], 'parent': ''}
+                  'play_replay': self.cat['play_label'], 'parent': '', 'version': '',
+                  'pin': 'Pin to commit'}
         rec = self.selected_record()
         can_cont, cont_why = rec.can_continue() if rec is not None else (False, '')
+        plan = None
+        if rec is not None:
+            plan = self.catalog.source_plan(rec)
+            if plan['mode'] is None:
+                can_cont, cont_why = False, plan['reason']
+            elif plan['mode'] == 'worktree':
+                can_cont, cont_why = True, ''
+                labels['continue'] = f"Continue in version {prov.short(plan['commit'])}"
+            elif rec.status == 'pinned':
+                labels['continue'] = "Continue (this version)"
+            else:
+                labels['continue'] = "Continue (local / current code)"
+            labels['version'] = rec.version_label()
+            if plan['mode'] is None:
+                labels['version'] += f"  |  source: {plan['reason']}"
+            elif plan['mode'] == 'worktree':
+                labels['version'] += "  |  source version runnable here"
         if rec is not None:
             ptitle, present = self.catalog.parent_of(rec)
             if ptitle:
@@ -810,6 +891,20 @@ class BenchApp:
             if key == 'parent':
                 t = small.render(labels[key][:44], True, C_ACCENT)
                 screen.blit(t, (rect[0], rect[1]))
+                continue
+            if key == 'version':
+                col = C_OK if rec.status == 'pinned' else C_WARN
+                t = small.render(labels[key][:46], True, col)
+                screen.blit(t, (rect[0], rect[1]))
+                continue
+            if key == 'pin':
+                if rec.status == 'pinned':
+                    continue
+                pygame.draw.rect(screen, C_BTN, rect, border_radius=4)
+                pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
+                t = small.render(labels[key], True, C_TXT)
+                screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
+                                rect[1] + (rect[3] - t.get_height()) // 2))
                 continue
             hot = ((key == 'stop' and self.engine.playing) or (key == 'continue' and can_cont)
                    or (key == 'cancel' and self.cat['thread'] is not None))
@@ -825,8 +920,11 @@ class BenchApp:
             screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                             rect[1] + (rect[3] - t.get_height()) // 2))
         px = self.panel_x
+        if self.child is not None and self.child.alive:
+            screen.blit(small.render("Separate version bench running (this one is muted)",
+                                     True, C_WARN), (MARGIN, self.height - 30))
         if rec is not None:
-            y = r['parent'][1] + 24
+            y = r['pin'][1] + 30
             screen.blit(small.render("Note:", True, C_DIM), (px, y))
             for j, line in enumerate(_wrap(rec.note, small, PANEL_W)[:6]):
                 screen.blit(small.render(line, True, C_TXT), (px, y + 18 + j * 17))
@@ -861,20 +959,36 @@ def _wrap(text, font, width):
     return lines
 
 
-def run_ui(scene, vol):
+def _print_provenance():
+    """First line of the launch contract: what code THIS process runs."""
+    doc = prov.current()
+    print(json.dumps({'provenance': {k: doc.get(k) for k in
+                                     ('commit', 'digest', 'match', 'reason', 'root',
+                                      'repo_id', 'environment')}}), flush=True)
+    st, why = prov.status_of(doc)
+    print(f"[code] {st} {prov.short(doc.get('commit')) or '?'} {why}".rstrip(), flush=True)
+
+
+def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_record_id=None,
+           caption=''):
     import pygame
     from casynth_lab.audio_out import LiveEngine
-    catalog = Catalog()
+    catalog = catalog or Catalog()
     os.makedirs(catalog.tmp_root, exist_ok=True)
-    runner = DemoRunner(scene, vol=vol)
-    engine = LiveEngine(runner, record_root=catalog.tmp_root)
+    if runner is None:
+        runner = DemoRunner(scene, vol=vol)
+    engine = LiveEngine(runner, record_root=catalog.tmp_root, origin_snapshot=origin_snapshot,
+                        parent_record_id=parent_record_id)
     engine.start()
     print(f"[audio] {engine.status_text()}")
     pygame.init()
-    app = BenchApp(scene, engine, catalog=catalog)
-    app.vol = vol
+    app = BenchApp(runner.scene, engine, catalog=catalog)
+    app.vol = runner.vol
+    if origin_snapshot is not None:
+        app.status = f"Continued: {runner.scene.title}  ({caption})"
     screen = pygame.display.set_mode((app.width, app.height))
-    pygame.display.set_caption(f"CASynth demo bench - {scene.title}")
+    pygame.display.set_caption(f"CASynth demo bench - {runner.scene.title}"
+                               + (f"  [{caption}]" if caption else ''))
     font = pygame.font.SysFont(FONT_NAMES, 17)
     small = pygame.font.SysFont(FONT_NAMES, 14)
     clock = pygame.time.Clock()
@@ -903,7 +1017,56 @@ def run_ui(scene, vol):
     finally:
         engine.stop()
         pygame.quit()
+        if app.child is not None:
+            app.child.terminate()
     return 0
+
+
+def run_record(catalog_root, rid, action, headless=False, seconds=2.0, out=None):
+    """Launch contract of a version bench / worker (S6):
+        demo_bench.py --catalog ROOT --record ID --action continue|check
+    The first stdout line is this process's provenance (JSON); a `status`
+    JSON line ends a worker.  `continue` opens the live bench on the record's
+    end snapshot (or, headless, renders `seconds` from it into `out`.npz);
+    `check` = reproducibility check with THIS code."""
+    _print_provenance()
+    catalog = Catalog(os.path.abspath(catalog_root))
+    doc = prov.current()
+    caption = f"version {prov.short(doc.get('commit')) or 'local'}"
+    if action == 'check':
+        res = catalog.replay(rid, yield_cpu=False)
+        print(json.dumps(dict(status=res.status, reason=res.reason, outputs=res.outputs,
+                              commit=doc.get('commit'))), flush=True)
+        return 0 if res.status == 'match' else 1
+    try:
+        runner, state, rec = catalog.continue_runner(rid)
+    except CatalogError as e:
+        print(json.dumps(dict(status='unavailable', reason=str(e))), flush=True)
+        return 3
+    if headless:
+        import numpy as np
+        from casynth_lab import BLOCK, OUTPUTS
+        from casynth_lab.audio_out import LiveEngine
+        got = {o: [] for o in OUTPUTS}
+        n = int(round(seconds * 44100 / BLOCK))
+        eng = LiveEngine(runner, sink=lambda m, b: [got[o].append(b.get(o)) for o in OUTPUTS],
+                         record_root=catalog.tmp_root, origin_snapshot=state,
+                         parent_record_id=rec.id)
+        eng.start()
+        import time
+        t0 = time.time()
+        while len(got['A']) < n and time.time() - t0 < 120:
+            time.sleep(0.01)
+        kind, cut = eng.cut_now()
+        eng.stop()
+        rid2 = catalog.save(cut, f"headless continuation of {rec.title}") if cut else None
+        if out:
+            np.savez(out, **{o: np.concatenate(got[o][:n]) for o in OUTPUTS})
+        print(json.dumps(dict(status='ok', blocks=len(got['A'][:n]), saved=rid2,
+                              commit=doc.get('commit'))), flush=True)
+        return 0
+    return run_ui(None, runner.vol, catalog=catalog, runner=runner, origin_snapshot=state,
+                  parent_record_id=rec.id, caption=caption)
 
 
 def run_render(scene, out_path, seconds, vol, side):
@@ -925,13 +1088,28 @@ def run_render(scene, out_path, seconds, vol, side):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="CASynth demo bench (S1/S2)")
-    ap.add_argument('--demo', required=True, help="scene JSON (demos/*.json)")
+    ap.add_argument('--demo', help="scene JSON (demos/*.json)")
     ap.add_argument('--render', metavar='WAV', help="offline render to WAV (no window)")
     ap.add_argument('--seconds', type=float, default=8.0, help="render length (s)")
     ap.add_argument('--side', choices=('A', 'B', 'monitor'), default='A',
                     help="offline output: raw side A/B or the monitor mix")
     ap.add_argument('--vol', type=float, default=VOL_DEFAULT, help="initial volume 0..1")
+    ap.add_argument('--catalog', metavar='ROOT', help="catalog root (absolute; S6 contract)")
+    ap.add_argument('--record', metavar='ID', help="record to act on (with --catalog)")
+    ap.add_argument('--action', choices=('continue', 'check'), default='continue')
+    ap.add_argument('--headless', action='store_true',
+                    help="with --record continue: render --seconds from the snapshot, no window")
+    ap.add_argument('--out', metavar='NPZ', help="headless continuation output (npz)")
     a = ap.parse_args(argv)
+    if a.record:
+        if not a.catalog:
+            print("error: --record needs --catalog ROOT")
+            return 2
+        return run_record(a.catalog, a.record, a.action, headless=a.headless,
+                          seconds=a.seconds, out=a.out)
+    if not a.demo:
+        print("error: --demo is required (or --catalog/--record)")
+        return 2
     try:
         scene = load_scene(a.demo)
     except SceneError as e:
@@ -939,7 +1117,9 @@ def main(argv=None):
         return 2
     if a.render:
         return run_render(scene, a.render, a.seconds, a.vol, a.side)
-    return run_ui(scene, a.vol)
+    _print_provenance()
+    catalog = Catalog(os.path.abspath(a.catalog)) if a.catalog else None
+    return run_ui(scene, a.vol, catalog=catalog)
 
 
 if __name__ == '__main__':

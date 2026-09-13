@@ -40,7 +40,7 @@ def _fresh_catalog(name):
     root = os.path.join(CAT_ROOT, name)
     shutil.rmtree(root, ignore_errors=True)
     os.makedirs(os.path.join(root, '.tmp'), exist_ok=True)
-    return Catalog(root)
+    return Catalog(root, repo_root=None)        # S6: never pin from tests
 
 
 def _wait(pred, timeout=10.0):
@@ -233,7 +233,7 @@ def test_cut_is_a_consistent_prefix_and_session_continues():
         assert np.array_equal(r2.pcm('A')[:len(r1.pcm('A'))], r1.pcm('A'))
         assert any(j['kind'] == 'set_cell' for j in r2.meta['journal'])
         assert not any(j['kind'] == 'set_cell' for j in r1.meta['journal'])
-        assert [rr.id for rr, _e in cat.list()] == [rid2, rid1]      # newest first
+        assert {rr.id for rr, _e in cat.list()} == {rid1, rid2}      # (same-second ids: no order)
     finally:
         s.engine.stop()
 

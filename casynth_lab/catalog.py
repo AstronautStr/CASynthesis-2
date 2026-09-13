@@ -34,9 +34,12 @@ from . import registry
 from .runner import BLOCK, CHANNELS, OUTPUTS, DemoRunner, RUNNER_STATE_VERSION
 from .scene import SceneError, scene_from_doc
 from .snapshot import SnapshotError, save_state, load_state
+from . import provenance as prov
+from . import versions
 
-RECORD_FORMAT = 2                         # 2 = S5 (snapshots, origin_kind, parent)
-RECORD_FORMATS_READ = (1, 2)              # S4 records open without migration
+RECORD_FORMAT = 3                         # 3 = S6 (provenance, pinned/local status)
+RECORD_FORMATS_READ = (1, 2, 3)           # S4/S5 records open without migration
+STATUS_PINNED, STATUS_LOCAL = 'pinned', 'local'
 STATE_END, STATE_ORIGIN = 'state_end', 'state_origin'
 DEFAULT_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             'lab_catalog', 'local')
@@ -170,6 +173,44 @@ class Record:
                 out.append(f"{eid} (missing)")
         return tuple(out)
 
+    # -- S6 --------------------------------------------------------------------
+    @property
+    def provenance(self):
+        p = self.meta.get('provenance')
+        return p if isinstance(p, dict) else None
+
+    @property
+    def status(self):
+        """'pinned' | 'local'.  Records before S6 carry status 'local' with no
+        provenance; nothing is attributed to them after the fact."""
+        p = self.provenance
+        if self.meta.get('status') == STATUS_PINNED and p and p.get('commit')                 and p.get('digest') and (self.meta.get('pin') or {}).get('commit') == p['commit']:
+            return STATUS_PINNED
+        return STATUS_LOCAL
+
+    @property
+    def status_reason(self):
+        if self.status == STATUS_PINNED:
+            return ''
+        if not isinstance(self.provenance, dict) or not self.provenance:
+            return "code version not recorded"
+        return self.meta.get('status_reason') or prov.status_of(self.provenance)[1]
+
+    @property
+    def commit(self):
+        p = self.provenance or {}
+        return p.get('commit')
+
+    @property
+    def digest(self):
+        p = self.provenance or {}
+        return p.get('digest')
+
+    def version_label(self):
+        if self.status == STATUS_PINNED:
+            return f"Pinned {prov.short(self.commit)}"
+        return f"Local: {self.status_reason}"
+
     # -- S5 --------------------------------------------------------------------
     @property
     def parent_id(self):
@@ -285,9 +326,10 @@ class ReplayResult:
 
 
 class Catalog:
-    def __init__(self, root=DEFAULT_ROOT):
+    def __init__(self, root=DEFAULT_ROOT, repo_root=prov.PROJECT_ROOT):
         self.root = root
         self.tmp_root = os.path.join(root, '.tmp')
+        self.repo_root = repo_root          # the Git repository pins refer to (None = never pin)
 
     # -- listing / loading ----------------------------------------------------
     def ids(self):
@@ -325,6 +367,135 @@ class Catalog:
             return self.load(pid).title, True
         except CatalogError:
             return pid, False
+
+    # -- provenance / pinning (S6) ----------------------------------------------------
+    def _pin_status(self, doc):
+        """(status, reason, pin) for a provenance doc: pinned only when the
+        runtime set matched a commit AND the holding ref exists (created here;
+        any failure -> local with the reason, never a false pin)."""
+        status, reason = prov.status_of(doc)
+        if status != STATUS_PINNED:
+            return STATUS_LOCAL, reason, None
+        if self.repo_root is None:
+            return STATUS_LOCAL, "pinning disabled for this catalog", None
+        commit = doc['commit']
+        try:
+            prov.hold_commit(self.repo_root, commit)
+        except prov.ProvenanceError as e:
+            return STATUS_LOCAL, f"could not hold commit {prov.short(commit)}: {e}", None
+        return STATUS_PINNED, '', {'commit': commit, 'ref': prov.pin_ref(commit)}
+
+    def _rewrite_meta(self, rec, meta):
+        """Replace record.json atomically (WAVs, snapshots, id untouched)."""
+        path = os.path.join(rec.dir, 'record.json')
+        tmp = path + '.tmp'
+        try:
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(meta, f, ensure_ascii=False, indent=1)
+            os.replace(tmp, path)
+        except OSError as e:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise CatalogError(f"{rec.id}: cannot update record.json: {e}")
+
+    def find_commit_for_digest(self, target, limit=200):
+        """A commit (HEAD first, then recent history) whose runtime set has
+        exactly the digest `target`; None if none."""
+        try:
+            commits = prov.git(self.repo_root, 'rev-list', f'-n{limit}', 'HEAD').split()
+        except prov.ProvenanceError:
+            return None
+        for c in commits:
+            try:
+                if prov.digest_at_commit(self.repo_root, c) == target:
+                    return c
+            except prov.ProvenanceError:
+                continue
+        return None
+
+    def pin(self, rid, commit=None):
+        """Pin a local record to a commit whose runtime set has EXACTLY the
+        fingerprint the record was made with.  Only provenance/status fields
+        change (id, WAVs, conditions, journal, snapshots stay).  CatalogError
+        (and no change) when nothing matches or Git/metadata fail."""
+        rec = self.load(rid)
+        if rec.status == STATUS_PINNED:
+            return rec.commit
+        if self.repo_root is None:
+            raise CatalogError(f"{rid}: pinning disabled for this catalog")
+        doc = rec.provenance
+        if not doc or not doc.get('digest') or not doc.get('manifest'):
+            raise CatalogError(f"{rid}: code fingerprint not recorded -- cannot pin")
+        if commit is None:
+            commit = self.find_commit_for_digest(doc['digest'])
+            if commit is None:
+                raise CatalogError(f"{rid}: no commit has this code fingerprint "
+                                   f"({doc['digest'][:12]}); commit the exact runtime "
+                                   f"files first or save a new experiment")
+        else:
+            try:
+                same = prov.digest_at_commit(self.repo_root, commit) == doc['digest']
+            except prov.ProvenanceError as e:
+                raise CatalogError(f"{rid}: cannot read commit {prov.short(commit)}: {e}")
+            if not same:
+                raise CatalogError(f"{rid}: commit {prov.short(commit)} has different "
+                                   f"runtime files -- matching audio does not prove the code")
+        rid_repo, _head = prov.repo_identity(self.repo_root)
+        if doc.get('repo_id') and rid_repo and doc['repo_id'] != rid_repo:
+            raise CatalogError(f"{rid}: record comes from another repository")
+        try:
+            prov.hold_commit(self.repo_root, commit)
+        except prov.ProvenanceError as e:
+            raise CatalogError(f"{rid}: cannot hold commit {prov.short(commit)}: {e}")
+        meta = copy.deepcopy(rec.meta)
+        p = dict(doc)
+        p.update(commit=commit, match='clean', dirty=[], reason='', repo_id=rid_repo)
+        meta['provenance'] = p
+        meta['status'] = STATUS_PINNED
+        meta['status_reason'] = ''
+        meta['pin'] = {'commit': commit, 'ref': prov.pin_ref(commit),
+                       'pinned_at': _dt.datetime.now().isoformat(timespec='seconds')}
+        self._rewrite_meta(rec, meta)
+        return commit
+
+    def source_plan(self, rec, current=None):
+        """How "Continue" would run this record's code.
+        -> dict(mode='in-process'|'worktree'|None, label, reason, commit).
+        Pinned: same clean version here -> in-process; else a child bench of the
+        held commit (needs the commit and a compatible environment).  Local:
+        current code by the S5 rules, labelled as such."""
+        current = current or prov.current()
+        if rec.status == STATUS_PINNED:
+            commit = rec.commit
+            if current.get('match') == 'clean' and current.get('digest') == rec.digest:
+                # identical runtime set (the commit may differ: code is the truth)
+                return dict(mode='in-process', commit=commit, reason='',
+                            label=f"this bench is version {prov.short(commit)}")
+            if self.repo_root is None:
+                return dict(mode=None, commit=commit, label='',
+                            reason="other version: this catalog has no repository")
+            ok, why = prov.environment_compatible((rec.provenance or {}).get('environment'))
+            if not ok:
+                return dict(mode=None, commit=commit, label='',
+                            reason=f"no compatible environment: {why}")
+            if not prov.commit_exists(self.repo_root, commit):
+                return dict(mode=None, commit=commit, label='',
+                            reason=f"commit {prov.short(commit)} is not available")
+            return dict(mode='worktree', commit=commit, reason='',
+                        label=f"separate bench of version {prov.short(commit)}")
+        return dict(mode='in-process', commit=rec.commit, reason='',
+                    label="local record / current code")
+
+    def worktree_for(self, rec):
+        """Verified checkout of the record's pinned commit (VersionError)."""
+        return versions.ensure_worktree(self.repo_root, self.root, rec.commit)
+
+    def run_version(self, rec, action, extra=(), on_line=None):
+        """Start a child bench of the record's version (see versions.py)."""
+        wt = self.worktree_for(rec)
+        return versions.ChildBench(wt, self.root, rec.id, action, extra, on_line).start()
 
     # -- continuation (S5) ------------------------------------------------------------
     def end_state(self, rid):
@@ -410,16 +581,22 @@ class Catalog:
                 j, a = save_state(partial, STATE_ORIGIN, cut.origin_snapshot)
                 snapshot['origin'] = {'json': j, 'npz': a}
                 snapshot['origin_seq'] = int(cut.origin_snapshot['seq'])
+            doc = getattr(cut, 'provenance', None)
+            status, status_reason, pin = self._pin_status(doc) if doc else \
+                (STATUS_LOCAL, "code version not recorded", None)
             meta = {
                 'format': RECORD_FORMAT,
                 'id': rid,
+                'provenance': doc,
+                'status_reason': status_reason,
+                'pin': pin,
                 'origin_kind': origin_kind,
                 'parent_record_id': getattr(cut, 'parent_record_id', None),
                 'snapshot': snapshot,
                 'created': now.isoformat(timespec='seconds'),
                 'title': title,
                 'note': note or '',
-                'status': 'local',
+                'status': status,
                 'scene': _effective_scene(cut.scene_doc, cut.origin_state),
                 'demo_scene': cut.scene_doc,
                 'origin_sample': cut.origin_sample,

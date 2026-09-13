@@ -156,6 +156,7 @@ class Recorder:
         snap_ok, snap_why = r.snapshot_support()
         end_snapshot = r.export_state() if snap_ok else None
         return Cut(
+            provenance=r.provenance,
             origin_kind=self.origin_kind,
             origin_snapshot=self.origin_snapshot,
             parent_record_id=self.parent_record_id,

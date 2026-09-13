@@ -53,7 +53,7 @@ def _fresh_catalog(name):
     root = os.path.join(CAT_ROOT, name)
     shutil.rmtree(root, ignore_errors=True)
     os.makedirs(os.path.join(root, '.tmp'), exist_ok=True)
-    return Catalog(root)
+    return Catalog(root, repo_root=None)        # S6: never pin from tests
 
 
 def _wait(pred, timeout=10.0):

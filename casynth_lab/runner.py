@@ -30,6 +30,7 @@ import numpy as np
 from casynth_config import SR, CHUNK_S, MASTER_GAIN, VOL_DEFAULT
 from casynth_engine import step, events_field
 from . import registry
+from . import provenance as _prov
 from .engine_api import EngineContext, check_block, supports_snapshot
 
 BLOCK = int(CHUNK_S * SR)          # samples per audio block (== engine chunk)
@@ -124,9 +125,13 @@ _SILENT = np.zeros((BLOCK, CHANNELS), np.int16)
 
 
 class DemoRunner:
-    def __init__(self, scene, vol=VOL_DEFAULT):
+    def __init__(self, scene, vol=VOL_DEFAULT, provenance=None):
         self.scene = scene
         self.vol = float(vol)
+        # S6: the code this executor runs on -- captured once per process at
+        # first use (the imported code), never re-read at Save time
+        self.provenance = provenance if provenance is not None else _prov.current(
+            audio=dict(sr=SR, block=BLOCK, channels=CHANNELS))
         self.out_samples = 0
         self.journal = []              # (out_sample, seq, kind, args)
         self._pending = []             # [(seq, at, kind, args)]
@@ -397,7 +402,7 @@ class DemoRunner:
         )
 
     @classmethod
-    def from_state(cls, state, scene=None):
+    def from_state(cls, state, scene=None, provenance=None):
         """A runner whose next next_block() equals the exported runner's.
         The state is validated completely BEFORE anything is built; any
         problem raises ValueError (nothing half-restored is returned)."""
@@ -457,7 +462,7 @@ class DemoRunner:
             if n not in SIDES or not isinstance(per_engine, dict):
                 raise ValueError("snapshot: memory keys must be sides A/B")
         # build: a plain runner on the scene, then overwrite everything
-        r = cls(scene, vol=state['vol'])
+        r = cls(scene, vol=state['vol'], provenance=provenance)
         r.grid = np.ascontiguousarray(grid, dtype=np.uint8).copy()
         r.exc = None if exc is None else np.ascontiguousarray(exc, np.float64).copy()
         r.gen = int(state['gen'])

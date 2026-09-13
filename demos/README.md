@@ -92,6 +92,47 @@ Restart in a continued session begin a fresh recording (fresh conditions, as
 in S4) that still carries the parent link.  **Continue** on the same record
 always starts from its unchanged snapshot and creates no record by itself.
 
+## Code versions: pinned and local records (S6)
+
+Every Save also records **which code produced it**: an explicit runtime set
+(`demo_bench.py`, `casynth_lab/*.py`, `casynth_core.py`, `casynth_engine.py`,
+`casynth_config.py`, `requirements.txt`, `demos/*.json`) with per-file
+fingerprints, the Git commit, whether the set's CONTENT equals that commit
+(staged, unstaged and new runtime files all count; docs / tests / memory do
+not; CRLF checkouts are fine), and the environment (Python, exact package
+versions, OS).  It is captured once per process for the code that was
+imported -- not the HEAD at Save time; workers and version benches report
+their own.
+
+- **Pinned <sha>**: the runtime set matched a commit, and that commit is held
+  by a permanent ref (`refs/casynth/pins/<commit>`) so it survives branch
+  deletion and `git gc`.  Pinned means established origin -- whether the
+  version can run here and whether the PCM reproduces are separate checks.
+- **Local: <reason>**: uncommitted runtime changes, no repository, a failed
+  ref, or a record from before S6 ("code version not recorded" -- never
+  attributed to HEAD after the fact).  Local records keep everything else.
+- **Pin to commit** (local records): after committing exactly that code the
+  record is attached to the commit found (HEAD or recent history); only the
+  origin fields change.  Different code -- even with identical WAVs -- is
+  refused; run a new experiment instead.
+- **Check reproducibility** always computes with THIS bench's code.
+- **Continue**: same runtime fingerprint here -> in this bench ("this
+  version"); another pinned version -> "Continue in version <sha>" starts a
+  separate bench of that commit from a cached detached checkout
+  (`lab_catalog/worktrees/<commit>/`, verified / repaired from the held
+  commit; the main checkout, index and branch are never touched) when the
+  environment is compatible (same Python major.minor, exact package
+  versions).  This bench stays muted in the catalog until the other one
+  closes; its saves land in the same catalog, pinned to their version, with
+  the parent link.  Local record -> current code by the S5 rules.  No commit,
+  no environment, or an unsupported (pre-S6) version -> a concrete reason,
+  the WAVs still play.
+
+Launch contract of a version bench / worker:
+`python demo_bench.py --catalog <abs root> --record <id> --action continue|check`
+(`--headless --seconds N --out file.npz` renders from the snapshot without a
+window).  The first stdout line is the process's provenance (JSON).
+
 Engines take part through two optional methods of the S3 interface
 (`export_state()` / `restore_state(grid, exc, state)` + a class
 `STATE_VERSION`, see `casynth_lab/engine_api.py`); the five built-in methods
