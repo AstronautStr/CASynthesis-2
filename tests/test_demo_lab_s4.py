@@ -530,6 +530,17 @@ def test_ui_headless_save_catalog_player_replay():
         assert app.save_form['title'].endswith("Проверка S4")
         assert app.key('tab') == 'save:field'
         app.text_input("заметка")
+        # editing: Backspace one char, Ctrl+Backspace one word (Windows habits)
+        assert app.key('backspace') == 'save:edit' and app.save_form['note'] == "заметк"
+        app.text_input("а  два три ")
+        assert app.key('backspace', ctrl=True) == 'save:edit'
+        assert app.save_form['note'] == "заметка  два "
+        app.key('backspace', ctrl=True)
+        assert app.save_form['note'] == "заметка  "
+        app.key('backspace', ctrl=True)
+        assert app.save_form['note'] == ""
+        app.key('backspace', ctrl=True)                    # empty stays empty
+        app.text_input("заметка")
         app.draw(screen, font, small)
         time.sleep(0.2)
         assert app.key('return') == 'save:ok'

@@ -220,11 +220,12 @@ class BenchApp:
             if cell is not None:
                 self._paint(cell)
 
-    def key(self, name):
-        """Keyboard hotkey by key name ('r' = Restart).  Returns the command or None."""
+    def key(self, name, ctrl=False):
+        """Keyboard hotkey by key name ('r' = Restart).  Returns the command or None.
+        `ctrl`: a Control modifier is held (text editing: Ctrl+Backspace)."""
         name = name.lower()
         if self.mode == 'save':
-            return self._key_save_form(name)
+            return self._key_save_form(name, ctrl)
         if self.mode == 'catalog':
             if name == 'escape':
                 self.close_catalog()
@@ -467,7 +468,14 @@ class BenchApp:
         if f is not None:
             f[f['field']] += text
 
-    def _key_save_form(self, name):
+    @staticmethod
+    def _erase_word(text):
+        """Ctrl+Backspace: drop trailing spaces, then the last word."""
+        t = text.rstrip(' ')
+        i = t.rfind(' ')
+        return t[:i + 1] if i >= 0 else ''
+
+    def _key_save_form(self, name, ctrl=False):
         f = self.save_form
         if name in ('return', 'enter', 'kp_enter'):
             self.confirm_save()
@@ -479,7 +487,8 @@ class BenchApp:
             f['field'] = 'note' if f['field'] == 'title' else 'title'
             return 'save:field'
         if name == 'backspace':
-            f[f['field']] = f[f['field']][:-1]
+            cur = f[f['field']]
+            f[f['field']] = self._erase_word(cur) if ctrl else cur[:-1]
             return 'save:edit'
         return None
 
@@ -982,6 +991,7 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
     engine.start()
     print(f"[audio] {engine.status_text()}", flush=True)     # (a parent bench reads the pipe)
     pygame.init()
+    pygame.key.set_repeat(400, 35)     # held keys repeat (Backspace in the save form)
     app = BenchApp(runner.scene, engine, catalog=catalog)
     app.vol = runner.vol
     if origin_snapshot is not None:
@@ -1002,7 +1012,7 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
                         and app.mode == 'live':
                     alive = False
                 elif ev.type == pygame.KEYDOWN:
-                    app.key(pygame.key.name(ev.key))
+                    app.key(pygame.key.name(ev.key), ctrl=bool(ev.mod & pygame.KMOD_CTRL))
                 elif ev.type == pygame.TEXTINPUT:
                     app.text_input(ev.text)
                 elif ev.type == pygame.MOUSEBUTTONDOWN:
