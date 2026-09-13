@@ -1,0 +1,66 @@
+{
+ "format": 2,
+ "id": "laplace_s6",
+ "title": "S6 acceptance: Laplace A/B, harm B = 0.25",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   14,
+   15
+  ],
+  [
+   14,
+   16
+  ],
+  [
+   15,
+   14
+  ],
+  [
+   15,
+   15
+  ],
+  [
+   16,
+   15
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 4,
+ "audio": {
+  "f0_hz": 220,
+  "level": 1.0
+ },
+ "variants": {
+  "A": {
+   "engine_id": "laplacian",
+   "engine_params": {
+    "n": 12,
+    "spread": 0,
+    "alpha": 1,
+    "shape": 0,
+    "harm": 0,
+    "fullshape": 1,
+    "dyn": 0
+   }
+  },
+  "B": {
+   "engine_id": "laplacian",
+   "engine_params": {
+    "n": 12,
+    "spread": 0,
+    "alpha": 1,
+    "shape": 0,
+    "harm": 0.25,
+    "fullshape": 1,
+    "dyn": 0
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "B is pulled toward integer ratios (harm 0.25): compare A / B, then Save and check the Pinned status in the catalog."
+}
