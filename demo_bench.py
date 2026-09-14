@@ -23,6 +23,7 @@ import math
 import os
 import sys
 import threading
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -184,12 +185,14 @@ class BenchApp:
             return False
 
     # -- input ---------------------------------------------------------------
-    def press(self, pos, button):
-        """Mouse button down. button: 1 = left, 3 = right.  Returns what was hit."""
+    def press(self, pos, button, now=None):
+        """Mouse button down. button: 1 = left, 3 = right.  Returns what was hit.
+        `now` (seconds, monotonic) only serves double-click detection in the
+        catalog; tests may pass it explicitly."""
         if self.mode == 'save':
             return self._press_save_form(pos, button)
         if self.mode == 'catalog':
-            return self._press_catalog(pos, button)
+            return self._press_catalog(pos, button, now)
         if self.mode == 'report':
             return self._press_report(pos, button)
         if button == 1 and self.catalog is not None:
@@ -979,8 +982,9 @@ class BenchApp:
         return (MARGIN, self.CAT_TOP + i * ROW_LIST_H, self.field_w, ROW_LIST_H - 4)
 
     CAT_ROWS = 12                    # records listed at once (wheel scrolls)
+    DOUBLE_CLICK_S = 0.4             # second click on the same record -> Continue
 
-    def _press_catalog(self, pos, button):
+    def _press_catalog(self, pos, button, now=None):
         if button in (4, 5):             # mouse wheel: scroll the list
             n = len(self.cat['entries'])
             first = self.cat.get('scroll', 0) + (-1 if button == 4 else 1)
@@ -1008,9 +1012,17 @@ class BenchApp:
             self.close_catalog()
             return 'back'
         first = self.cat.get('scroll', 0)
+        now = time.monotonic() if now is None else now
         for i in range(first, min(len(self.cat['entries']), first + self.CAT_ROWS)):
             if self._inside(self._list_rect(i - first), pos):
+                last = self.cat.get('click')
                 self.select_record(i)
+                if last is not None and last[0] == i and 0.0 <= now - last[1] < self.DOUBLE_CLICK_S:
+                    # double click = the Continue button of that record
+                    self.cat['click'] = None
+                    self.continue_record()
+                    return 'continue'
+                self.cat['click'] = (i, now)
                 return f'record:{i}'
         if self._inside(r['continue'], pos):
             self.continue_record()
@@ -1633,7 +1645,10 @@ def _print_provenance():
 
 
 def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_record_id=None,
-           caption=''):
+           caption='', start='catalog'):
+    """`start`: 'catalog' (default) opens on the catalog screen -- the live
+    scene stands paused and muted behind it, Esc / Back reaches it; 'live'
+    opens the sounding field directly (--live; autotests, continued records)."""
     import pygame
     from casynth_lab.audio_out import LiveEngine
     catalog = catalog or Catalog()
@@ -1650,6 +1665,8 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
     app.vol = runner.vol
     if origin_snapshot is not None:
         app.status = f"Continued: {runner.scene.title}  ({caption})"
+    elif start == 'catalog':
+        app.open_catalog()
     screen = pygame.display.set_mode((app.width, app.height))
     pygame.display.set_caption(f"CASynth demo bench - {runner.scene.title}"
                                + (f"  [{caption}]" if caption else ''))
@@ -1733,7 +1750,7 @@ def run_record(catalog_root, rid, action, headless=False, seconds=2.0, out=None)
                               commit=doc.get('commit'))), flush=True)
         return 0
     return run_ui(None, runner.vol, catalog=catalog, runner=runner, origin_snapshot=state,
-                  parent_record_id=rec.id, caption=caption)
+                  parent_record_id=rec.id, caption=caption, start='live')
 
 
 def run_render(scene, out_path, seconds, vol, side):
@@ -1762,6 +1779,8 @@ def main(argv=None):
                     help="offline output: raw side A/B or the monitor mix")
     ap.add_argument('--vol', type=float, default=VOL_DEFAULT, help="initial volume 0..1")
     ap.add_argument('--catalog', metavar='ROOT', help="catalog root (absolute; S6 contract)")
+    ap.add_argument('--live', action='store_true',
+                    help="open the sounding field directly instead of the catalog screen")
     ap.add_argument('--record', metavar='ID', help="record to act on (with --catalog)")
     ap.add_argument('--action', choices=('continue', 'check'), default='continue')
     ap.add_argument('--headless', action='store_true',
@@ -1786,7 +1805,7 @@ def main(argv=None):
         return run_render(scene, a.render, a.seconds, a.vol, a.side)
     _print_provenance()
     catalog = Catalog(os.path.abspath(a.catalog)) if a.catalog else None
-    return run_ui(scene, a.vol, catalog=catalog)
+    return run_ui(scene, a.vol, catalog=catalog, start='live' if a.live else 'catalog')
 
 
 if __name__ == '__main__':

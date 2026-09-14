@@ -10,7 +10,12 @@ Offline render, no window / no audio device:
 
 Dependencies: `pip install -r requirements.txt` (numpy, scipy, pygame-ce, sounddevice).
 
-Transport: the bench opens ON PAUSE (silent) -- release **Pause CA** to go
+The bench opens on the **Catalog** screen (2026-09-14): pick a record and press
+**Continue**, or double-click it -- the same thing; Esc / **Back** reaches the
+live scene of the launch file.  `--live` opens the sounding field directly
+(autotests, scripted launches); a continued record always opens live.
+
+Transport: the live scene starts ON PAUSE (silent) -- release **Pause CA** to go
 (field evolves + sound); while running Pause CA freezes only the automaton
 (painting and sound continue).  **Stop** (S) = initial scene + pause + silence;
 **Restart** (R) = initial scene, clocks and all audio tails reset, runs again.  Stop/Restart keep the
@@ -232,7 +237,7 @@ Pulsar scene; never per record).  Both engines snapshot completely (Continue
 is byte-exact; `tests/test_demo_lab_sn.py`).
 
 Entries: **`run_scan_demo.bat`** / **`run_network_demo.bat`** open the bench
-on a demo scene with the prepared catalog
+on the catalog screen (a demo scene stands behind it) with the prepared catalog
 `lab_catalog/sn_demos_2026_09_14/{scan,network}/`.  Build the catalog once
 (it is user data, not in Git; the build refuses an existing directory):
 `python demos/build_sn_demos.py` (scenes `demos/sn_*.json` are rewritten

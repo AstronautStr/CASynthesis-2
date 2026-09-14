@@ -663,6 +663,29 @@ def test_registry_ui_hints_and_scene_validation():
     pieces = app._seam_pieces((31.0, 31.0), (32.0, 32.0))
     assert len(pieces) == 2 and pieces[1][1] == (0.0, 0.0)
     assert app._seam_pieces((3.0, 4.0), (5.0, 4.0)) == [((3.0, 4.0), (5.0, 4.0))]
+    # catalog: a double click on a record acts as its Continue button; a slow
+    # second click or a click on another record only selects
+    import tempfile
+    from casynth_lab.catalog import Catalog
+    root = os.path.join(ART, 'dblclick')
+    shutil.rmtree(root, ignore_errors=True)
+    os.makedirs(os.path.join(root, '.tmp'))
+    cat = Catalog(root, repo_root=None)
+    app2 = db.BenchApp(scene, eng, catalog=cat)
+    calls = []
+    app2.continue_record = lambda: calls.append(app2.cat['sel'])
+    app2.open_catalog()
+    assert app2.mode == 'catalog'
+    app2.cat['entries'] = [(None, 'x'), (None, 'y')]              # two rows (content irrelevant)
+    r0, r1 = app2._list_rect(0), app2._list_rect(1)
+    c0, c1 = (r0[0] + 5, r0[1] + 5), (r1[0] + 5, r1[1] + 5)
+    assert app2.press(c0, 1, now=10.0) == 'record:0' and app2.cat['sel'] == 0 and calls == []
+    assert app2.press(c0, 1, now=10.3) == 'continue' and calls == [0]
+    assert app2.press(c0, 1, now=10.5) == 'record:0' and calls == [0]   # the pair was consumed
+    assert app2.press(c0, 1, now=11.5) == 'record:0' and calls == [0]   # too slow
+    assert app2.press(c1, 1, now=11.6) == 'record:1' and app2.cat['sel'] == 1 and calls == [0]
+    assert app2.press(c1, 1, now=11.7) == 'continue' and calls == [0, 1]
+    eng.stop()
 
 
 def _run():
