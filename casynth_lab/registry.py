@@ -16,13 +16,27 @@ from .legacy_engine import LegacySynthEngine
 
 
 class EngineSpec:
-    __slots__ = ('id', 'label', 'params', 'factory')
+    """Optional display hints (S/N demos, 2026-09-14; the sound never depends
+    on them):
+      choices  : {param: (name, ...)} -- an integer parameter whose values are
+                 modes named by words (index = value); the bench shows buttons
+                 with those words instead of a slider / on-off toggle.
+      inactive : inactive(params) -> {param: text} -- parameters that do not
+                 act for the current settings (shown as that text, not editable).
+      overlay  : overlay(params, rows, cols) -> dict drawn over the field for
+                 the listened side (see demo_bench: 'polyline' of unwrapped
+                 cell coordinates, 'start'/'ahead', 'labels', 'circles',
+                 'text').  It must use the SAME geometry as the engine."""
+    __slots__ = ('id', 'label', 'params', 'factory', 'choices', 'inactive', 'overlay')
 
-    def __init__(self, id, label, params, factory):
+    def __init__(self, id, label, params, factory, choices=None, inactive=None, overlay=None):
         self.id = id
         self.label = label
         self.params = tuple(tuple(p) for p in params)
         self.factory = factory       # factory(ctx, params) -> SoundEngine
+        self.choices = {k: tuple(v) for k, v in (choices or {}).items()}
+        self.inactive = inactive
+        self.overlay = overlay
 
     def defaults(self):
         return {p[0]: p[5] for p in self.params}
@@ -32,6 +46,15 @@ class EngineSpec:
             if p[0] == name:
                 return p
         return None
+
+    def value_text(self, name, value):
+        """Human text of a parameter value (mode word when the parameter has
+        named choices)."""
+        names = self.choices.get(name)
+        if names is not None and 0 <= int(value) < len(names) and int(value) == value:
+            return names[int(value)]
+        spec = self.spec_of(name)
+        return f"{int(value):d}" if spec is not None and spec[4] else f"{value:g}"
 
 
 REGISTRY = {}
@@ -46,6 +69,11 @@ def register(spec, replace=False):
     for p in spec.params:
         if len(p) != 6:
             raise ValueError(f"engine {spec.id!r}: bad param spec {p!r}")
+    for name, names in spec.choices.items():
+        p = spec.spec_of(name)
+        if p is None or not p[4] or p[2] != 0 or p[3] != len(names) - 1:
+            raise ValueError(f"engine {spec.id!r}: choices of {name!r} do not match its "
+                             f"integer range 0..{len(names) - 1}")
     REGISTRY[spec.id] = spec
     return spec
 
@@ -70,6 +98,10 @@ def specs():
 
 def label(engine_id):
     return get(engine_id).label
+
+
+def value_text(engine_id, name, value):
+    return get(engine_id).value_text(name, value)
 
 
 def defaults(engine_id):
@@ -109,3 +141,7 @@ def _legacy_factory(engine_id):
 
 for _e in _CORE_ENGINES:
     register(EngineSpec(_e['id'], _e['label'], _e['params'], _legacy_factory(_e['id'])))
+
+# S/N demo engines (2026-09-14): registered after the built-in five, in this
+# one place (each module calls register() at import).
+from . import scan_surface    # noqa: E402,F401

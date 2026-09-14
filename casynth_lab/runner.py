@@ -86,6 +86,12 @@ class SideState:
             self.clip_blocks += 1
         return buf
 
+    def display(self):
+        """Read-only numbers an engine offers the UI (None when it has none);
+        the display never takes part in the sound."""
+        fn = getattr(self.engine, 'display', None)
+        return fn() if callable(fn) else None
+
     @property
     def snapshot_ok(self):
         return supports_snapshot(self.engine)
@@ -522,7 +528,8 @@ class DemoRunner:
                     selected=self.selected,
                     sides=self.side_settings(), modified=self.side_modified(),
                     peak={n: s.peak for n, s in self.sides.items()},
-                    clip_blocks={n: s.clip_blocks for n, s in self.sides.items()})
+                    clip_blocks={n: s.clip_blocks for n, s in self.sides.items()},
+                    display={n: s.display() for n, s in self.sides.items()})
 
 
 def describe_difference(settings):
@@ -531,7 +538,8 @@ def describe_difference(settings):
     la, lb = registry.label(ea), registry.label(eb)
     if ea != eb:
         return f"A: {la}  /  B: {lb}"
-    diffs = [f"{k}: A={pa[k]:g}, B={pb[k]:g}" for k in pa if pa[k] != pb.get(k)]
+    diffs = [f"{k}: A={registry.value_text(ea, k, pa[k])}, B={registry.value_text(ea, k, pb[k])}"
+             for k in pa if pa[k] != pb.get(k)]
     return "   ".join(diffs) if diffs else f"A = B ({la})"
 
 

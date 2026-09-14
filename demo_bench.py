@@ -19,6 +19,7 @@ stdout stays ASCII (Windows console codepage).
 """
 import argparse
 import json
+import math
 import os
 import sys
 import threading
@@ -58,6 +59,7 @@ C_BTN_ON = (48, 92, 104)
 C_ERR = (230, 120, 90)
 C_WARN = (230, 180, 90)
 C_OK = (120, 210, 140)
+C_OVERLAY = (235, 120, 175)     # S/N demos: reading path / link masks over the field
 LAB_BTN_W = 104
 ROW_LIST_H = 50
 
@@ -100,7 +102,7 @@ class BenchApp:
         self.field_y = TOP_H
         self.panel_x = MARGIN + self.field_w + MARGIN
         self.width = self.panel_x + PANEL_W + MARGIN
-        self.height = TOP_H + max(self.field_h, 420) + MARGIN
+        self.height = TOP_H + max(self.field_h, 420) + 20 + MARGIN   # +20: overlay caption
         self.buttons = {}
         x = MARGIN
         for key, label in (('stop', 'Stop (S)'), ('pause', 'Pause CA (Space)'), ('reset', 'Restart (R)')):
@@ -117,14 +119,20 @@ class BenchApp:
         self.copy_btns = {('B', 'A'): (px + TAB_W + 4, py, ARROW_W, TAB_H),          # <<
                           ('A', 'B'): (px + TAB_W + ARROW_W + 8, py, ARROW_W, TAB_H)}  # >>
         self.factory_btn = (px + PANEL_W - 100, py + TAB_H + 6, 100, 22)
+        # engine buttons: 3 per row, as many rows as the registry needs; the
+        # parameter rows start below the LAST row (S/N demos: 7 engines)
         self.engine_btns = {}
         ey = py + TAB_H + 48
-        for i, e in enumerate(registry.specs()):
+        specs = registry.specs()
+        for i, e in enumerate(specs):
             col, row = i % 3, i // 3
             self.engine_btns[e.id] = (px + col * (ENG_W + 6), ey + row * (ENG_H + 6),
                                          ENG_W, ENG_H)
-        self.params_y = ey + 2 * (ENG_H + 6) + 12
-        self.slider_x = px + 60
+        self.engine_rows = (len(specs) + 2) // 3
+        self.params_y = ey + self.engine_rows * (ENG_H + 6) + 12
+        self.param_rows_max = max([len(e.params) for e in specs] + [1])
+        self.footer_y = self.params_y + self.param_rows_max * ROW_H + 8   # peak / message
+        self.slider_x = px + 82
 
     # -- helpers -------------------------------------------------------------
     @staticmethod
@@ -152,6 +160,19 @@ class BenchApp:
             y = self.params_y + i * ROW_H
             rows.append((spec, (self.slider_x, y + 6, SLIDER_W, 10)))
         return rows
+
+    def _choice_rects(self, eid, name, sy):
+        """Word buttons of a named-choice parameter on the row whose slider
+        would sit at y = sy: [(value, rect)]."""
+        names = registry.get(eid).choices.get(name, ())
+        n = max(1, len(names))
+        w = min(60, (PANEL_W - 82 - 4 * (n - 1)) // n)
+        return [(v, (self.slider_x + v * (w + 4), sy - 4, w, 18)) for v in range(len(names))]
+
+    @staticmethod
+    def _inactive(eid, params):
+        fn = registry.get(eid).inactive
+        return fn(params) if fn is not None else {}
 
     def _post(self, kind, **args):
         try:
@@ -205,9 +226,19 @@ class BenchApp:
                 if self._inside(rect, pos):
                     self._post('set_engine', side=side, engine_id=e_id)
                     return f'engine:{e_id}'
+            inactive = self._inactive(eid, params)
+            choices = registry.get(eid).choices
             for spec, (sx, sy, sw, sh) in self._param_rows(eid):
+                name = spec[0]
+                if name in inactive:
+                    continue                          # shown as text, not editable
+                if name in choices:
+                    for value, rect in self._choice_rects(eid, name, sy):
+                        if self._inside(rect, pos) and value != params[name]:
+                            self._post('set_param', side=side, name=name, value=value)
+                            return f'param:{name}'
+                    continue
                 if sx - 6 <= pos[0] < sx + sw + 6 and sy - 8 <= pos[1] < sy + sh + 8:
-                    name = spec[0]
                     if _is_toggle(spec):
                         self._post('set_param', side=side, name=name,
                                    value=0 if params[name] else 1)
@@ -347,6 +378,7 @@ class BenchApp:
         # side panel
         side = snap['selected']
         eid, params = snap['sides'][side]
+        self._draw_overlay(screen, small, eid, params)
         for s, rect in self.tabs.items():
             on = (s == side)
             pygame.draw.rect(screen, C_BTN_ON if on else C_BTN, rect, border_radius=4)
@@ -355,6 +387,8 @@ class BenchApp:
             hot = '1' if s == 'A' else '2'
             lbl = f"{s}{star}: {registry.label(snap['sides'][s][0])} ({hot})"
             t = font.render(lbl, True, C_TXT)
+            if t.get_width() > rect[2] - 6:
+                t = small.render(lbl, True, C_TXT)
             screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                             rect[1] + (rect[3] - t.get_height()) // 2))
         for (src, dst), rect in self.copy_btns.items():
@@ -380,11 +414,23 @@ class BenchApp:
             t = small.render(registry.label(e_id), True, C_TXT)
             screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                             rect[1] + (rect[3] - t.get_height()) // 2))
+        inactive = self._inactive(eid, params)
+        choices = registry.get(eid).choices
         for spec, (sx, sy, sw, sh) in self._param_rows(eid):
             name, label, lo, hi, integer, _d = spec
             v = params[name]
             screen.blit(small.render(label, True, C_DIM), (px, sy - 4))
-            if _is_toggle(spec):
+            if name in inactive:
+                screen.blit(small.render(inactive[name], True, C_DIM), (sx, sy - 4))
+            elif name in choices:
+                for value, rect in self._choice_rects(eid, name, sy):
+                    on = (value == v)
+                    pygame.draw.rect(screen, C_BTN_ON if on else C_BTN, rect, border_radius=3)
+                    pygame.draw.rect(screen, C_ACCENT if on else C_EDGE, rect, 1, border_radius=3)
+                    t = small.render(choices[name][value], True, C_TXT)
+                    screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
+                                    rect[1] + (rect[3] - t.get_height()) // 2))
+            elif _is_toggle(spec):
                 pygame.draw.rect(screen, C_ACCENT if v else C_BTN, (sx, sy - 3, 34, 16),
                                  border_radius=8)
                 pygame.draw.rect(screen, C_EDGE, (sx, sy - 3, 34, 16), 1, border_radius=8)
@@ -397,10 +443,12 @@ class BenchApp:
                 screen.blit(small.render(txt, True, C_TXT), (sx + sw + 8, sy - 4))
         pk = snap['peak']
         screen.blit(small.render(f"peak A {pk['A']:.2f}   B {pk['B']:.2f}", True, C_DIM),
-                    (px, self.params_y + 7 * ROW_H + 8))
+                    (px, self.footer_y))
         if self.message:
             screen.blit(small.render(self.message[:60], True, C_ERR),
-                        (px, self.params_y + 7 * ROW_H + 28))
+                        (px, self.footer_y + 20))
+        self._draw_display(screen, small, snap.get('display', {}).get(side),
+                           px, self.params_y + len(registry.get(eid).params) * ROW_H + 6)
         # S4: lab buttons + status; overlays
         if self.catalog is not None:
             for key, rect in self.lab_buttons.items():
@@ -415,6 +463,124 @@ class BenchApp:
                 screen.blit(small.render(self.status[:90], True, col), (MARGIN + 300, TOP_H - 26))
         if self.mode == 'save':
             self._draw_save_form(screen, font, small)
+
+    # =====================================================================
+    # S/N demos (2026-09-14): field overlay of the listened side + engine display
+    # =====================================================================
+    def _cell_px(self, x, y):
+        """Unwrapped cell coordinates (x = column, y = row) -> pixel centre."""
+        return (self.field_x + (x + 0.5) * CELL, self.field_y + (y + 0.5) * CELL)
+
+    def _seam_pieces(self, a, b):
+        """The unwrapped segment a->b as pieces INSIDE the field: a torus seam
+        crossing is split at the seam and each piece is shifted into the field
+        (never a fake line across the whole field)."""
+        rows, cols = self.scene.rows, self.scene.cols
+        (ax, ay), (bx, by) = a, b
+        ts = {0.0, 1.0}
+        for pa, pb, n in ((ax, bx, cols), (ay, by, rows)):
+            if pb != pa:
+                lo, hi = min(pa, pb), max(pa, pb)
+                for k in range(math.ceil((lo + 0.5) / n), math.floor((hi + 0.5) / n) + 1):
+                    t = (k * n - 0.5 - pa) / (pb - pa)
+                    if 0.0 < t < 1.0:
+                        ts.add(t)
+        ts = sorted(ts)
+        out = []
+        for t0, t1 in zip(ts[:-1], ts[1:]):
+            tm = (t0 + t1) / 2.0
+            sx = math.floor((ax + (bx - ax) * tm + 0.5) / cols) * cols
+            sy = math.floor((ay + (by - ay) * tm + 0.5) / rows) * rows
+            out.append(((ax + (bx - ax) * t0 - sx, ay + (by - ay) * t0 - sy),
+                        (ax + (bx - ax) * t1 - sx, ay + (by - ay) * t1 - sy)))
+        return out
+
+    def _overlay_runs(self, eid, params):
+        """Pixel polylines of the engine overlay (cached per settings)."""
+        spec = registry.get(eid)
+        if spec.overlay is None:
+            return None
+        key = (eid, tuple(sorted(params.items())), self.scene.rows, self.scene.cols)
+        cache = getattr(self, '_overlay_cache', None)
+        if cache is not None and cache[0] == key:
+            return cache[1]
+        ov = spec.overlay(params, self.scene.rows, self.scene.cols)
+        runs = []
+        pts = ov.get('polyline') or []
+        pairs = list(zip(pts[:-1], pts[1:]))
+        run = []
+        for a, b in pairs:
+            for p0, p1 in self._seam_pieces(a, b):
+                if run and run[-1] == p0:
+                    run.append(p1)
+                else:
+                    if len(run) >= 2:
+                        runs.append(run)
+                    run = [p0, p1]
+        if len(run) >= 2:
+            runs.append(run)
+        data = dict(runs=[[self._cell_px(*p) for p in r] for r in runs],
+                    start=ov.get('start'), ahead=ov.get('ahead'), text=ov.get('text', ''),
+                    circles=ov.get('circles') or [], labels=ov.get('labels') or [])
+        self._overlay_cache = (key, data)
+        return data
+
+    def _draw_overlay(self, screen, small, eid, params):
+        import pygame
+        data = self._overlay_runs(eid, params)
+        if data is None:
+            return
+        col = C_OVERLAY
+        for x, y, radius in data['circles']:
+            cx, cy = self._cell_px(x, y)
+            pygame.draw.circle(screen, col, (int(cx), int(cy)), int(radius * CELL), 1)
+        for x, y, text in data['labels']:
+            cx, cy = self._cell_px(x, y)
+            t = small.render(text, True, col)
+            box = (cx - t.get_width() // 2 - 3, cy - t.get_height() // 2 - 1,
+                   t.get_width() + 6, t.get_height() + 2)
+            pygame.draw.rect(screen, C_BG, box, border_radius=3)
+            pygame.draw.rect(screen, col, box, 1, border_radius=3)
+            screen.blit(t, (cx - t.get_width() // 2, cy - t.get_height() // 2))
+        for run in data['runs']:
+            pygame.draw.lines(screen, col, False, run, 2)
+        if data['start'] is not None:
+            sx, sy = self._cell_px(*data['start'])
+            pygame.draw.circle(screen, col, (int(sx), int(sy)), 5)
+            if data['ahead'] is not None:
+                hx, hy = self._cell_px(*data['ahead'])
+                dx, dy = hx - sx, hy - sy
+                norm = math.hypot(dx, dy) or 1.0
+                ux, uy = dx / norm, dy / norm
+                tip = (sx + ux * 16, sy + uy * 16)
+                left = (sx + ux * 6 - uy * 6, sy + uy * 6 + ux * 6)
+                right = (sx + ux * 6 + uy * 6, sy + uy * 6 - ux * 6)
+                pygame.draw.polygon(screen, col, [tip, left, right])
+        if data['text']:
+            screen.blit(small.render(data['text'][:90], True, col),
+                        (self.field_x, self.field_y + self.field_h + 2))
+
+    def _draw_display(self, screen, small, disp, x, y):
+        """Engine display numbers (pm_network: six link depths W as bars,
+        the target as a tick, frozen / gate state)."""
+        import pygame
+        if not disp or 'W' not in disp:
+            return
+        from casynth_lab.pm_network import EDGES
+        state = "frozen" if disp.get('frozen') else "live"
+        screen.blit(small.render(f"Links W (j>i)  {state}   gate {disp.get('gate', 0):.2f}",
+                                 True, C_DIM), (x, y))
+        bar_x, bar_w, full = x + 44, 150, 1.0 / 3.0
+        for k, (i, j) in enumerate(EDGES):
+            ry = y + 18 + k * 14
+            w, wt = float(disp['W'][k]), float(disp['W_target'][k])
+            screen.blit(small.render(f"{j}>{i}", True, C_DIM), (x, ry - 2))
+            pygame.draw.rect(screen, C_EDGE, (bar_x, ry, bar_w, 8), border_radius=3)
+            pygame.draw.rect(screen, C_ACCENT, (bar_x, ry, int(bar_w * min(w / full, 1.0)), 8),
+                             border_radius=3)
+            tx = bar_x + int(bar_w * min(wt / full, 1.0))
+            pygame.draw.line(screen, C_TXT, (tx, ry - 2), (tx, ry + 10), 1)
+            screen.blit(small.render(f"{w:.3f}", True, C_TXT), (bar_x + bar_w + 8, ry - 3))
 
     # =====================================================================
     # S4: save / catalog / player / replay
@@ -812,7 +978,14 @@ class BenchApp:
     def _list_rect(self, i):
         return (MARGIN, self.CAT_TOP + i * ROW_LIST_H, self.field_w, ROW_LIST_H - 4)
 
+    CAT_ROWS = 12                    # records listed at once (wheel scrolls)
+
     def _press_catalog(self, pos, button):
+        if button in (4, 5):             # mouse wheel: scroll the list
+            n = len(self.cat['entries'])
+            first = self.cat.get('scroll', 0) + (-1 if button == 4 else 1)
+            self.cat['scroll'] = max(0, min(first, max(0, n - self.CAT_ROWS)))
+            return 'scroll'
         if button != 1:
             return None
         r = self._catalog_rects()
@@ -834,8 +1007,9 @@ class BenchApp:
         if self._inside(r['back'], pos):
             self.close_catalog()
             return 'back'
-        for i in range(len(self.cat['entries'])):
-            if self._inside(self._list_rect(i), pos):
+        first = self.cat.get('scroll', 0)
+        for i in range(first, min(len(self.cat['entries']), first + self.CAT_ROWS)):
+            if self._inside(self._list_rect(i - first), pos):
                 self.select_record(i)
                 return f'record:{i}'
         if self._inside(r['continue'], pos):
@@ -920,8 +1094,13 @@ class BenchApp:
             pygame.draw.rect(screen, C_EDGE, (MARGIN + 320, y + 4, 180, 8), border_radius=3)
             pygame.draw.rect(screen, C_ACCENT, (MARGIN + 320, y + 4, int(180 * v['progress']), 8),
                              border_radius=3)
-        for i, (rec, err) in enumerate(entries[:12]):
-            rect = self._list_rect(i)
+        first = max(0, min(self.cat.get('scroll', 0), max(0, len(entries) - self.CAT_ROWS)))
+        if len(entries) > self.CAT_ROWS:
+            screen.blit(small.render(f"{first + 1}-{min(len(entries), first + self.CAT_ROWS)} "
+                                     f"of {len(entries)} (wheel scrolls)", True, C_DIM),
+                        (MARGIN + 390, self.CAT_TOP - 16))
+        for i, (rec, err) in enumerate(entries[first:first + self.CAT_ROWS], start=first):
+            rect = self._list_rect(i - first)
             on = (i == self.cat['sel'])
             pygame.draw.rect(screen, C_BTN_ON if on else C_PANEL, rect, border_radius=4)
             pygame.draw.rect(screen, C_ACCENT if on else C_EDGE, rect, 1, border_radius=4)
