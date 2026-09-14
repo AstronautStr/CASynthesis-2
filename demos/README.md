@@ -23,8 +23,9 @@ marks a side that differs from those defaults.
 A/B: one shared field, two sound sides computed all the time on the same
 timeline.  The **A** / **B** tabs pick the side you listen to AND edit
 (20 ms crossfade on switch).  The panel shows the selected side's engine
-(Laplace / FFT / Walsh / Random / Granulo from `casynth_core.ENGINES`), its
-knobs with the registry ranges, and a one-line summary of how A and B differ.
+(Laplace / FFT / Walsh / Random / Granulo from `casynth_core.ENGINES`, plus
+Scan / Network, see below), its knobs with the registry ranges (named modes as
+word buttons), and a one-line summary of how A and B differ.
 Settings are remembered per side x engine.
 
 Scenes: `laplace_basic.json` = format 1 (one engine, loaded as A = B);
@@ -199,6 +200,70 @@ Headless: `python -m casynth_lab.verify run lab_catalog/local` (JSON lines).
 Demo catalog for the acceptance: `python tests/s7_demo_catalog.py`, then
 `run_demo_bench.bat --catalog lab_catalog\s7_demo`.
 
+## Scan / Network sound demos (2026-09-14)
+
+Two engines from `memory/req-sonification-sn-demos-2026-09-14.md`, both
+treating the WHOLE field as one sound object (no per-object segmentation):
+
+- **Scan** (`scan_surface`, `casynth_lab/scan_surface.py`): the mask becomes
+  a surface (`Surface`: **Smooth** = 2*Gaussian(g, width)-1, periodic;
+  **Distance** = tanh((d_dead - d_live)/width) on the torus) and a fixed
+  closed path reads it once per note period (`Path`: **Ellipse**,
+  **Lissajous** 2:3, **Raster** = snake through every cell, closed across the
+  torus seam; `Radius X/Y` act on the two analytic paths only -- the panel
+  shows `Full field` for Raster).  The reading is mean-removed, band-limited
+  to K = floor(0.45*sr/f0) COMPLEX harmonics and played additively with a
+  continuous phase; any change of field / surface / path / radii crossfades the
+  coefficient vectors over 20 ms.  The path is drawn over the field for the
+  listened side (start dot + arrow = direction), with the same geometry the
+  engine reads.
+- **Network** (`pm_network`, `casynth_lab/pm_network.py`): four generators at
+  ratios 1..4 of f0 on one phase; six directed phase-modulation links (higher
+  index modulates lower, same sample, no feedback) whose depths W are the
+  field's mass under six fixed Gaussian masks (two rows x three columns, drawn
+  as circles `j>i` = j modulates i); `Coupling` = beta, `Frozen links` holds
+  the current W.  Runs at 4x with a linear-phase decimator and a 5 Hz
+  high-pass; W / beta smoothed over 30 ms; an empty field closes a 20 ms
+  gate.  The six current depths are shown as bars (tick = target).
+
+`Level (dB)` on both = constant trim applied once with the master gain
+(defaults Scan +6 dB, Network +3 dB: RMS matched to the Laplace side on the
+Pulsar scene; never per record).  Both engines snapshot completely (Continue
+is byte-exact; `tests/test_demo_lab_sn.py`).
+
+Entries: **`run_scan_demo.bat`** / **`run_network_demo.bat`** open the bench
+on a demo scene with the prepared catalog
+`lab_catalog/sn_demos_2026_09_14/{scan,network}/`.  Build the catalog once
+(it is user data, not in Git; the build refuses an existing directory):
+`python demos/build_sn_demos.py` (scenes `demos/sn_*.json` are rewritten
+identically; `--scenes-only` skips the recording).  Records: 8 s static
+(the CA paused from the first block; Continue = sound on, CA paused) or
+12 s evolution (Pulsar at 2 steps/s; Continue keeps evolving).
+
+| Record (catalog) | Scene | Field | A | B | Purpose |
+|---|---|---|---|---|---|
+| S-path: Ellipse / Lissajous (scan) | `sn_s_path_ellipse_lissajous` | F1 static | Scan Smooth Ellipse | Scan Smooth Lissajous | path only |
+| S-path: Ellipse / Raster (scan) | `sn_s_path_ellipse_raster` | F1 static | Scan Smooth Ellipse | Scan Smooth Raster | path only |
+| S-surface: Smooth / Distance (F1) (scan) | `sn_s_surface_f1` | F1 static | Scan Smooth Raster | Scan Distance Raster | surface only |
+| S-surface: Smooth / Distance (F2) (scan) | `sn_s_surface_f2` | F2 static | same | same | field change |
+| S-Laplace (scan) | `sn_s_laplace` | F3 Pulsar 12 s | Laplacian harm=0 | Scan Smooth Raster | whole method |
+| S-Laplace (Distance) (scan) | `sn_s_laplace_distance` | F3 12 s | Laplacian harm=0 | Scan Distance Raster | named extra |
+| S-Laplace (harm=1) (scan) | `sn_s_laplace_harm1` | F3 12 s | Laplacian harm=1 | Scan Smooth Raster | harmonicity control |
+| N-links: independent / connected (top) (network) | `sn_n_links_top` | F5 top static | Network coupling 0 | Network coupling 2 | links |
+| N-links: ... (bottom) (network) | `sn_n_links_bottom` | F5 bottom static | coupling 0 | coupling 2 | same count, other W |
+| N-field: Pond left / right (network) | `sn_n_field_left` / `_right` | F4 static | coupling 0 | coupling 2 | small-object control |
+| N-frozen: live / frozen links (network) | `sn_n_frozen` | F3 12 s | live links | frozen links | evolution of W |
+| N-frozen (Kok's galaxy) (network) | `sn_n_frozen_kok` | Kok's galaxy 12 s | live links | frozen links | REQ reserve case (W moves little for both oscillators) |
+| N-Laplace (network) | `sn_n_laplace` | F3 12 s | Laplacian harm=0 | Network coupling 2 | whole method |
+| N-Laplace (harm=1) (network) | `sn_n_laplace_harm1` | F3 12 s | Laplacian harm=1 | Network coupling 2 | harmonicity control |
+
+Fields: F1 `g[r,c]=1 if (r//4 + 2*(c//5)) % 3 == 0`; F2 = F1 transposed;
+F3 = Pulsar (anchor 9,9); F4 = Pond at (6,6) / (6,21); F5 = rows < 16 /
+rows >= 16.  Laplace control: n=12, spread=0, alpha=1, shape=1, harm=0 (1 in
+the named control), fullshape=1, dyn=0.  Known near-silent case: the analytic
+paths at radius 0.8 pass around the centred Pulsar (F3) and read only the
+Smooth tails -- F3 is prepared with Raster only.
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B
@@ -229,7 +294,13 @@ turns the field into stereo blocks.
                        lambda ctx, params: MyEngine(ctx, params)))
    ```
    Param spec = `(arg, label, lo, hi, integer, default)`; integer 0/1 renders as
-   a toggle.  The UI buttons/knobs, scene validation, commands and `--side`
+   a toggle.  Optional display hints (no effect on sound): `choices={'path':
+   ('Ellipse', 'Lissajous', 'Raster')}` renders an integer parameter as word
+   buttons; `inactive(params) -> {name: text}` shows a parameter as text when
+   it does not act; `overlay(params, rows, cols) -> dict` (`polyline` of
+   unwrapped cell coordinates, `start`/`ahead`, `circles`, `labels`, `text`) is
+   drawn over the field for the listened side; an engine method `display()`
+   returning plain numbers reaches the UI through the runner snapshot.  The UI buttons/knobs, scene validation, commands and `--side`
    export all come from the registry -- no other Python changes.
 3. **Scene** — reference it from JSON only:
    `"variants": {"B": {"engine_id": "my_engine", "engine_params": {"depth": 0.5}}}`.

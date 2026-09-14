@@ -1,0 +1,70 @@
+{
+ "format": 2,
+ "id": "sn_n_field_right",
+ "title": "N-field: Pond right (6,21)",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   6,
+   22
+  ],
+  [
+   6,
+   23
+  ],
+  [
+   7,
+   21
+  ],
+  [
+   7,
+   24
+  ],
+  [
+   8,
+   21
+  ],
+  [
+   8,
+   24
+  ],
+  [
+   9,
+   22
+  ],
+  [
+   9,
+   23
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 4.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0
+ },
+ "variants": {
+  "A": {
+   "engine_id": "pm_network",
+   "engine_params": {
+    "coupling": 0.0,
+    "freeze_links": 0,
+    "trim_db": 3.0
+   }
+  },
+  "B": {
+   "engine_id": "pm_network",
+   "engine_params": {
+    "coupling": 2.0,
+    "freeze_links": 0,
+    "trim_db": 3.0
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2 = listen A / B. Space pauses the CA; paint inside the six link marks."
+}
