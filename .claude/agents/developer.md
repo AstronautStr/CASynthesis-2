@@ -96,6 +96,10 @@ UI-кадр (пиксель-в-пиксель vs `tests/golden/ui_frame.png`) + 
 
 Ручной длинный smoke (живой аудио-цикл), если нужен:
 `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy python gol_synth.py` (Ctrl+C через пару секунд).
+Demo-стенд: `python demo_bench.py --demo demos/<scene>.json [--catalog ROOT]` открывается
+экраном каталога; чтобы сразу получить живое звучащее поле (скрипты, smoke, тесты с окном),
+добавь **`--live`**. Оффлайн-рендер `--render out.wav` и контракт `--record/--action` окна
+не открывают и флага не требуют.
 
 ## Работа по реквесту с критериями приёмки
 Любое вынужденное отклонение от ТЗ **согласуй с Researcher ДО реализации**, не молча
