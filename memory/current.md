@@ -1,6 +1,6 @@
 # Current Implementation State
 
-_Снапшот живого состояния (консолидирован /dream 2026-07-14). Полная история —
+_Снапшот живого состояния (консолидирован /dream 2026-07-14; демо S/N добавлены 2026-09-14). Полная история —
 `memory/archive/current-history-2026-06-16.md` + `memory/log/` (нарративы фиксов);
 решённые вопросы — `memory/archive/questions-resolved.md`._
 
@@ -23,12 +23,13 @@ _Снапшот живого состояния (консолидирован /d
 | `laplacian_explainer/`, `frontiers_explainer/` | Обучалки (JS дублирует ядро — известный trade-off) |
 | `patterns.py` | 29 паттернов в 9 категориях |
 | `demo_bench.py` + `casynth_lab/` + `demos/` | **Demo-стенд S1–S4** (2026-09-07/09): `DemoRunner` (единый live/offline исполнитель, общее поле + две стороны A/B, часы в сэмплах, очередь команд + журнал, crossfade 20 мс в мониторе), `LiveEngine` (render-поток + sounddevice), сцены JSON v1/v2; движки через `registry.py` (интерфейс `engine_api.SoundEngine`, адаптер `legacy_engine.py`); каталог опытов `recorder.py`/`catalog.py`; **снепшоты S5** (2026-09-12): `snapshot.py` (JSON+npz, без pickle), `export_state`/`restore_state` в интерфейсе движка и адаптере, `DemoRunner.export_state/from_state`, «Continue» / ветки с `parent_record_id`; **версии S6** (2026-09-13): `provenance.py` (отпечаток runtime-набора, git-соответствие, окружение), `versions.py` (кэш worktree + дочерний стенд по договору `--catalog/--record/--action`), статусы Pinned/Local, Pin, «Continue in version»; **проверка каталога S7** (2026-09-13): `verify.py` (`Catalog.recompute` — единый путь реплея; `compare_pcm`, `Verifier.run`/`run_in_subprocess`, отчёты `lab_catalog/local/.verify/<run>/`, отметки на слух, проверка пар по отпечаткам), плеер пары Saved/Recomputed на одном курсоре (`audio_out.play_pair`), экран отчёта в `demo_bench.py`; демо-каталог `tests/s7_demo_catalog.py`; запуск `run_demo_bench.bat` (`laplace_ab.json`) |
+| `casynth_lab/scan_surface.py` + `casynth_lab/pm_network.py` | **Демо S/N (2026-09-14, ТЗ `memory/req-sonification-sn-demos-2026-09-14.md`)**: движки стенда `scan_surface` (Scan: поверхность Smooth/Distance + путь Ellipse/Lissajous/Raster, band-limited аддитивный рендер с непрерывной фазой, 20-мс переход коэффициентов) и `pm_network` (Network: 4 генератора 1..4·f0, 6 направленных PM-связей из шести гауссовых масок поля, 4× рендер + FIR-децматор + HPF 5 Гц, сглаживание W/beta 30 мс, gate 20 мс, frozen links); оба с полным snapshot (Continue байт-в-байт). Подсказки реестра `choices/inactive/overlay` + `display()` движка → панель со словесными режимами, `Full field`, оверлей пути/масок, полоски W (`demo_bench.py`, геометрия панели от числа движков, прокрутка каталога колёсиком). Материал: `demos/build_sn_demos.py` (поля F1–F5 + Kok, 15 сцен `demos/sn_*.json`, каталог `lab_catalog/sn_demos_2026_09_14/{scan,network}/`), входы `run_scan_demo.bat` / `run_network_demo.bat`, тесты `tests/test_demo_lab_sn.py` (15). Уровни: сырой запас ×8, trim по умолчанию Scan +6 / Network +3 dB (RMS = Laplace на F3). Отчёт `memory/log/2026-09-14-sn-demos.md` |
 | `check.py` | **Все гейты одной командой** (см. «Гейты») |
-| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (39 тестов S1–S3) + `test_demo_lab_s4.py` (9 тестов S4) + `test_demo_lab_s5.py` (6 тестов S5) + `test_demo_lab_s6.py` (6 тестов S6, изолированные git-репо в `artifacts/_s6/`) + `test_demo_lab_s7.py` (6 тестов S7, `artifacts/_s7/`; демо-каталог `s7_demo_catalog.py`) + `golden/` (эталоны golden-master и UI) |
+| `tests/` | `test_casynth_core.py` (59 тестов) + `test_demo_lab.py` (39 тестов S1–S3) + `test_demo_lab_s4.py` (9 тестов S4) + `test_demo_lab_s5.py` (6 тестов S5) + `test_demo_lab_s6.py` (6 тестов S6, изолированные git-репо в `artifacts/_s6/`) + `test_demo_lab_s7.py` (6 тестов S7, `artifacts/_s7/`; демо-каталог `s7_demo_catalog.py`) + `test_demo_lab_sn.py` (15 тестов демо S/N, `artifacts/_sn/`) + `golden/` (эталоны golden-master и UI) |
 
 ## Гейты (обязательны после каждого изменения)
 
-`python check.py` = 59 юнит-тестов + 39 + 9 + 6 + 6 + 6 тестов demo-стенда S1–S7 + golden-master аудио (байт-в-байт,
+`python check.py` = 59 юнит-тестов + 39 + 9 + 6 + 6 + 6 + 15 тестов demo-стенда S1–S7 и демо S/N + golden-master аудио (байт-в-байт,
 sha256[:16]=cd3126907ad13b6c) + UI-кадр (пиксель-в-пиксель vs `tests/golden/ui_frame.png`)
 + import/init smoke. Эталоны ВЕРСИОНИРУЮТСЯ в `tests/golden/` (переехали из gitignored
 `artifacts/` 2026-07-14). Легитимное изменение UI → `python check.py --bless-ui` в том же
@@ -165,6 +166,16 @@ _(A/B стенд `ab_bench.py` с пресетами (клавиши 1–9, `ab_
   пересобирается `python tests/s7_demo_catalog.py` (каталог `lab_catalog/` вайпнут
   Пользователем 2026-09-13 как тестовый мусор). Следующий спринт S8 (пакетный прогон
   демо) — по ТЗ.
+- **Демо S/N (ТЗ Researcher `memory/req-sonification-sn-demos-2026-09-14.md`, слуховые кейсы
+  `memory/req-listen-sn-demos-2026-09-14.md`) сданы технически 2026-09-14**
+  (`memory/log/2026-09-14-sn-demos.md`): движки `scan_surface` / `pm_network` в `casynth_lab/`,
+  15 сцен + два каталога записей (сборка `python demos/build_sn_demos.py`), ярлыки
+  `run_scan_demo.bat` / `run_network_demo.bat`. **Ждёт: ревью Researcher на соответствие ТЗ
+  (вопрос в `questions.md` 2026-09-14 — пять инженерных выборов) и слуховую приёмку
+  Пользователя по трём шагам.** Инженерные итоги: 4× vs 8× у Network −109 dB; удвоенная
+  плотность у Scan < −50 dB; Pulsar/Kok's galaxy двигают W лишь на 0.017/0.025 (шкала
+  0..1/3) — основной контраст N остаётся F5. Эллипс/Лиссажу радиуса 0.8 обходят
+  центрированный Pulsar (F3 подготовлен только с Raster).
 
 - **`acc` (событийные акценты, громкостный канал ветки ДИНАМИКА)** — дизайн принят
   2026-07-06 (REQ с критериями A–G в `decisions.md`), ЖДЁТ РЕАЛИЗАЦИИ. Переиспользует
