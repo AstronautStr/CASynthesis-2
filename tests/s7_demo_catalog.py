@@ -9,10 +9,10 @@ working DSP:
   1. "S7 exact"       -- made by THIS code (A/B switch + a harm change on B):
                          the check reproduces it exactly.
   2. "S7 differs"     -- made by a child process running an isolated COPY of the
-                         runtime set with one uncommitted change (MASTER_GAIN
+                         runtime files with one uncommitted change (MASTER_GAIN
                          halved in casynth_config.py; the copy is a throwaway
                          Git repo under artifacts/_s7_demo_repo, so the record is
-                         "Local: runtime files differ from HEAD: casynth_config.py").
+                         "Local: sound files differ from HEAD: casynth_config.py").
                          Recomputed with the current code it is 6 dB louder: a
                          clearly audible, honestly explained difference.
   3. "S7 unavailable" -- a copy of record 1 whose side B names an engine that no

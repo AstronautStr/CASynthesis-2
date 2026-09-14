@@ -480,13 +480,13 @@ def test_target_provenance_runtime_change_cancel_partial_and_persistence():
             _write(cfg, orig + "\n# changed during the check\n")
     msgs, proc = _worker(root, cat.root, on_line=on_line)
     run2 = ver.load_run(msgs[-1]['run_id'])
-    assert run2.status == RUN_STOPPED and 'runtime set changed' in run2.doc['reason']
+    assert run2.status == RUN_STOPPED and 'sound set changed' in run2.doc['reason']
     assert run2.result(ids[0])['status'] == TRACK_EXACT if run2.record_ids[0] == ids[0] else True
     first, second, third = run2.record_ids
     assert run2.result(first)['status'] == TRACK_EXACT
     assert run2.result(second)['status'] == TRACK_UNCHECKED
     assert run2.result(third)['status'] == TRACK_UNCHECKED
-    assert 'runtime set changed' in run2.result(second)['reason']
+    assert 'sound set changed' in run2.result(second)['reason']
     assert run2.target['commit'] == head                          # one version per report
     _write(cfg, orig)
     # the same, deterministically, in-process with an injected fingerprint

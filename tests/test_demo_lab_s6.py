@@ -168,8 +168,9 @@ def test_classification_clean_dirty_docs_crlf():
     doc = _cap(root)
     assert doc['match'] == 'clean' and doc['commit'] == head and doc['repo_id']
     assert prov.status_of(doc) == ('pinned', '')
-    assert len(doc['manifest']) >= 12 and 'casynth_lab/runner.py' in doc['manifest']
-    assert 'casynth_engine.py' in doc['manifest'] and 'requirements.txt' in doc['manifest']
+    assert len(doc['manifest']) >= 11 and 'casynth_lab/runner.py' in doc['manifest']
+    assert 'casynth_engine.py' in doc['manifest'] and 'requirements.txt' not in doc['manifest']
+    assert 'demo_bench.py' not in doc['manifest']          # sound set only (2026-09-14)
     assert not any(k.startswith(('tests/', 'memory/', 'docs/')) for k in doc['manifest'])
     assert doc['digest'] == prov.digest_at_commit(root, head)
     # unstaged change of the shared DSP -> local
@@ -541,15 +542,19 @@ def test_ui_headless_status_pin_and_continue_in_version():
         rows = {rec.id: i for i, (rec, _e) in enumerate(app.cat['entries']) if rec}
         r = app._catalog_rects()
 
+        clock = [0.0]                       # explicit click times: never a double click
+
         def select(rid):
-            app.press((app._list_rect(rows[rid])[0] + 5, app._list_rect(rows[rid])[1] + 5), 1)
+            clock[0] += 10.0
+            app.press((app._list_rect(rows[rid])[0] + 5, app._list_rect(rows[rid])[1] + 5), 1,
+                      now=clock[0])
             app.draw(screen, font, small)
             assert app.selected_record().id == rid
         # statuses
         select(pid_y)
         assert app.selected_record().version_label() == f"Pinned {y[:7]}"
         select(pid_local)
-        assert app.selected_record().version_label().startswith("Local: runtime files differ")
+        assert app.selected_record().version_label().startswith("Local: sound files differ")
         # Pin the local record after committing its code
         assert app.press((r['pin'][0] + 3, r['pin'][1] + 3), 1) == 'pin'
         assert app.status.startswith("Cannot pin"), app.status
@@ -590,11 +595,82 @@ def test_ui_headless_status_pin_and_continue_in_version():
         select(pid_y)
         assert app.press((r['continue'][0] + 3, r['continue'][1] + 3), 1) == 'continue'
         assert app.mode == 'live' and app.engine is not cur_engine
-        assert "this bench is version " + y[:7] in app.status, app.status
+        assert "same sound code as version " + y[:7] in app.status, app.status
     finally:
         prov.current = real_current
         app.engine.stop()
         pygame.quit()
+
+
+def test_ui_or_resource_edits_do_not_repin_sound_records():
+    """2026-09-14 incident: a UI change (demo_bench.py) made every pinned
+    record open 'in version <old>'.  The fingerprint is the SOUND set only:
+    edits of the bench, audio_out / catalog / recorder / verify / versions /
+    provenance, requirements.txt and demos/*.json keep a record's Continue in
+    this bench ('same sound code'); an edit of a sound file does not, and the
+    plan names the differing files.  Records whose digest was stored with the
+    old set definition (set 1) are compared by content at their commit."""
+    root = _make_repo('soundset')
+    x = _head(root)
+    cat = _catalog(root)
+    doc_x = _cap(root)
+    assert doc_x['match'] == 'clean' and doc_x.get('sound_set') == prov.SOUND_SET_VERSION
+    assert 'demo_bench.py' not in doc_x['manifest'] and 'casynth_lab/audio_out.py' not in doc_x['manifest']
+    assert 'casynth_lab/runner.py' in doc_x['manifest'] and 'casynth_core.py' in doc_x['manifest']
+    assert not any(k.startswith('demos/') for k in doc_x['manifest'])
+    rid = _record(cat, doc_x)
+    rec = cat.load(rid)
+    assert rec.status == 'pinned' and rec.commit == x
+    # UI / resource / plumbing edits, committed: a NEW commit, same sound code
+    for rel in ('demo_bench.py', 'casynth_lab/audio_out.py', 'casynth_lab/catalog.py',
+                'casynth_lab/verify.py', 'requirements.txt'):
+        with open(os.path.join(root, rel), 'a', encoding='utf-8') as f:
+            f.write("\n# ui / plumbing edit\n")
+    _write(os.path.join(root, 'demos', 'new_scene.json'), "{}\n")
+    y = _commit_all(root, 'ui edit')
+    assert y != x
+    doc_y = _cap(root)
+    assert doc_y['match'] == 'clean' and doc_y['digest'] == doc_x['digest']
+    plan = cat.source_plan(rec, current=doc_y)
+    assert plan['mode'] == 'in-process' and plan['differs'] == [], plan
+    assert 'same sound code' in plan['label']
+    # even UNCOMMITTED ui edits keep the checkout 'clean' for the sound set
+    with open(os.path.join(root, 'demo_bench.py'), 'a', encoding='utf-8') as f:
+        f.write("# uncommitted ui edit\n")
+    doc_dirty_ui = _cap(root)
+    assert doc_dirty_ui['match'] == 'clean' and doc_dirty_ui['dirty'] == []
+    # a record whose digest was made with the OLD set definition (S6 as
+    # delivered, set 1 = including the bench): compared by content at its commit
+    old_doc = dict(doc_x, digest='0' * 64, sound_set=1)
+    rid_old = _record(cat, old_doc)
+    rec_old = cat.load(rid_old)
+    assert rec_old.status == 'pinned' and rec_old.digest == '0' * 64
+    plan = cat.source_plan(rec_old, current=doc_y)
+    assert plan['mode'] == 'in-process' and plan['differs'] == [], plan
+    # a SOUND edit, committed: the record wants its own version and says why
+    cfg = os.path.join(root, 'casynth_config.py')
+    with open(cfg, 'a', encoding='utf-8') as f:
+        f.write("\nMASTER_GAIN = MASTER_GAIN * 0.5\n")
+    z = _commit_all(root, 'sound edit')
+    doc_z = _cap(root)
+    assert doc_z['match'] == 'clean' and doc_z['digest'] != doc_x['digest']
+    for r in (rec, rec_old):
+        plan = cat.source_plan(r, current=doc_z)
+        assert plan['mode'] == 'worktree' and plan['differs'] == ['casynth_config.py'], plan
+        assert 'casynth_config.py' in plan['reason']
+    # the running code (Z) still has the same sound code as a Z-record
+    rid_z = _record(cat, doc_z)
+    assert cat.source_plan(cat.load(rid_z), current=doc_z)['mode'] == 'in-process'
+    # an unknown commit: no crash, a concrete reason
+    rec_ghost = cat.load(rid)
+    rec_ghost.meta['provenance'] = dict(rec.provenance, commit='1' * 40)
+    rec_ghost.meta['pin'] = {'commit': '1' * 40}
+    plan = cat.source_plan(rec_ghost, current=doc_z)
+    assert plan['mode'] is None and 'not available' in plan['reason']
+    # membership of the sound set is explicit
+    assert prov.is_sound_path('casynth_lab/scan_surface.py')
+    assert not prov.is_sound_path('demo_bench.py') and not prov.is_sound_path('demos/x.json')
+    assert not prov.is_sound_path('casynth_lab/provenance.py')
 
 
 def _run():

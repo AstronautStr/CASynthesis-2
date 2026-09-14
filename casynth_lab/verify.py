@@ -4,7 +4,7 @@ and keep the outcome as a REPORT that survives the application.
 
 One run = one target implementation: the code the worker process actually
 executes (its S6 provenance, captured once at start) + its environment.  The
-runtime set is fingerprinted again before and after every record; a change
+sound set is fingerprinted again before and after every record; a change
 stops the run (the unfinished record is 'unchecked', finished ones stay).
 
 Layout (inside the catalog root, user data):
@@ -400,7 +400,7 @@ class Verifier:
                 status, reason = RUN_CANCELLED, "cancelled"
                 break
             if runtime_digest() != digest0:
-                status, reason = RUN_STOPPED, "runtime set changed during the run"
+                status, reason = RUN_STOPPED, "sound set changed during the run"
                 break
             doc['current'] = rid
             _write_json(path, doc)
@@ -413,7 +413,7 @@ class Verifier:
             if runtime_digest() != digest0:
                 # the code may have changed while this one was computed:
                 # its result is not attributable to one version -> unchecked
-                status, reason = RUN_STOPPED, "runtime set changed during the run"
+                status, reason = RUN_STOPPED, "sound set changed during the run"
                 break
             doc['results'][rid] = res
             doc['current'] = None

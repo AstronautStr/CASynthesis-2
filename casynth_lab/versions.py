@@ -12,7 +12,7 @@ A child bench is started FROM that worktree with the minimal launch contract
 so it imports the worktree's modules (its own directory is sys.path[0]; the
 parent's PYTHONPATH is stripped), sees the SAME catalog (absolute root) and
 reports its own provenance as the first JSON line on stdout.  A cache entry
-is verified before use (HEAD == commit and the runtime set's digest equals
+is verified before use (HEAD == commit and the sound set's digest equals
 the commit's); a broken one is removed and recreated from the held commit.
 """
 import json
@@ -40,7 +40,7 @@ def worktree_path(catalog_root, commit):
 
 
 def _verify(repo_root, path, commit):
-    """True when `path` is a checkout of `commit` with an intact runtime set."""
+    """True when `path` is a checkout of `commit` with an intact sound set."""
     if not os.path.isdir(path):
         return False
     try:
