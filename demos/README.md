@@ -100,21 +100,31 @@ always starts from its unchanged snapshot and creates no record by itself.
 
 ## Code versions: pinned and local records (S6)
 
-Every Save also records **which code produced it**: an explicit runtime set
-(`demo_bench.py`, `casynth_lab/*.py`, `casynth_core.py`, `casynth_engine.py`,
-`casynth_config.py`, `requirements.txt`, `demos/*.json`) with per-file
-fingerprints, the Git commit, whether the set's CONTENT equals that commit
-(staged, unstaged and new runtime files all count; docs / tests / memory do
-not; CRLF checkouts are fine), and the environment (Python, exact package
+Every Save also records **which code produced it**: the **sound set** --
+the files that can change the PCM of an experiment given its embedded
+conditions (`casynth_core.py`, `casynth_engine.py`, `casynth_config.py` and
+the casynth_lab modules that turn a scene + journal + snapshot into blocks:
+`runner`, `engine_api`, `registry`, `legacy_engine`, the engine modules,
+`scene`, `snapshot`) with per-file fingerprints, the Git commit, whether the
+set's CONTENT equals that commit (staged, unstaged and new sound files all
+count; the bench UI `demo_bench.py`, `audio_out` / `catalog` / `recorder` /
+`verify` / `versions` / `provenance`, `requirements.txt`, `demos/*.json`,
+docs / tests / memory do NOT -- editing them never re-pins an experiment;
+CRLF checkouts are fine), and the environment (Python, exact package
 versions, OS).  It is captured once per process for the code that was
 imported -- not the HEAD at Save time; workers and version benches report
-their own.
+their own.  Records made before 2026-09-14 (set 1, which also fingerprinted
+the bench) are compared by the content of the sound set at their commit, so
+they stay continuable here when only non-sound files changed.  Diagnosis:
+`python -m casynth_lab.provenance` (this checkout) and
+`python -m casynth_lab.provenance why lab_catalog/<root> [id...]` (per record:
+same sound code, or which sound files differ).
 
-- **Pinned <sha>**: the runtime set matched a commit, and that commit is held
+- **Pinned <sha>**: the sound set matched a commit, and that commit is held
   by a permanent ref (`refs/casynth/pins/<commit>`) so it survives branch
   deletion and `git gc`.  Pinned means established origin -- whether the
   version can run here and whether the PCM reproduces are separate checks.
-- **Local: <reason>**: uncommitted runtime changes, no repository, a failed
+- **Local: <reason>**: uncommitted sound-set changes, no repository, a failed
   ref, or a record from before S6 ("code version not recorded" -- never
   attributed to HEAD after the fact).  Local records keep everything else.
 - **Pin to commit** (local records): after committing exactly that code the
@@ -122,8 +132,9 @@ their own.
   origin fields change.  Different code -- even with identical WAVs -- is
   refused; run a new experiment instead.
 - **Check reproducibility** always computes with THIS bench's code.
-- **Continue**: same runtime fingerprint here -> in this bench ("this
-  version"); another pinned version -> "Continue in version <sha>" starts a
+- **Continue**: same sound code here -> in this bench ("same sound code as
+  version <sha>"); other sound code -> "Continue in version <sha>" (the card
+  names the differing sound files) starts a
   separate bench of that commit from a cached detached checkout
   (`lab_catalog/worktrees/<commit>/`, verified / repaired from the held
   commit; the main checkout, index and branch are never touched) when the
@@ -148,6 +159,25 @@ Formats: `record.json` `format` 2 (1 = S4, still read), runner state version
 1 (`casynth_lab/runner.py`), engine state version per class, snapshot file
 version 1 (`casynth_lab/snapshot.py`: JSON + npz, no pickle).
 
+## Listening notes (2026-09-14)
+
+**Notes** (live view, next to Catalog; also on the catalog screen for the
+selected record) opens the free-text notes of the record the session belongs
+to -- the record you continued / opened, or the last one you saved in this
+session (a fresh session has none yet: Continue a record or Save first).
+Text is saved as you type into `<record>/notes.md` (UTF-8; Enter = new line,
+Ctrl+Backspace = erase a word, Esc closes); while the window is open the
+sound goes on and clicks outside it still work (A/B tabs, transport, knobs,
+painting).  The Save description (`note` in record.json) stays what it was;
+WAVs, snapshots and record.json are never touched.  Records with notes carry
+a "notes" tag in the catalog list.
+
+The pipeline: listen -> write the impression right there -> the agent reads
+it back with
+
+    python -m casynth_lab.catalog notes lab_catalog/<root>        # Markdown: title, id, engines, text
+    python -m casynth_lab.catalog notes lab_catalog/<root> --all  # + records with a Save description only
+
 ## Checking the catalog after a code change (S7)
 
 **Check catalog** (catalog screen) recomputes EVERY record listed at that
@@ -162,7 +192,7 @@ and **As heard** (monitor), each on its own.  The bench stays responsive
 (progress "N of M", the current record, **Cancel**); one check at a time --
 no single check and no second worker meanwhile.  An error in one record does
 not stop the others; a cancel keeps the finished results and marks the rest
-"not checked".  If the runtime set on disk changes during the run the run
+"not checked".  If the sound set on disk changes during the run the run
 stops: what was finished is kept, the record in progress and the rest are
 "not checked" (one report never mixes two versions).
 

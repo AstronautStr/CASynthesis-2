@@ -111,7 +111,12 @@ class BenchApp:
             x += BTN_W + 10
         self.vol_rect = (MARGIN + 92, BTN_Y + BTN_H + 14, VOL_W, 10)
         self.lab_buttons = {'save': (x + 10, BTN_Y, LAB_BTN_W, BTN_H),
-                            'catalog': (x + 20 + LAB_BTN_W, BTN_Y, LAB_BTN_W, BTN_H)}
+                            'catalog': (x + 20 + LAB_BTN_W, BTN_Y, LAB_BTN_W, BTN_H),
+                            'notes': (x + 30 + 2 * LAB_BTN_W, BTN_Y, LAB_BTN_W, BTN_H)}
+        # listening notes (2026-09-14): the record this session belongs to --
+        # the record continued / opened, or the last one saved here
+        self.session_record = None
+        self.notes_form = None            # {'rid', 'title', 'text', 'from'} while editing
         # side panel
         px, py = self.panel_x, TOP_H
         # row: [A] [<<] [>>] [B]
@@ -191,15 +196,24 @@ class BenchApp:
         catalog; tests may pass it explicitly."""
         if self.mode == 'save':
             return self._press_save_form(pos, button)
+        if self.mode == 'notes':
+            return self._press_notes(pos, button, now)
         if self.mode == 'catalog':
             return self._press_catalog(pos, button, now)
         if self.mode == 'report':
             return self._press_report(pos, button)
-        if button == 1 and self.catalog is not None:
+        return self._press_live(pos, button, allow_lab=True)
+
+    def _press_live(self, pos, button, allow_lab=True):
+        """The live view (transport, A/B, knobs, painting; lab buttons when
+        allowed -- the Notes window passes clicks outside it here without them)."""
+        if button == 1 and self.catalog is not None and allow_lab:
             for key, rect in self.lab_buttons.items():
                 if self._inside(rect, pos):
                     if key == 'save':
                         self.begin_save()
+                    elif key == 'notes':
+                        self.open_notes()
                     else:
                         self.open_catalog()
                     return key
@@ -273,6 +287,8 @@ class BenchApp:
         name = name.lower()
         if self.mode == 'save':
             return self._key_save_form(name, ctrl)
+        if self.mode == 'notes':
+            return self._key_notes(name, ctrl)
         if self.mode == 'catalog':
             if name == 'escape':
                 self.close_catalog()
@@ -457,7 +473,8 @@ class BenchApp:
             for key, rect in self.lab_buttons.items():
                 pygame.draw.rect(screen, C_BTN, rect, border_radius=4)
                 pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
-                t = font.render('Save' if key == 'save' else 'Catalog', True, C_TXT)
+                t = font.render({'save': 'Save', 'catalog': 'Catalog', 'notes': 'Notes'}[key],
+                                True, C_TXT)
                 screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                                 rect[1] + (rect[3] - t.get_height()) // 2))
             if self.status:
@@ -466,6 +483,116 @@ class BenchApp:
                 screen.blit(small.render(self.status[:90], True, col), (MARGIN + 300, TOP_H - 26))
         if self.mode == 'save':
             self._draw_save_form(screen, font, small)
+        if self.mode == 'notes':
+            self._draw_notes(screen, font, small)
+
+    # =====================================================================
+    # Listening notes (2026-09-14): free text attached to the session's record
+    # =====================================================================
+    def notes_target(self):
+        """(rid, title) of the record the notes belong to, or (None, reason)."""
+        if self.catalog is None:
+            return None, "notes need a catalog"
+        if self.mode == 'catalog':
+            rec = self.selected_record()
+            return (rec.id, rec.title) if rec is not None else (None, "select a record first")
+        if self.session_record is None:
+            return None, "no record in this session yet: Continue a record or Save first"
+        try:
+            rec = self.catalog.load(self.session_record)
+        except CatalogError as e:
+            return None, f"record unavailable: {e}"
+        return rec.id, rec.title
+
+    def open_notes(self):
+        rid, why = self.notes_target()
+        if rid is None:
+            self.status = f"Notes: {why}"
+            return False
+        rec = self.catalog.load(rid)
+        text = rec.notes
+        if text.endswith('\n'):
+            text = text[:-1]                  # the file's final newline is added on write
+        self.notes_form = dict(rid=rid, title=rec.title, text=text, from_mode=self.mode)
+        self.mode = 'notes'
+        self.status = ""
+        return True
+
+    def close_notes(self):
+        f, self.notes_form = self.notes_form, None
+        self.mode = f['from_mode'] if f is not None else 'live'
+        if self.mode == 'catalog':
+            self.refresh_catalog()
+
+    def _notes_edit(self, text):
+        """Every edit is written at once (small file, atomic replace): nothing
+        typed while listening is lost."""
+        f = self.notes_form
+        f['text'] = text
+        try:
+            self.catalog.write_notes(f['rid'], text)
+            self.status = f"Notes saved: {f['title'][:40]}"
+        except CatalogError as e:
+            self.status = f"Notes NOT saved: {e}"
+
+    def _key_notes(self, name, ctrl=False):
+        f = self.notes_form
+        if name == 'escape':
+            self.close_notes()
+            return 'notes:close'
+        if name in ('return', 'enter', 'kp_enter'):
+            self._notes_edit(f['text'] + '\n')
+            return 'notes:edit'
+        if name == 'backspace':
+            cur = f['text']
+            self._notes_edit(self._erase_word(cur) if ctrl else cur[:-1])
+            return 'notes:edit'
+        return None
+
+    def _notes_rects(self):
+        x, y = self.field_x + 12, self.field_y + 12
+        w, h = self.field_w - 24, self.field_h - 24
+        return dict(box=(x, y, w, h), close=(x + w - 110, y + 8, 100, 24),
+                    text=(x + 12, y + 40, w - 24, h - 78))
+
+    def _press_notes(self, pos, button, now=None):
+        r = self._notes_rects()
+        if self._inside(r['close'], pos) and button == 1:
+            self.close_notes()
+            return 'notes:close'
+        if self._inside(r['box'], pos):
+            return None
+        # outside the window: the live controls keep working while writing
+        # (A/B tabs, transport, knobs, painting) -- never Save / Catalog / Notes
+        if self.notes_form is not None and self.notes_form['from_mode'] == 'live':
+            return self._press_live(pos, button, allow_lab=False)
+        return None
+
+    def _draw_notes(self, screen, font, small):
+        import pygame
+        r = self._notes_rects()
+        f = self.notes_form
+        pygame.draw.rect(screen, C_PANEL, r['box'], border_radius=6)
+        pygame.draw.rect(screen, C_ACCENT, r['box'], 1, border_radius=6)
+        bx, by = r['box'][0], r['box'][1]
+        screen.blit(font.render(f"Notes: {f['title']}"[:42], True, C_TXT), (bx + 12, by + 10))
+        cr = r['close']
+        pygame.draw.rect(screen, C_BTN, cr, border_radius=4)
+        pygame.draw.rect(screen, C_EDGE, cr, 1, border_radius=4)
+        t = small.render('Close (Esc)', True, C_TXT)
+        screen.blit(t, (cr[0] + (cr[2] - t.get_width()) // 2, cr[1] + (cr[3] - t.get_height()) // 2))
+        tx, ty, tw, th = r['text']
+        pygame.draw.rect(screen, C_BG, (tx, ty, tw, th), border_radius=3)
+        lines = []
+        for para in (f['text'] + '|').split('\n'):
+            lines.extend(_wrap(para, small, tw - 12) or [''])
+        line_h = small.get_height() + 2
+        n = max(1, (th - 8) // line_h)
+        for i, line in enumerate(lines[-n:]):
+            screen.blit(small.render(line, True, C_TXT), (tx + 6, ty + 4 + i * line_h))
+        screen.blit(small.render("Saved as you type.  Enter = new line.  Clicks outside still work "
+                                 "(A/B, Pause, painting).", True, C_DIM),
+                    (bx + 12, by + r['box'][3] - 26))
 
     # =====================================================================
     # S/N demos (2026-09-14): field overlay of the listened side + engine display
@@ -657,6 +784,7 @@ class BenchApp:
         def work():
             try:
                 rid = self.catalog.save(form['cut'], form['title'], form['note'])
+                self.session_record = rid          # Notes now belong to the saved record
                 self.status = f"Saved: {form['title'] or rid}  [{form['cut'].seconds:.1f} s]"
             except CatalogError as e:
                 self.status = f"Save failed: {e}"
@@ -669,6 +797,9 @@ class BenchApp:
         self.status = "Save cancelled"
 
     def text_input(self, text):
+        if self.mode == 'notes' and self.notes_form is not None:
+            self._notes_edit(self.notes_form['text'] + text)
+            return
         f = self.save_form
         if f is not None:
             f[f['field']] += text
@@ -773,6 +904,8 @@ class BenchApp:
         self.mode = 'live'
 
     def select_record(self, idx):
+        if self.cat.get('click') is not None and self.cat['click'][0] != idx:
+            self.cat['click'] = None          # a selection change breaks a double click
         self.cat['sel'] = idx
         self.cat['result'] = None
         self.cat['play_label'] = ""
@@ -929,6 +1062,7 @@ class BenchApp:
         self.engine = eng
         self.vol = runner.vol
         self.message = ""
+        self.session_record = parent_record_id      # Notes belong to this record now
 
     def start_replay(self):
         rec = self.selected_record()
@@ -975,7 +1109,8 @@ class BenchApp:
                           play_replay=(px, y + 194, 186, 26),
                           parent=(px, y + 232, 262, 18),
                           version=(px, y + 252, 262, 18),
-                          pin=(px, y + 274, 120, 24)))
+                          pin=(px, y + 274, 120, 24),
+                          notes=(px + 126, y + 274, 136, 24)))
         return rects
 
     def _list_rect(self, i):
@@ -1033,6 +1168,9 @@ class BenchApp:
         if self._inside(r['parent'], pos) and self.goto_parent():
             return 'parent'
         rec = self.selected_record()
+        if rec is not None and self._inside(r['notes'], pos):
+            self.open_notes()
+            return 'notes'
         if rec is not None and rec.status != 'pinned' and self._inside(r['pin'], pos):
             self.pin_record()
             return 'pin'
@@ -1125,6 +1263,8 @@ class BenchApp:
             tag = ("Pinned " + prov.short(rec.commit)) if rec.status == 'pinned' else "Local"
             if rec.parent_id:
                 tag += ", branch"
+            if rec.has_notes:
+                tag += ", notes"
             line = (f"{rec.created.replace('T', ' ')}   {rec.seconds:.1f} s   "
                     f"A: {la}  B: {lb}   {tag}")
             screen.blit(small.render(line, True, C_OK if rec.status == 'pinned' else C_DIM),
@@ -1133,7 +1273,8 @@ class BenchApp:
                   'play_A': 'Play A', 'play_B': 'Play B', 'play_mon': 'Play as heard',
                   'stop': 'Stop', 'replay': 'Check reproducibility', 'cancel': 'Cancel',
                   'play_replay': self.cat['play_label'], 'parent': '', 'version': '',
-                  'pin': 'Pin to commit', 'check': '', 'report': ''}
+                  'pin': 'Pin to commit', 'check': '', 'report': '',
+                  'notes': 'Notes'}
         rec = self.selected_record()
         can_cont, cont_why = rec.can_continue() if rec is not None else (False, '')
         plan = None
@@ -1152,7 +1293,7 @@ class BenchApp:
             if plan['mode'] is None:
                 labels['version'] += f"  |  source: {plan['reason']}"
             elif plan['mode'] == 'worktree':
-                labels['version'] += "  |  source version runnable here"
+                labels['version'] += "  |  " + (plan.get('reason') or "source version runnable here")
         if rec is not None:
             ptitle, present = self.catalog.parent_of(rec)
             if ptitle:
@@ -1171,6 +1312,8 @@ class BenchApp:
                 t = small.render(labels[key][:46], True, col)
                 screen.blit(t, (rect[0], rect[1]))
                 continue
+            if key == 'notes':
+                labels[key] = 'Notes' + ('  *' if rec.has_notes else '')
             if key == 'pin':
                 if rec.status == 'pinned':
                     continue
@@ -1663,6 +1806,7 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
     pygame.key.set_repeat(400, 35)     # held keys repeat (Backspace in the save form)
     app = BenchApp(runner.scene, engine, catalog=catalog)
     app.vol = runner.vol
+    app.session_record = parent_record_id
     if origin_snapshot is not None:
         app.status = f"Continued: {runner.scene.title}  ({caption})"
     elif start == 'catalog':

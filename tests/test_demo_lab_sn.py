@@ -688,6 +688,118 @@ def test_registry_ui_hints_and_scene_validation():
     eng.stop()
 
 
+def test_notes_button_editor_extraction():
+    """Listening notes (2026-09-14): in a session continued from a record the
+    Notes button opens an editor whose text is saved as typed into
+    <record>/notes.md; clicks outside the window still drive A/B and the
+    transport; the catalog offers Notes for the selected record and marks
+    records that have them; `python -m casynth_lab.catalog notes ROOT`
+    prints them for the agents; nothing else in the record changes."""
+    import hashlib
+    import demo_bench as db
+    from casynth_lab.audio_out import LiveEngine
+    from casynth_lab.catalog import Catalog
+    from casynth_lab.recorder import Recorder
+    root = os.path.join(ART, 'notes_cat')
+    shutil.rmtree(root, ignore_errors=True)
+    os.makedirs(os.path.join(root, '.tmp'))
+    cat = Catalog(root, repo_root=None)
+    scene = scene_from_doc(_doc('F1', D.scan(path=2), D.network()))
+    # a record (offline, as the demo builder does)
+    runner = DemoRunner(scene)
+    rec_ = Recorder(runner, None)
+    runner.post('start', at=0)
+    for _ in range(40):
+        before = runner.out_samples
+        rec_.on_block(runner.next_block(), runner.running, before)
+    cut = rec_.cut(dict(device_ok=False, device_error='test', underruns=0, block_errors=0,
+                        last_error=None, clip_blocks={'A': 0, 'B': 0}, record_error=None))
+    rid = cat.save(cut, "Notes test record", "description at save")
+
+    def digest_without_notes(d):
+        h = hashlib.sha256()
+        for name in sorted(os.listdir(d)):
+            if name.startswith('notes.md'):
+                continue
+            with open(os.path.join(d, name), 'rb') as f:
+                h.update(name.encode() + f.read())
+        return h.hexdigest()
+    before = digest_without_notes(os.path.join(root, rid))
+    # a fresh session: no record yet -> Notes explains
+    eng = LiveEngine(DemoRunner(scene), sink=lambda m, b: None)
+    eng.start()
+    app = db.BenchApp(scene, eng, catalog=cat)
+    nb = app.lab_buttons['notes']
+    assert app.press((nb[0] + 3, nb[1] + 3), 1) == 'notes' and app.mode == 'live'
+    assert app.status.startswith("Notes: no record in this session")
+    # continue the record -> the session belongs to it
+    app.open_catalog()
+    app.select_record([i for i, (r, _e) in enumerate(app.cat['entries']) if r and r.id == rid][0])
+    app.continue_record()
+    assert app.mode == 'live' and app.session_record == rid
+    assert app.press((nb[0] + 3, nb[1] + 3), 1) == 'notes' and app.mode == 'notes'
+    assert app.notes_form['rid'] == rid and app.notes_form['text'] == ''
+    for ch in "Ellipse thinner":
+        app.text_input(ch)
+    app.key('return')
+    for ch in "raster has more body":
+        app.text_input(ch)
+    app.key('backspace')
+    app.key('backspace', ctrl=True)
+    app.text_input("body!")
+    want = "Ellipse thinner\nraster has more body!"
+    assert app.notes_form['text'] == want
+    with open(os.path.join(root, rid, 'notes.md'), encoding='utf-8') as f:
+        assert f.read() == want + '\n'                   # saved as typed, LF, trailing newline
+    assert app.status.startswith("Notes saved")
+    # clicks outside the window reach the live controls, never the lab buttons
+    tab_b = app.tabs['B']
+    assert app.press((tab_b[0] + 3, tab_b[1] + 3), 1) == 'tab:B' and app.mode == 'notes'
+    assert app.press((app.lab_buttons['catalog'][0] + 3, app.lab_buttons['catalog'][1] + 3), 1) is None
+    assert app.mode == 'notes'
+    import time as _t
+    _t.sleep(0.3)
+    assert app.engine.snapshot()['selected'] == 'B'
+    assert app.key('escape') == 'notes:close' and app.mode == 'live'
+    # the catalog: Notes for the selected record, the row is tagged, text persists
+    app.open_catalog()
+    r = app._catalog_rects()
+    app.cat['sel'] = None                                     # no record selected: no button
+    assert app.press((r['notes'][0] + 3, r['notes'][1] + 3), 1) is None and app.mode == 'catalog'
+    app.select_record([i for i, (rr, _e) in enumerate(app.cat['entries']) if rr and rr.id == rid][0])
+    assert app.press((r['notes'][0] + 3, r['notes'][1] + 3), 1) == 'notes' and app.mode == 'notes'
+    assert app.notes_form['text'] == want
+    app.text_input(" +")
+    assert app.key('escape') == 'notes:close' and app.mode == 'catalog'
+    assert cat.load(rid).has_notes and cat.load(rid).notes == want + " +\n"
+    # a frame renders in both places
+    import pygame
+    pygame.init()
+    screen = pygame.Surface((app.width, app.height))
+    font = pygame.font.SysFont(db.FONT_NAMES, 17)
+    small = pygame.font.SysFont(db.FONT_NAMES, 14)
+    app.press((r['notes'][0] + 3, r['notes'][1] + 3), 1)
+    app.draw(screen, font, small)
+    app.key('escape')
+    app.draw(screen, font, small)
+    eng.stop()
+    # the record itself is untouched; empty notes remove the file
+    assert digest_without_notes(os.path.join(root, rid)) == before
+    assert cat.load(rid).note == "description at save"
+    # extraction for the agents
+    p = subprocess.run([sys.executable, '-X', 'utf8', '-m', 'casynth_lab.catalog', 'notes', root],
+                       capture_output=True, text=True, encoding='utf-8', cwd=ROOT)
+    assert p.returncode == 0, p.stderr
+    out = p.stdout
+    assert "## Notes test record" in out and rid in out and "Ellipse thinner" in out
+    assert "raster has more body! +" in out and "description at save" in out
+    cat.write_notes(rid, "   ")
+    assert not os.path.exists(os.path.join(root, rid, 'notes.md')) and not cat.load(rid).has_notes
+    p = subprocess.run([sys.executable, '-X', 'utf8', '-m', 'casynth_lab.catalog', 'notes', root],
+                       capture_output=True, text=True, encoding='utf-8', cwd=ROOT)
+    assert p.returncode == 0 and "(no notes" in p.stdout
+
+
 def _run():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

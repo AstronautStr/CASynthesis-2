@@ -154,7 +154,32 @@ class Record:
 
     @property
     def note(self):
+        """The description typed at Save (record.json 'note'); never edited later."""
         return self.meta.get('note', '')
+
+    # -- listening notes (2026-09-14) ----------------------------------------------
+    NOTES_FILE = 'notes.md'
+
+    @property
+    def notes_path(self):
+        return os.path.join(self.dir, self.NOTES_FILE)
+
+    @property
+    def notes(self):
+        """Free-text notes attached to the record (<record>/notes.md, UTF-8):
+        the user's listening feedback, written in the bench (Notes button) and
+        read back by the agents (`python -m casynth_lab.catalog notes ROOT`).
+        Separate from the Save description; WAVs / snapshots / record.json are
+        never touched by it."""
+        try:
+            with open(self.notes_path, encoding='utf-8') as f:
+                return f.read()
+        except OSError:
+            return ''
+
+    @property
+    def has_notes(self):
+        return bool(self.notes.strip())
 
     @property
     def created(self):
@@ -386,7 +411,7 @@ class Catalog:
     # -- provenance / pinning (S6) ----------------------------------------------------
     def _pin_status(self, doc):
         """(status, reason, pin) for a provenance doc: pinned only when the
-        runtime set matched a commit AND the holding ref exists (created here;
+        sound set matched a commit AND the holding ref exists (created here;
         any failure -> local with the reason, never a false pin)."""
         status, reason = prov.status_of(doc)
         if status != STATUS_PINNED:
@@ -399,6 +424,38 @@ class Catalog:
         except prov.ProvenanceError as e:
             return STATUS_LOCAL, f"could not hold commit {prov.short(commit)}: {e}", None
         return STATUS_PINNED, '', {'commit': commit, 'ref': prov.pin_ref(commit)}
+
+    def write_notes(self, rid, text):
+        """Replace the record's notes.md atomically (empty text removes it).
+        CatalogError when the record does not exist or cannot be written."""
+        rec = self.load(rid)
+        path = rec.notes_path
+        tmp = path + '.tmp'
+        try:
+            if not (text or '').strip():
+                if os.path.exists(path):
+                    os.remove(path)
+                return
+            with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(text if text.endswith('\n') else text + '\n')
+            os.replace(tmp, path)
+        except OSError as e:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise CatalogError(f"{rid}: cannot write notes: {e}")
+
+    def notes_report(self, with_description=False):
+        """[(Record, notes)] newest first for every record that has notes
+        (with_description: also records whose Save description is non-empty)."""
+        out = []
+        for rec, _err in self.list():
+            if rec is None:
+                continue
+            if rec.has_notes or (with_description and rec.note.strip()):
+                out.append((rec, rec.notes))
+        return out
 
     def _rewrite_meta(self, rec, meta):
         """Replace record.json atomically (WAVs, snapshots, id untouched)."""
@@ -416,7 +473,7 @@ class Catalog:
             raise CatalogError(f"{rec.id}: cannot update record.json: {e}")
 
     def find_commit_for_digest(self, target, limit=200):
-        """A commit (HEAD first, then recent history) whose runtime set has
+        """A commit (HEAD first, then recent history) whose sound set has
         exactly the digest `target`; None if none."""
         try:
             commits = prov.git(self.repo_root, 'rev-list', f'-n{limit}', 'HEAD').split()
@@ -431,7 +488,7 @@ class Catalog:
         return None
 
     def pin(self, rid, commit=None):
-        """Pin a local record to a commit whose runtime set has EXACTLY the
+        """Pin a local record to a commit whose sound set has EXACTLY the
         fingerprint the record was made with.  Only provenance/status fields
         change (id, WAVs, conditions, journal, snapshots stay).  CatalogError
         (and no change) when nothing matches or Git/metadata fail."""
@@ -485,23 +542,47 @@ class Catalog:
         if rec.status == STATUS_PINNED:
             commit = rec.commit
             if current.get('match') == 'clean' and current.get('digest') == rec.digest:
-                # identical runtime set (the commit may differ: code is the truth)
-                return dict(mode='in-process', commit=commit, reason='',
-                            label=f"this bench is version {prov.short(commit)}")
+                # identical sound set (the commit may differ: code is the truth)
+                return dict(mode='in-process', commit=commit, reason='', differs=[],
+                            label=f"same sound code as version {prov.short(commit)}")
             if self.repo_root is None:
                 return dict(mode=None, commit=commit, label='',
                             reason="other version: this catalog has no repository")
+            # the stored digest may come from an older set definition or an
+            # unrelated commit: compare the SOUND CODE at the record's commit
+            # with the sound code running here (the content is the truth)
+            differs = self._sound_difference(commit, current)
+            if differs is not None and not differs and current.get('match') == 'clean':
+                return dict(mode='in-process', commit=commit, reason='', differs=[],
+                            label=f"same sound code as version {prov.short(commit)}")
             ok, why = prov.environment_compatible((rec.provenance or {}).get('environment'))
             if not ok:
-                return dict(mode=None, commit=commit, label='',
+                return dict(mode=None, commit=commit, label='', differs=differs or [],
                             reason=f"no compatible environment: {why}")
             if not prov.commit_exists(self.repo_root, commit):
                 return dict(mode=None, commit=commit, label='',
                             reason=f"commit {prov.short(commit)} is not available")
-            return dict(mode='worktree', commit=commit, reason='',
+            what = (", ".join(differs[:4]) + (" ..." if len(differs) > 4 else "")) if differs \
+                else "this checkout is not a clean commit"
+            return dict(mode='worktree', commit=commit, differs=differs or [],
+                        reason=f"sound code differs: {what}",
                         label=f"separate bench of version {prov.short(commit)}")
         return dict(mode='in-process', commit=rec.commit, reason='',
                     label="local record / current code")
+
+    def _sound_difference(self, commit, current):
+        """Sound-set paths whose content differs between `commit` and the
+        running code (None when the commit cannot be read); cached per commit."""
+        cache = self.__dict__.setdefault('_manifest_cache', {})
+        if commit not in cache:
+            try:
+                cache[commit] = prov.manifest_at_commit(self.repo_root, commit)
+            except prov.ProvenanceError:
+                cache[commit] = None
+        ref = cache[commit]
+        if ref is None:
+            return None
+        return prov.manifest_difference(ref, current.get('manifest') or {})
 
     def worktree_for(self, rec):
         """Verified checkout of the record's pinned commit (VersionError)."""
@@ -830,9 +911,28 @@ class Catalog:
 
 
 def _cli(argv):
-    """python -m casynth_lab.catalog replay ROOT ID   (JSON lines on stdout)"""
+    """python -m casynth_lab.catalog replay ROOT ID      (JSON lines on stdout)
+       python -m casynth_lab.catalog notes ROOT [--all]  (listening notes, Markdown)"""
+    if len(argv) >= 2 and argv[0] == 'notes':
+        cat = Catalog(argv[1])
+        rows = cat.notes_report(with_description='--all' in argv[2:])
+        if not rows:
+            print(f"(no notes in {cat.root})")
+            return 0
+        for rec, notes in rows:
+            la, lb = rec.engine_labels()
+            print(f"## {rec.title}\n")
+            print(f"- record `{rec.id}`, {rec.created.replace('T', ' ')}, {rec.seconds:.1f} s, "
+                  f"A: {la} / B: {lb}, {rec.version_label()}")
+            if rec.note.strip():
+                print(f"- description: {rec.note.strip()}")
+            if notes.strip():
+                print()
+                print(notes.rstrip())
+            print()
+        return 0
     if len(argv) != 3 or argv[0] not in ('replay', 'end_state'):
-        print("usage: python -m casynth_lab.catalog replay|end_state ROOT ID")
+        print("usage: python -m casynth_lab.catalog replay|end_state ROOT ID  |  notes ROOT [--all]")
         return 2
     cat = Catalog(argv[1])
 
