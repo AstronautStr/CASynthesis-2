@@ -145,3 +145,4 @@ for _e in _CORE_ENGINES:
 # S/N demo engines (2026-09-14): registered after the built-in five, in this
 # one place (each module calls register() at import).
 from . import scan_surface    # noqa: E402,F401
+from . import pm_network      # noqa: E402,F401
