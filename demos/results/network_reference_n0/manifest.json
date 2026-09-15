@@ -1,0 +1,1174 @@
+{
+ "package": "network_reference_n0",
+ "generated": "2026-09-15 13:11:07",
+ "command": "python -m demos.network_reference_n0.render_n0",
+ "source": {
+  "url": "https://github.com/tommmmudd/guttersynthesis",
+  "commit": "efa4737af31febf09bd746a45bd9cd57c88f74b1",
+  "license": "GPL-3.0",
+  "file_sha256": {
+   "gutterOsc.class": "b328361bac815537369b4888083773ef4a3d2a5425dd384d1eb8fbb82353ccf9",
+   "gutterOsc$BPFilter.class": "2fdc05a6b00327b9069b977121f0fdec7d726cfc2298243bdf47fd9c4d156558",
+   "gutterOsc$Highpass.class": "f620d83a9722a582fdce585aa332f04c54da91c0c8c614a3736330370b33f214",
+   "gutterOsc$Lowpass.class": "b01e0ea04698be5357407359472e88b3ecfd46a619cb5f25eb26807873462d54",
+   "gutterOsc.java": "b0be129479b3b79c8585d0692ced18b1b7717e686dc3b4ef31faea22d9c6c2fd",
+   "gutterOsc for Java1.6/gutterOsc.class": "ea9a959b9f2be6896bd070eec52b4a32ff98c01d4d43337cff885a0e665abcd9",
+   "Gutter Synth.maxpat": "db531601b030f0655c914175a5080cda4fedb6e0ef56df6f861d009af2d36a0f",
+   "mxjGutterCompact.maxpat": "6f7fd29ad8f3bcab90daa919b2d21a4f96f5b0bbe6e12e75bb2cce1621d24ca1",
+   "filters.txt": "4d989129c432243c6694a0740c58daaf34173fbfe4ffecca8e85aeb348e92c0f",
+   "LICENSE": "230184f60bae2feaf244f10a8bac053c8ff33a183bcc365b4d8b876d2b7f4809"
+  },
+  "executable_node": "gutterOsc.class (top level) -- NOT gutterOsc.java"
+ },
+ "environment": {
+  "python": "3.14.5",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "machine": "AMD64"
+ },
+ "sample_rate": 44100,
+ "seed": 20260915,
+ "master_gain": 0.85,
+ "config": "config.json",
+ "model_constants": {
+  "matrix_delay_samples": 2000,
+  "extra_feedback_samples": 64,
+  "total_link_delay_samples": 2064,
+  "ramps_ms": {
+   "gain": 30.0,
+   "damp": 15.0,
+   "mod": 30.0,
+   "rate": 30.0,
+   "omega": 50.0,
+   "interaction": 50.0,
+   "matrix": 2000.0
+  },
+  "svf_hp_hz": [
+   20.0,
+   30.0
+  ],
+  "node_clip": 5.0
+ },
+ "parameters": [
+  {
+   "name": "gain (singleGain)",
+   "unit": "linear",
+   "raw": 162,
+   "value": 2.21484375,
+   "range": "0..3.5",
+   "source": "restore gain=162; p mapGain: scale 0 256 0. 3.5 -> line~ 30 ms -> mxj inlet 4"
+  },
+  {
+   "name": "damp (c base)",
+   "unit": "1/sample",
+   "raw": 138,
+   "value": 0.29058837890625,
+   "range": "0..1 (then +link, clip 0.0001..1)",
+   "source": "restore damp=138; p mapDamp: (v/256)^2 -> line~ 15 ms -> +~ link -> clip~ 0.0001 1. -> mxj inlet 2"
+  },
+  {
+   "name": "mod (gamma)",
+   "unit": "forcing amplitude",
+   "raw": 46,
+   "value": 0.3228759765625,
+   "range": "0..10",
+   "source": "restore mod=46; p mapMod: (v/256)^2*10 -> line~ 30 ms -> mxj inlet 0"
+  },
+  {
+   "name": "rate (dt)",
+   "unit": "t increment/sample",
+   "raw": 39,
+   "value": 0.002693199785426259,
+   "range": "0..5",
+   "source": "restore rate=39; p mapRate: (v/256)^4*5 -> line~ 30 ms -> mxj inlet 3"
+  },
+  {
+   "name": "omega",
+   "unit": "rad per t unit",
+   "raw": null,
+   "value": 0.002,
+   "range": "fixed",
+   "source": "p duff: loadmess 0.002 -> p line (line~ 50 ms) -> mxj inlet 1 (forcing = gamma*sin(omega*t))"
+  },
+  {
+   "name": "Q (all 24 filters)",
+   "unit": "",
+   "raw": 149,
+   "value": 135.83477020263672,
+   "range": "0.5..400",
+   "source": "restore Q=149; p mapQ: (v/256)^2 -> scale 0. 1. 0.5 400. -> multislider(24) -> setQN i q for all 24"
+  },
+  {
+   "name": "soften (setLowpass)",
+   "unit": "Hz",
+   "raw": 103,
+   "value": 6036.491394042969,
+   "range": "500..16000",
+   "source": "restore soften=103; scale 0 256 1. 0. -> squared -> scale 0. 1. 500. 16000. -> setLowpass"
+  },
+  {
+   "name": "setHighpass",
+   "unit": "Hz",
+   "raw": null,
+   "value": 5.0,
+   "range": "fixed (<10 => bypassed in class)",
+   "source": "loadmess 5 -> setHighpass $1"
+  },
+  {
+   "name": "filter count",
+   "unit": "",
+   "raw": 23,
+   "value": 24,
+   "range": "1..24",
+   "source": "restore filter_count=23 (menu index) -> +1 -> filters 24"
+  },
+  {
+   "name": "filter freqs",
+   "unit": "Hz",
+   "raw": null,
+   "value": "random per node at load (see FILTER_RANDOM_MIXED_ROOT)",
+   "range": "50..5000 (x pitch_shift 0.1..2, min 19000)",
+   "source": "p randomise_filters_mixed_root: loadbang -> del 1000 -> uzi 24; multislider 0..1 -> squared -> scale 0. 1. 50. 5000. -> list_mult pitch_shift -> setFreqN"
+  },
+  {
+   "name": "pitch_shift",
+   "unit": "ratio",
+   "raw": 121.263161,
+   "value": 1.000000023046875,
+   "range": "0.1..2",
+   "source": "loadmess 121.263161 -> pictslider -> scale 0. 256 0.1 2. (= 1.0000)"
+  },
+  {
+   "name": "distortion method",
+   "unit": "",
+   "raw": null,
+   "value": 2,
+   "range": "0..5",
+   "source": "class default (atan); no message in patch"
+  },
+  {
+   "name": "pan per node",
+   "unit": "0..1",
+   "raw": null,
+   "value": [
+    0,
+    1,
+    0.15,
+    0.85,
+    0.3,
+    0.7,
+    0.46,
+    0.54
+   ],
+   "range": "0..1",
+   "source": "#1 -> pipe 2000 -> -1 -> zl lookup 0 1 0.15 0.85 0.3 0.7 0.46 0.54 -> pan slider; p pan: v=0.25*pan, L=cos(2 pi v), R=cos(2 pi (v+0.75)) via cycle~"
+  },
+  {
+   "name": "node post chain",
+   "unit": "",
+   "raw": null,
+   "value": "mxj out0 -> clip~ -5. 5. -> svf~ 20 (HP outlet) -> svf~ 30 (HP outlet) -> tanh~ -> p pan",
+   "range": "",
+   "source": "mxjGutterCompact.maxpat"
+  },
+  {
+   "name": "matrix input i",
+   "unit": "",
+   "raw": null,
+   "value": "0.5*(L_i + R_i)",
+   "range": "",
+   "source": "p matrix: receive~ iL/iR -> *~ 0.5 -> matrix~ inlet i"
+  },
+  {
+   "name": "matrix cells",
+   "unit": "gain",
+   "raw": null,
+   "value": "preset 1: all 1 except diagonal 0",
+   "range": "0/1 per cell (matrix~ 8 8 @ramp 2000)",
+   "source": "loadmess 1 -> preset -> matrixctrl -> p matrix (preset_data 1)"
+  },
+  {
+   "name": "matrix delay",
+   "unit": "samples",
+   "raw": null,
+   "value": "2000 + random(0..1999) at load (NOT reproducible); N0 fixes 2000",
+   "range": "0..8000",
+   "source": "loadbang -> random 2000 -> + 2000 -> s matrix_delay -> delay~ 8000 2000 (all 8 lines)"
+  },
+  {
+   "name": "interaction",
+   "unit": "gain on link",
+   "raw": 127,
+   "value": 1.2305450439453125,
+   "range": "0..5",
+   "source": "loadmess 127 / restore interaction=127 -> scale 0. 256 0. 1. -> squared -> * 5. -> p matrix inlet 1 -> line~ 50 ms -> *~"
+  },
+  {
+   "name": "link -> node",
+   "unit": "",
+   "raw": null,
+   "value": "send~ NmatrixOut -> receive~ #1matrixOut -> +~ damp -> clip~ 0.0001 1. -> c",
+   "range": "",
+   "source": "feedback through send~/receive~: +1 signal vector (64 samples assumed, see gutter_network.EXTRA_FEEDBACK_SAMPLES)"
+  },
+  {
+   "name": "master out",
+   "unit": "",
+   "raw": null,
+   "value": "sum(L_n) * 1.0 (soften[1]=256) * 0.4 -> dac",
+   "range": "",
+   "source": "p leftOuts/p rightOuts -> *~ line~ -> *~ 0.4 -> ezdac~; N0 uses its own fixed MASTER_GAIN with headroom"
+  },
+  {
+   "name": "master restore (alternative init)",
+   "unit": "raw",
+   "raw": {
+    "gain": 150,
+    "damp": 159,
+    "mod": 46,
+    "rate": 23,
+    "Q": 149,
+    "soften": 172
+   },
+   "value": "",
+   "range": "",
+   "source": "Gutter Synth.maxpat autopattr restore -> p prepends -> to_gutters; load order vs. node restore not determinable offline"
+  },
+  {
+   "name": "movement preset",
+   "unit": "",
+   "raw": 2,
+   "value": "SLOW: per-node random mod in (0.1..0.17)*256, rate in (0.2..0.8)*256",
+   "range": "STATIC..RAPID",
+   "source": "restore live.menu[1]=2 -> p movement_presets (random per node at load; N0 uses the deterministic node restore values instead)"
+  }
+ ],
+ "files": {
+  "01_palette": {
+   "file": "01_palette.wav",
+   "raw_file": "raw/01_palette.f32.wav",
+   "seconds": 25.0,
+   "peak_after_gain": 0.7169325822068714,
+   "clipped_samples": 0,
+   "sha256": "51bec7ff5821c5d54f7edeed8a22ebe901312b662d2ed1781d9f883c90f9b4f1",
+   "raw_sha256": "008bde420e2d5e15cc686214331c9d78d36759d9a586ed483d58896d948cdc77"
+  },
+  "02_control": {
+   "file": "02_control.wav",
+   "raw_file": "raw/02_control.f32.wav",
+   "seconds": 12.0,
+   "peak_after_gain": 0.7189609638856584,
+   "clipped_samples": 0,
+   "sha256": "dc6c4933e4de25641eaf41789e7394cbe40aef01a6e57def4be9bff8a5841cf6",
+   "raw_sha256": "ed74a9ab2e2e19a003a96fbf5adcaf892638cd0da7c3f9797ea8aebb2442bf3d"
+  },
+  "02_control_reference": {
+   "file": "02_control_reference.wav",
+   "raw_file": "raw/02_control_reference.f32.wav",
+   "seconds": 12.0,
+   "peak_after_gain": 0.6618032686496277,
+   "clipped_samples": 0,
+   "sha256": "5451072135b4211b96a1eb7e1b2ab6ca557eedf00740f825f0164d227e19d942",
+   "raw_sha256": "a0b4a24459321670850011089e22cd341dfaf8926270ca37c41d363d5fcbbdeb"
+  },
+  "03_links": {
+   "file": "03_links.wav",
+   "raw_file": "raw/03_links.f32.wav",
+   "seconds": 16.5,
+   "peak_after_gain": 0.6552741149937995,
+   "clipped_samples": 0,
+   "sha256": "719c7fca72e68340f99496507927f4383446c4081164f04ec4c60053b729a70c",
+   "raw_sha256": "302e35e6ef00a0bbf1e764c546739f61e3a910ade94b6ad61ff064b285501590"
+  },
+  "03b_links_strong": {
+   "file": "03b_links_strong.wav",
+   "raw_file": "raw/03b_links_strong.f32.wav",
+   "seconds": 16.5,
+   "peak_after_gain": 0.7169821086463444,
+   "clipped_samples": 0,
+   "sha256": "c786d2d45e4f3414234426a062b859f145af6f0a16a1bd95d63e3b5f1fad6bd5",
+   "raw_sha256": "5411b47fb25394620e3926caad29d7825e548a090acdca56f272633432af2450"
+  }
+ },
+ "examples": {
+  "01_palette": [
+   {
+    "label": "A_base",
+    "changes": {},
+    "start_s": 0.0,
+    "seconds": 8.0,
+    "resets": 0,
+    "features": {
+     "rms_db": -14.909667314275904,
+     "peak": 0.6842596807915464,
+     "centroid_hz": 959.6360025295123,
+     "spread_hz": 891.9037626827728,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -48.37639065384003,
+     "spectral_flux": 0.030709204878428112,
+     "env_std_db_50ms": 6.555064245818551,
+     "env_std_db_250ms": 0.5466353320640657,
+     "crest_db": 11.61408632325429
+    }
+   },
+   {
+    "label": "B_low_damping",
+    "changes": {
+     "damp": 40
+    },
+    "start_s": 8.5,
+    "seconds": 8.0,
+    "resets": 0,
+    "features": {
+     "rms_db": -12.962680368256843,
+     "peak": 0.7457775491020094,
+     "centroid_hz": 64.14520984138314,
+     "spread_hz": 74.4877112623331,
+     "rolloff85_hz": 64.599609375,
+     "flatness_db": -61.32416487912061,
+     "spectral_flux": 0.05431356086401819,
+     "env_std_db_50ms": 3.742781474145938,
+     "env_std_db_250ms": 2.6423250812255894,
+     "crest_db": 10.414866472513971
+    }
+   },
+   {
+    "label": "C_strong_links",
+    "changes": {
+     "interaction": 230
+    },
+    "start_s": 17.0,
+    "seconds": 8.0,
+    "resets": 0,
+    "features": {
+     "rms_db": -15.198314254132734,
+     "peak": 0.6678037196804848,
+     "centroid_hz": 713.7720708375696,
+     "spread_hz": 835.2787934775961,
+     "rolloff85_hz": 1679.58984375,
+     "flatness_db": -43.51260591138598,
+     "spectral_flux": 0.04051707894628457,
+     "env_std_db_50ms": 6.621167300830449,
+     "env_std_db_250ms": 1.1350045887756068,
+     "crest_db": 11.691290929168876
+    }
+   }
+  ],
+  "02_control": {
+   "axis": "damp",
+   "raw_base": 138,
+   "raw_set": 40,
+   "mapped_base": 0.29058837890625,
+   "mapped_set": 0.0244140625,
+   "t_set_s": 4.0,
+   "t_back_s": 8.0,
+   "ramp_ms": 15.0,
+   "resets": 0,
+   "resets_reference": 0,
+   "segments": {
+    "base": {
+     "rms_db": -14.914075342552064,
+     "peak": 0.6842596807915464,
+     "centroid_hz": 1073.1892263038949,
+     "spread_hz": 909.52540905464,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -47.29991441998958,
+     "spectral_flux": 0.029977000804042607,
+     "env_std_db_50ms": 9.235889680205645,
+     "env_std_db_250ms": 0.7653027411908027,
+     "crest_db": 11.618494351530424
+    },
+    "set": {
+     "rms_db": -13.332208040362751,
+     "peak": 0.637282038787913,
+     "centroid_hz": 87.7272748607831,
+     "spread_hz": 131.1061752619859,
+     "rolloff85_hz": 150.732421875,
+     "flatness_db": -60.68297002893143,
+     "spectral_flux": 0.055025250457612175,
+     "env_std_db_50ms": 2.958050150858525,
+     "env_std_db_250ms": 1.3335917126695576,
+     "crest_db": 9.418841609504852
+    },
+    "back": {
+     "rms_db": -13.303301081902742,
+     "peak": 0.7052458190428779,
+     "centroid_hz": 65.36374841673377,
+     "spread_hz": 63.372739477073196,
+     "rolloff85_hz": 64.599609375,
+     "flatness_db": -65.82770521110618,
+     "spectral_flux": 0.057156991805677876,
+     "env_std_db_50ms": 3.4003342791535047,
+     "env_std_db_250ms": 1.324091138833772,
+     "crest_db": 10.270111485408457
+    }
+   },
+   "reference_segments": {
+    "base": {
+     "rms_db": -14.914075342552064,
+     "peak": 0.6842596807915464,
+     "centroid_hz": 1073.1892263038949,
+     "spread_hz": 909.52540905464,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -47.29991441998958,
+     "spectral_flux": 0.029977000804042607,
+     "env_std_db_50ms": 9.235889680205645,
+     "env_std_db_250ms": 0.7653027411908027,
+     "crest_db": 11.618494351530424
+    },
+    "set": {
+     "rms_db": -14.905263755550669,
+     "peak": 0.6395874083662509,
+     "centroid_hz": 848.224388536428,
+     "spread_hz": 859.4946770492891,
+     "rolloff85_hz": 2400.9521484375,
+     "flatness_db": -50.86925989792612,
+     "spectral_flux": 0.03150511987537598,
+     "env_std_db_50ms": 0.24218735152697402,
+     "env_std_db_250ms": 0.09982245496673522,
+     "crest_db": 11.023261858522122
+    },
+    "back": {
+     "rms_db": -14.660953760945594,
+     "peak": 0.7189685611135279,
+     "centroid_hz": 897.8956723168952,
+     "spread_hz": 895.3385174140632,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -49.423393605200744,
+     "spectral_flux": 0.03271099273210108,
+     "env_std_db_50ms": 0.2750757338912451,
+     "env_std_db_250ms": 0.13445699681190648,
+     "crest_db": 11.795151762341213
+    }
+   }
+  },
+  "03_links": {
+   "warmup_s": 4.0,
+   "saved_state": "raw/links_saved_state.npz",
+   "saved_state_sha256": "41b37007e5b53a367c7dca01ac943a6e114e43aec893f67f774292d096faa46f",
+   "off": {
+    "start_s": 0.0,
+    "seconds": 8.0,
+    "resets": 0,
+    "features": {
+     "rms_db": -14.864294079877904,
+     "peak": 0.711212460081694,
+     "centroid_hz": 1226.8149193883523,
+     "spread_hz": 804.7689652575322,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -63.08909502720433,
+     "spectral_flux": 0.015545906757118979,
+     "env_std_db_50ms": 0.16124870380476106,
+     "env_std_db_250ms": 0.09291644222739269,
+     "crest_db": 11.904281212788417
+    }
+   },
+   "on": {
+    "start_s": 8.5,
+    "seconds": 8.0,
+    "resets": 0,
+    "features": {
+     "rms_db": -14.64837780557745,
+     "peak": 0.6806597003130948,
+     "centroid_hz": 1140.5062069663527,
+     "spread_hz": 797.7276479926776,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -49.09348475872058,
+     "spectral_flux": 0.01875730488439077,
+     "env_std_db_50ms": 0.17499517907345746,
+     "env_std_db_250ms": 0.08509797553757238,
+     "crest_db": 11.30697856906215
+    },
+    "matrix": "preset 1 (all-to-all, no self)",
+    "interaction_raw": 127
+   },
+   "on_vs_off": {
+    "level_change_db": 0.21591627430045435,
+    "log_spectral_distance_db": 10.62932359440832,
+    "pcm_difference_db_re_control": 1.588677985507683,
+    "centroid_change_ratio": 0.9296481392115526,
+    "flux_change_ratio": 1.2065751568850231,
+    "env_std_change_db": -0.007818466689820308,
+    "crest_change_db": -0.5973026437262678,
+    "reading": {
+     "level": false,
+     "spectrum": true,
+     "time_behaviour": false
+    }
+   },
+   "node_dynamics_kept": "both runs use the same node parameters and saved state; only matrix~ cells differ"
+  },
+  "03b_links_strong": {
+   "warmup_s": 4.0,
+   "saved_state": "raw/links_strong_saved_state.npz",
+   "saved_state_sha256": "ac4ccb2d09731bc9ff31718b630245f68c73e53f52ea0938a0f3b4d35d3813de",
+   "off": {
+    "start_s": 0.0,
+    "seconds": 8.0,
+    "resets": 0,
+    "features": {
+     "rms_db": -14.864294079877904,
+     "peak": 0.711212460081694,
+     "centroid_hz": 1226.8149193883523,
+     "spread_hz": 804.7689652575322,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -63.08909502720433,
+     "spectral_flux": 0.015545906757118979,
+     "env_std_db_50ms": 0.16124870380476106,
+     "env_std_db_250ms": 0.09291644222739269,
+     "crest_db": 11.904281212788417
+    }
+   },
+   "on": {
+    "start_s": 8.5,
+    "seconds": 8.0,
+    "resets": 0,
+    "features": {
+     "rms_db": -13.27410807030316,
+     "peak": 0.7449155329943966,
+     "centroid_hz": 350.36774266038645,
+     "spread_hz": 625.5055423670377,
+     "rolloff85_hz": 947.4609375,
+     "flatness_db": -47.50541864887961,
+     "spectral_flux": 0.036393330269678587,
+     "env_std_db_50ms": 2.401152932356945,
+     "env_std_db_250ms": 1.7907346075180366,
+     "crest_db": 10.71624867598985
+    },
+    "matrix": "preset 1 (all-to-all, no self)",
+    "interaction_raw": 230
+   },
+   "on_vs_off": {
+    "level_change_db": 1.5901860095747438,
+    "log_spectral_distance_db": 11.86165124051766,
+    "pcm_difference_db_re_control": 3.293286377760742,
+    "centroid_change_ratio": 0.28559136111180305,
+    "flux_change_ratio": 2.3410233213326648,
+    "env_std_change_db": 1.6978181652906439,
+    "crest_change_db": -1.188032536798568,
+    "reading": {
+     "level": false,
+     "spectrum": true,
+     "time_behaviour": true
+    }
+   },
+   "node_dynamics_kept": "both runs use the same node parameters and saved state; only matrix~ cells differ"
+  }
+ },
+ "probes": {
+  "schedule": {
+   "t_set_s": 4.0,
+   "length_s": 12.0,
+   "analysis_window_s": [
+    6.0,
+    12.0
+   ]
+  },
+  "control": {
+   "resets": 0,
+   "nan": false,
+   "frame_rms_db_250ms": [
+    -17.92,
+    -14.72,
+    -14.84,
+    -14.75,
+    -14.75,
+    -14.81,
+    -14.75,
+    -14.61,
+    -14.84,
+    -14.88,
+    -14.8,
+    -14.69,
+    -14.83,
+    -14.8,
+    -14.75,
+    -14.77,
+    -14.77,
+    -14.87,
+    -14.8,
+    -14.88,
+    -14.89,
+    -14.93,
+    -14.86,
+    -15.12,
+    -14.88,
+    -14.98,
+    -14.91,
+    -15.09,
+    -14.85,
+    -14.97,
+    -14.97,
+    -14.73,
+    -14.98,
+    -14.85,
+    -14.73,
+    -14.72,
+    -14.81,
+    -14.69,
+    -14.64,
+    -14.66,
+    -14.68,
+    -14.46,
+    -14.64,
+    -14.54,
+    -14.55,
+    -14.54,
+    -14.47,
+    -14.64
+   ],
+   "settle_time_s_level_within_3db": 0.25,
+   "centroid_hz_per_second": [
+    1286,
+    1126,
+    995,
+    911,
+    872,
+    850,
+    837,
+    832,
+    856,
+    884,
+    902,
+    946
+   ],
+   "window_features": {
+    "rms_db": -14.745752412964311,
+    "peak": 0.7189685702323914,
+    "centroid_hz": 878.6738339666318,
+    "spread_hz": 882.8319429990813,
+    "rolloff85_hz": 2411.71875,
+    "flatness_db": -49.717296823897826,
+    "spectral_flux": 0.03242205245084167,
+    "env_std_db_50ms": 0.3045915714468135,
+    "env_std_db_250ms": 0.17369704781650186,
+    "crest_db": 11.879950524524844
+   }
+  },
+  "probes": [
+   {
+    "axis": "mod",
+    "raw": 0,
+    "mapped": 0.0,
+    "file": "raw/probes/mod_000.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -14.54162258339309,
+     "peak": 0.7463690936565399,
+     "centroid_hz": 955.5090600351328,
+     "spread_hz": 935.1676795291221,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -49.363165466653705,
+     "spectral_flux": 0.03023438477611589,
+     "env_std_db_50ms": 0.27841414032738093,
+     "env_std_db_250ms": 0.08147852187857665,
+     "crest_db": 12.000695532190617
+    },
+    "vs_control": {
+     "level_change_db": 0.2041298295712206,
+     "log_spectral_distance_db": 4.25262774762071,
+     "pcm_difference_db_re_control": 2.154173026117986,
+     "centroid_change_ratio": 1.0874445364119252,
+     "flux_change_ratio": 0.9325253181289889,
+     "env_std_change_db": -0.0922185259379252,
+     "crest_change_db": 0.12074500766577323,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   },
+   {
+    "axis": "mod",
+    "raw": 23,
+    "mapped": 0.080718994140625,
+    "file": "raw/probes/mod_023.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -14.552817227531074,
+     "peak": 0.7088858783245087,
+     "centroid_hz": 954.2137591834745,
+     "spread_hz": 933.69837669862,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -49.0683593491909,
+     "spectral_flux": 0.029444817117883586,
+     "env_std_db_50ms": 0.3002541794604155,
+     "env_std_db_250ms": 0.07394804894943303,
+     "crest_db": 11.564343725132504
+    },
+    "vs_control": {
+     "level_change_db": 0.19293518543323707,
+     "log_spectral_distance_db": 3.743749639768057,
+     "pcm_difference_db_re_control": 2.170327862462991,
+     "centroid_change_ratio": 1.0859703820652424,
+     "flux_change_ratio": 0.9081725212346698,
+     "env_std_change_db": -0.09974899886706882,
+     "crest_change_db": -0.3156067993923397,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   },
+   {
+    "axis": "mod",
+    "raw": 92,
+    "mapped": 1.29150390625,
+    "file": "raw/probes/mod_092.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -20.190286308657676,
+     "peak": 0.5324281007051468,
+     "centroid_hz": 280.98238480519046,
+     "spread_hz": 642.3047400997925,
+     "rolloff85_hz": 602.9296875,
+     "flatness_db": -58.70989913750519,
+     "spectral_flux": 0.042772418051890984,
+     "env_std_db_50ms": 3.8609261143150775,
+     "env_std_db_250ms": 3.685294500839063,
+     "crest_db": 14.71550568410789
+    },
+    "vs_control": {
+     "level_change_db": -5.444533895693365,
+     "log_spectral_distance_db": 7.3186595507713506,
+     "pcm_difference_db_re_control": 1.0827133954093084,
+     "centroid_change_ratio": 0.3197800753173002,
+     "flux_change_ratio": 1.3192384447820675,
+     "env_std_change_db": 3.511597453022561,
+     "crest_change_db": 2.8355551595830466,
+     "reading": {
+      "level": true,
+      "spectrum": true,
+      "time_behaviour": true
+     }
+    }
+   },
+   {
+    "axis": "mod",
+    "raw": 138,
+    "mapped": 2.9058837890625,
+    "file": "raw/probes/mod_138.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -66.49787883783597,
+     "peak": 0.0033100200816988945,
+     "centroid_hz": 63.4613599958463,
+     "spread_hz": 14.779414974777492,
+     "rolloff85_hz": 75.3662109375,
+     "flatness_db": -131.000455015403,
+     "spectral_flux": 0.0823174331482159,
+     "env_std_db_50ms": 10.996991533103987,
+     "env_std_db_250ms": 10.549441053676846,
+     "crest_db": 16.894491391943276
+    },
+    "vs_control": {
+     "level_change_db": -51.75212642487166,
+     "log_spectral_distance_db": 17.851517379894926,
+     "pcm_difference_db_re_control": 0.0005682797334105622,
+     "centroid_change_ratio": 0.07222402391267325,
+     "flux_change_ratio": 2.5389334396095258,
+     "env_std_change_db": 10.375744005860344,
+     "crest_change_db": 5.014540867418432,
+     "reading": {
+      "level": true,
+      "spectrum": true,
+      "time_behaviour": true
+     }
+    }
+   },
+   {
+    "axis": "mod",
+    "raw": 184,
+    "mapped": 5.166015625,
+    "file": "raw/probes/mod_184.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -72.48283803665306,
+     "peak": 0.0016819688607938588,
+     "centroid_hz": 67.22078713175674,
+     "spread_hz": 13.883615599709147,
+     "rolloff85_hz": 86.1328125,
+     "flatness_db": -132.6770333302626,
+     "spectral_flux": 0.08485232653942577,
+     "env_std_db_50ms": 16.262640816391293,
+     "env_std_db_250ms": 15.90066482094026,
+     "crest_db": 16.999197024215256
+    },
+    "vs_control": {
+     "level_change_db": -57.737085623688756,
+     "log_spectral_distance_db": 16.59711784626092,
+     "pcm_difference_db_re_control": 0.00031370635799768604,
+     "centroid_change_ratio": 0.07650254796856679,
+     "flux_change_ratio": 2.6171176753254257,
+     "env_std_change_db": 15.726967773123759,
+     "crest_change_db": 5.119246499690412,
+     "reading": {
+      "level": true,
+      "spectrum": true,
+      "time_behaviour": true
+     }
+    }
+   },
+   {
+    "axis": "damp",
+    "raw": 40,
+    "mapped": 0.0244140625,
+    "file": "raw/probes/damp_040.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -12.423632154890319,
+     "peak": 0.7074330747127533,
+     "centroid_hz": 65.48701391390628,
+     "spread_hz": 70.93605654064748,
+     "rolloff85_hz": 64.599609375,
+     "flatness_db": -60.1721711707114,
+     "spectral_flux": 0.05561202900485355,
+     "env_std_db_50ms": 3.2657573401266196,
+     "env_std_db_250ms": 0.9509970550646032,
+     "crest_db": 9.41733936647699
+    },
+    "vs_control": {
+     "level_change_db": 2.3221202580739924,
+     "log_spectral_distance_db": 5.608156711501379,
+     "pcm_difference_db_re_control": 4.282161416021895,
+     "centroid_change_ratio": 0.07452937754874944,
+     "flux_change_ratio": 1.7152531934606092,
+     "env_std_change_db": 0.7773000072481013,
+     "crest_change_db": -2.4626111580478547,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": true
+     }
+    }
+   },
+   {
+    "axis": "damp",
+    "raw": 90,
+    "mapped": 0.12359619140625,
+    "file": "raw/probes/damp_090.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -11.071798431933308,
+     "peak": 0.9874740242958069,
+     "centroid_hz": 73.5548576696361,
+     "spread_hz": 124.44514718363749,
+     "rolloff85_hz": 64.599609375,
+     "flatness_db": -60.94311369124121,
+     "spectral_flux": 0.045640103890587085,
+     "env_std_db_50ms": 2.9325063534438853,
+     "env_std_db_250ms": 0.4885545905520945,
+     "crest_db": 10.962312036791298
+    },
+    "vs_control": {
+     "level_change_db": 3.673953981031003,
+     "log_spectral_distance_db": 5.432543993256671,
+     "pcm_difference_db_re_control": 5.179596374436013,
+     "centroid_change_ratio": 0.08371121891451407,
+     "flux_change_ratio": 1.407687066072903,
+     "env_std_change_db": 0.31485754273559263,
+     "crest_change_db": -0.9176384877335462,
+     "reading": {
+      "level": true,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   },
+   {
+    "axis": "damp",
+    "raw": 190,
+    "mapped": 0.55084228515625,
+    "file": "raw/probes/damp_190.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -14.314492222040867,
+     "peak": 0.723749577999115,
+     "centroid_hz": 883.2344647245211,
+     "spread_hz": 878.6016327508322,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -53.8998837134294,
+     "spectral_flux": 0.03136262526329934,
+     "env_std_db_50ms": 0.23092654208691307,
+     "env_std_db_250ms": 0.07120360328587749,
+     "crest_db": 11.506258692174757
+    },
+    "vs_control": {
+     "level_change_db": 0.43126019092344414,
+     "log_spectral_distance_db": 3.2154728293920196,
+     "pcm_difference_db_re_control": 2.996723986244363,
+     "centroid_change_ratio": 1.0051903568555138,
+     "flux_change_ratio": 0.9673238704073829,
+     "env_std_change_db": -0.10249344453062437,
+     "crest_change_db": -0.37369183235008663,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   },
+   {
+    "axis": "damp",
+    "raw": 230,
+    "mapped": 0.80718994140625,
+    "file": "raw/probes/damp_230.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -14.095332027179504,
+     "peak": 0.7256583869457245,
+     "centroid_hz": 879.6095093818966,
+     "spread_hz": 874.8702797874904,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -57.53437629069694,
+     "spectral_flux": 0.03074705805298509,
+     "env_std_db_50ms": 0.2379768780515669,
+     "env_std_db_250ms": 0.05915678416520421,
+     "crest_db": 11.30997640862253
+    },
+    "vs_control": {
+     "level_change_db": 0.6504203857848072,
+     "log_spectral_distance_db": 5.151068718995717,
+     "pcm_difference_db_re_control": 3.24527955471118,
+     "centroid_change_ratio": 1.001064872287184,
+     "flux_change_ratio": 0.9483378049432186,
+     "env_std_change_db": -0.11454026365129766,
+     "crest_change_db": -0.5699741159023137,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   },
+   {
+    "axis": "damp",
+    "raw": 256,
+    "mapped": 1.0,
+    "file": "raw/probes/damp_256.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -13.910236276624344,
+     "peak": 0.8062215149402618,
+     "centroid_hz": 867.9284060462463,
+     "spread_hz": 880.1540452676632,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -59.301526930024465,
+     "spectral_flux": 0.028731364328783038,
+     "env_std_db_50ms": 0.2862636187603372,
+     "env_std_db_250ms": 0.06539463037690334,
+     "crest_db": 12.039323948882162
+    },
+    "vs_control": {
+     "level_change_db": 0.835516136339967,
+     "log_spectral_distance_db": 5.699671421916937,
+     "pcm_difference_db_re_control": 3.1588143912845688,
+     "centroid_change_ratio": 0.9877708570518403,
+     "flux_change_ratio": 0.8861673508284383,
+     "env_std_change_db": -0.10830241743959852,
+     "crest_change_db": 0.15937342435731772,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   },
+   {
+    "axis": "interaction",
+    "raw": 0,
+    "mapped": 0.0,
+    "file": "raw/probes/interaction_000.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -14.676876033344875,
+     "peak": 0.7092279493808746,
+     "centroid_hz": 926.7754805079232,
+     "spread_hz": 896.2954418906514,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -64.58612396376026,
+     "spectral_flux": 0.031552100715577285,
+     "env_std_db_50ms": 0.27704817185793684,
+     "env_std_db_250ms": 0.09537776109233115,
+     "crest_db": 11.692592873700288
+    },
+    "vs_control": {
+     "level_change_db": 0.06887637961943582,
+     "log_spectral_distance_db": 9.243248818685588,
+     "pcm_difference_db_re_control": 1.5367642351602882,
+     "centroid_change_ratio": 1.0547434607494162,
+     "flux_change_ratio": 0.9731679005644875,
+     "env_std_change_db": -0.07831928672417071,
+     "crest_change_db": -0.18735765082455558,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   },
+   {
+    "axis": "interaction",
+    "raw": 64,
+    "mapped": 0.3125,
+    "file": "raw/probes/interaction_064.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -14.643985245712434,
+     "peak": 0.7529986202716827,
+     "centroid_hz": 920.0542117324087,
+     "spread_hz": 897.3397826097975,
+     "rolloff85_hz": 2411.71875,
+     "flatness_db": -59.0664394234394,
+     "spectral_flux": 0.03155172531210307,
+     "env_std_db_50ms": 0.25377389034145537,
+     "env_std_db_250ms": 0.08486260430815135,
+     "crest_db": 12.179868854435377
+    },
+    "vs_control": {
+     "level_change_db": 0.10176716725187696,
+     "log_spectral_distance_db": 5.0656780148143445,
+     "pcm_difference_db_re_control": 1.5382718374608388,
+     "centroid_change_ratio": 1.0470941277253834,
+     "flux_change_ratio": 0.9731563219182934,
+     "env_std_change_db": -0.08883444350835051,
+     "crest_change_db": 0.2999183299105326,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   },
+   {
+    "axis": "interaction",
+    "raw": 190,
+    "mapped": 2.75421142578125,
+    "file": "raw/probes/interaction_190.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -12.989333665890397,
+     "peak": 0.8156654536724091,
+     "centroid_hz": 294.6065261735689,
+     "spread_hz": 667.0788220164843,
+     "rolloff85_hz": 279.931640625,
+     "flatness_db": -50.32114516912377,
+     "spectral_flux": 0.0428241720868062,
+     "env_std_db_50ms": 2.641571844695082,
+     "env_std_db_250ms": 1.689652238253692,
+     "crest_db": 11.219575041523907
+    },
+    "vs_control": {
+     "level_change_db": 1.7564187470739139,
+     "log_spectral_distance_db": 4.574948180696095,
+     "pcm_difference_db_re_control": 3.8636444468787916,
+     "centroid_change_ratio": 0.3352854208069621,
+     "flux_change_ratio": 1.3208347050741538,
+     "env_std_change_db": 1.5159551904371902,
+     "crest_change_db": -0.6603754830009372,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   },
+   {
+    "axis": "interaction",
+    "raw": 230,
+    "mapped": 4.03594970703125,
+    "file": "raw/probes/interaction_230.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -11.853967786324866,
+     "peak": 0.8380190134048462,
+     "centroid_hz": 123.48837371207686,
+     "spread_hz": 337.40159210701836,
+     "rolloff85_hz": 64.599609375,
+     "flatness_db": -54.42401948220257,
+     "spectral_flux": 0.04453242849820352,
+     "env_std_db_50ms": 2.982902742489628,
+     "env_std_db_250ms": 1.096188431045705,
+     "crest_db": 10.319045231047514
+    },
+    "vs_control": {
+     "level_change_db": 2.8917846266394456,
+     "log_spectral_distance_db": 4.4426074590844795,
+     "pcm_difference_db_re_control": 4.665430306319532,
+     "centroid_change_ratio": 0.14053949137714553,
+     "flux_change_ratio": 1.373522807222757,
+     "env_std_change_db": 0.9224913832292032,
+     "crest_change_db": -1.5609052934773295,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   },
+   {
+    "axis": "interaction",
+    "raw": 256,
+    "mapped": 5.0,
+    "file": "raw/probes/interaction_256.f32.wav",
+    "resets": 0,
+    "nan": false,
+    "features": {
+     "rms_db": -12.005323980537836,
+     "peak": 0.8010065257549286,
+     "centroid_hz": 106.59835151391881,
+     "spread_hz": 262.518741863523,
+     "rolloff85_hz": 64.599609375,
+     "flatness_db": -55.416337383661556,
+     "spectral_flux": 0.04258510951236555,
+     "env_std_db_50ms": 2.8217258248157946,
+     "env_std_db_250ms": 1.5458736552056191,
+     "crest_db": 10.078045065928592
+    },
+    "vs_control": {
+     "level_change_db": 2.7404284324264747,
+     "log_spectral_distance_db": 4.826292424339134,
+     "pcm_difference_db_re_control": 4.504878325325385,
+     "centroid_change_ratio": 0.12131731638428071,
+     "flux_change_ratio": 1.3134612491585198,
+     "env_std_change_db": 1.3721766073891173,
+     "crest_change_db": -1.8019054585962522,
+     "reading": {
+      "level": false,
+      "spectrum": true,
+      "time_behaviour": false
+     }
+    }
+   }
+  ]
+ },
+ "peak_after_master_gain_max": 0.7189609638856584,
+ "clipped_samples_total": 0,
+ "verification_node": "verification_node.json",
+ "figures": [
+  "figures/01_palette.png",
+  "figures/02_control.png",
+  "figures/02_control_reference.png",
+  "figures/03_links.png",
+  "figures/03b_links_strong.png",
+  "figures/probes.png"
+ ],
+ "render_seconds": 278.6
+}

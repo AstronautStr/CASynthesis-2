@@ -160,7 +160,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", required=True, help="checkout of tommmmudd/guttersynthesis (class files)")
     ap.add_argument("--jdk", required=True, help="JDK bin directory (javac + java)")
-    ap.add_argument("--out", default=os.path.join(os.path.dirname(os.path.dirname(HERE)), "results", "network_reference_n0", "verification_node.json"))
+    ap.add_argument("--out", default=os.path.join(os.path.dirname(HERE), "results", "network_reference_n0", "verification_node.json"))
     ap.add_argument("--work", default=None)
     a = ap.parse_args()
     work = a.work or tempfile.mkdtemp(prefix="n0_verify_")
