@@ -299,6 +299,54 @@ the named control), fullshape=1, dyn=0.  Known near-silent case: the analytic
 paths at radius 0.8 pass around the centred Pulsar (F3) and read only the
 Smooth tails -- F3 is prepared with Raster only.
 
+## N1 -- the Gutter Synthesis network driven by the field (2026-09-15)
+
+`gutter_field` (`casynth_lab/gutter_field.py`, REQ
+`memory/req-network-ca-n1-2026-09-15.md`): the eight-node Gutter Synthesis
+network of the N0 reference (`demos/network_reference_n0/`) as a live bench
+engine.  The model is FIXED by `casynth_lab/gutter_field_n1_config.py`
+(= the Researcher's fixtures `memory/research/network-n1-fixtures-2026-09-15.json`:
+44.1 kHz, explicit 8 x 24 bank frequencies, N0 node values, matrix delay
+2000 + 64 samples, SVF q = 0.99, all-to-all links, the review-R1 output routes
+-- node 6 has no right outlet, neither in the master sum nor at the matrix
+input; `post_math = "scalar"`, `model_version = gutter_field_n1_v1`).  The
+per-sample arithmetic is the scalar node port's (Java-verified) statement
+order, executed by ONE numba kernel per block (~0.4 us per sample per side
+instead of ~52 with per-sample numpy; without numba the same function runs as
+plain Python, correct but far too slow for live use -- `numba` is in
+`requirements.txt`).  `tests/test_gutter_field_n1.py` (gate 1i) checks the
+kernel bit-exactly against the slow model in its scalar mode and against the
+scalar node port in lockstep.
+
+Field -> sound: the field is cut into 2 rows x 4 columns of regions (drawn
+over the field with the node numbers 0..7, `i = 4 r + c`); per region
+`n = live cells`, `u = n / (n + 2)`, `ratio = 2 ** clip(log2(scale) + depth *
+(2 u - 1), -1, 1)`, and every bank frequency of that node becomes
+`min(19000, base * ratio)` -- applied atomically at the block boundary as
+float32 setFreqN messages (coefficients recomputed, all states kept, no
+interpolation, no accumulation).  Nothing resets the network: painting,
+evolution, parameter moves and the CA pause keep it running; Stop / Restart
+are the bench transport.  Controls: `Resonators` (scale 0.5..2), `CA amount`
+(depth 0..1; 0 = the field does not act), `Links` (source interaction slider
+0..256, `(v/256)^2 * 5`, 50 ms ramp), `Freeze CA` (holds the control vector u
+reached so far; manual knobs keep acting on it; off takes the current field;
+at init the held vector is the initial field's).  The panel shows the held
+u per node as bars (tick = the field's own u), the cell count, the ratio, the
+current link gain and the node reset count.  Level: raw sum x 20, then the
+bench gain once (0.56 effective at the defaults); the clip counter measures
+before int16.  Snapshot = everything (ring delays, nodes, all filters,
+coefficients / frequencies, ramps, held vector, model version): Continue is
+byte-exact.
+
+Entry: **`run_network_n1.bat`** opens `demos/network_n1_blinkers.json` directly
+in the live bench (`--live`; catalog `lab_catalog/network_n1_2026_09_15/`,
+created on the first Save): 32 x 32, B3/S23, torus, 2 generations / s, four
+vertical blinkers in columns 4 / 12 / 20 / 28 (rows 14..16); A follows the
+field, B = `Freeze CA` on.  Measurements (levels, spectra per 2 s window, the
+fixtures' edit schedule, invariance with depth 0 / Freeze CA, block timing
+p95 / p99 offline and on the device): `python demos/gutter_field_n1_report.py`
+-> `demos/results/network_n1/report.{json,md}` (WAVs in `artifacts/_n1/`).
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B

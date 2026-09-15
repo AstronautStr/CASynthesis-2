@@ -3,3 +3,4 @@ numpy>=2.0
 scipy>=1.13
 pygame-ce>=2.5
 sounddevice>=0.5
+numba>=0.60          # N1 gutter_field: the per-sample network kernel (plain Python without it: too slow for live use)

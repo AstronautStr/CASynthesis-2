@@ -52,6 +52,7 @@ TAB_W, TAB_H = 96, 30
 ARROW_W = 28
 ENG_W, ENG_H = 74, 24
 ROW_H = 26
+DISPLAY_ROW_H = 14           # one bar row of an engine display (W links / node u)
 SLIDER_W = 120
 FONT_NAMES = "segoeui,arial,dejavusans,freesans"
 C_ALIVE = (111, 208, 224)
@@ -137,7 +138,10 @@ class BenchApp:
         self.engine_rows = (len(specs) + 2) // 3
         self.params_y = ey + self.engine_rows * (ENG_H + 6) + 12
         self.param_rows_max = max([len(e.params) for e in specs] + [1])
-        self.footer_y = self.params_y + self.param_rows_max * ROW_H + 8   # peak / message
+        # peak / message line: below the longest parameter list AND below the tallest
+        # engine display (gutter_field: 4 parameter rows + a header + 8 node bars)
+        self.footer_y = max(self.params_y + self.param_rows_max * ROW_H + 8,
+                            self.params_y + 4 * ROW_H + 6 + 18 + 8 * DISPLAY_ROW_H + 8)
         self.slider_x = px + 82
 
     # -- helpers -------------------------------------------------------------
@@ -651,7 +655,8 @@ class BenchApp:
             runs.append(run)
         data = dict(runs=[[self._cell_px(*p) for p in r] for r in runs],
                     start=ov.get('start'), ahead=ov.get('ahead'), text=ov.get('text', ''),
-                    circles=ov.get('circles') or [], labels=ov.get('labels') or [])
+                    circles=ov.get('circles') or [], labels=ov.get('labels') or [],
+                    lines=[(self._cell_px(*a), self._cell_px(*b)) for a, b in (ov.get('lines') or [])])
         self._overlay_cache = (key, data)
         return data
 
@@ -661,6 +666,8 @@ class BenchApp:
         if data is None:
             return
         col = C_OVERLAY
+        for a, b in data['lines']:                 # straight borders (no torus wrap)
+            pygame.draw.line(screen, col, a, b, 1)
         for x, y, radius in data['circles']:
             cx, cy = self._cell_px(x, y)
             pygame.draw.circle(screen, col, (int(cx), int(cy)), int(radius * CELL), 1)
@@ -692,9 +699,30 @@ class BenchApp:
 
     def _draw_display(self, screen, small, disp, x, y):
         """Engine display numbers (pm_network: six link depths W as bars,
-        the target as a tick, frozen / gate state)."""
+        the target as a tick, frozen / gate state; gutter_field: the held
+        control vector u per node as bars, the field's own u as a tick, the
+        frequency ratio, links / resets)."""
         import pygame
-        if not disp or 'W' not in disp:
+        if not disp:
+            return
+        if 'u' in disp:
+            state = "frozen" if disp.get('frozen') else "live"
+            screen.blit(small.render(f"Nodes u (held)  {state}   links {disp.get('links', 0):.2f}"
+                                     f"   resets {disp.get('resets', 0)}", True, C_DIM), (x, y))
+            bar_x, bar_w = x + 44, 150
+            for k in range(len(disp['u'])):
+                ry = y + 18 + k * DISPLAY_ROW_H
+                u, uf = float(disp['u'][k]), float(disp['u_field'][k])
+                screen.blit(small.render(f"{k} ({disp['counts'][k]})", True, C_DIM), (x, ry - 2))
+                pygame.draw.rect(screen, C_EDGE, (bar_x, ry, bar_w, 8), border_radius=3)
+                pygame.draw.rect(screen, C_ACCENT, (bar_x, ry, int(bar_w * min(u, 1.0)), 8),
+                                 border_radius=3)
+                tx = bar_x + int(bar_w * min(uf, 1.0))
+                pygame.draw.line(screen, C_TXT, (tx, ry - 2), (tx, ry + 10), 1)
+                screen.blit(small.render(f"x{disp['ratio'][k]:.3f}", True, C_TXT),
+                            (bar_x + bar_w + 8, ry - 3))
+            return
+        if 'W' not in disp:
             return
         from casynth_lab.pm_network import EDGES
         state = "frozen" if disp.get('frozen') else "live"
@@ -702,7 +730,7 @@ class BenchApp:
                                  True, C_DIM), (x, y))
         bar_x, bar_w, full = x + 44, 150, 1.0 / 3.0
         for k, (i, j) in enumerate(EDGES):
-            ry = y + 18 + k * 14
+            ry = y + 18 + k * DISPLAY_ROW_H
             w, wt = float(disp['W'][k]), float(disp['W_target'][k])
             screen.blit(small.render(f"{j}>{i}", True, C_DIM), (x, ry - 2))
             pygame.draw.rect(screen, C_EDGE, (bar_x, ry, bar_w, 8), border_radius=3)

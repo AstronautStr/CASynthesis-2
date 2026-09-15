@@ -15,6 +15,7 @@ Gates (any FAIL -> exit 1):
   1f. demo lab S7      python tests/test_demo_lab_s7.py           (catalog check / report)
   1g. demo lab S/N     python tests/test_demo_lab_sn.py           (Scan / Network engines)
   1h. network ref N0   python tests/test_network_reference_n0.py  (gutterOsc port == engine)
+  1i. network N1       python tests/test_gutter_field_n1.py       (live kernel == model, bench)
   2. golden master     python tests/golden/golden_master.py       (audio, byte-exact)
   3. ui frame + smoke  CASYNTH_DUMPFRAME render of gol_synth.py   (pixel-exact vs
                        tests/golden/ui_frame.png; doubles as the import/init smoke)
@@ -112,6 +113,11 @@ def main():
     results.append(("network reference N0",
                     _run("N0 network reference tests", [py, os.path.join("tests", "test_network_reference_n0.py")],
                          env={"PYTHONUTF8": "1"}, timeout=300)))
+
+    results.append(("network N1 (gutter_field)",
+                    _run("N1 gutter_field tests", [py, os.path.join("tests", "test_gutter_field_n1.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"}, timeout=600)))
 
     results.append(("golden master",
                     _run("golden master", [py, os.path.join("tests", "golden", "golden_master.py")])))
