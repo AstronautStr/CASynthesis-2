@@ -23,6 +23,17 @@ tests); the Max-side objects around it are transcribed from ``mxjGutterCompact.m
 
 All signals in the Max chain are float64 (Max 6+ audio); the mxj~ boundary is float32 in
 both directions (MSPSignal.vec is float[]), and that cast is applied here too.
+
+Explicit configuration keys added for N1 (2026-09-15; absent = the N0 behaviour, so the N0
+package stays reproducible from its own config.json):
+  output_routes : {"L": [0/1 x 8], "R": [0/1 x 8]} -- which node outlets reach the master
+                  sum AND the matrix input.  In the source patch (p individual_controls)
+                  node 6 (index 5) has no right connection (review R1): R[5] = 0.
+  post_math     : "numpy" (N0) | "scalar" (N1) -- how tanh~, the master sums and the matrix~
+                  product are evaluated.  numpy's vectorised tanh differs from the C runtime
+                  in the last ulp for ~20 % of inputs, and its reductions / BLAS do not sum
+                  in index order; "scalar" = C-runtime tanh per node, sums and the matrix
+                  product accumulated in index order from 0.0 (what a per-sample kernel does).
 """
 import math
 
@@ -212,6 +223,14 @@ class GutterNetwork:
         self.svf2 = _SVF(n, cfg["svf_hp_hz"][1], cfg["svf_res"], sr)
         v = 0.25 * np.array(cfg["pan"], dtype=np.float64)
         self.panL = np.cos(2.0 * np.pi * v); self.panR = np.cos(2.0 * np.pi * (v + 0.75))
+        routes = cfg.get("output_routes") or {"L": [1] * n, "R": [1] * n}
+        self.routeL = np.array(routes["L"], dtype=np.float64); self.routeR = np.array(routes["R"], dtype=np.float64)
+        if self.routeL.shape != (n,) or self.routeR.shape != (n,):
+            raise ValueError("output_routes: need L and R masks of length n_nodes")
+        post = cfg.get("post_math", "numpy")
+        if post not in ("numpy", "scalar"):
+            raise ValueError(f"post_math must be 'numpy' or 'scalar', got {post!r}")
+        self.scalar_post = (post == "scalar")
         # --- delay lines of the matrix outputs ---
         self.D = int(cfg["matrix_delay_samples"]) + int(cfg["extra_feedback_samples"])
         self.ring = np.zeros((n, self.D + 1))
@@ -358,11 +377,23 @@ class GutterNetwork:
         v = np.maximum(np.minimum(out0, self.node_clip), -self.node_clip)
         v = self.svf1.hp(v)
         v = self.svf2.hp(v)
-        o = np.tanh(v)
-        L = o * self.panL; R = o * self.panR
+        if self.scalar_post:
+            o = np.array([math.tanh(float(x)) for x in v])
+        else:
+            o = np.tanh(v)
+        L = np.where(self.routeL > 0, o * self.panL, 0.0)
+        R = np.where(self.routeR > 0, o * self.panR, 0.0)
         # ---- matrix~ -> delay~ (written now, read D samples later)
         m_in = 0.5 * (L + R)
-        self.ring[:, k % (self.D + 1)] = m_in @ self.G                 # mo[j] = sum_i G[i,j] in_i
+        if self.scalar_post:
+            col = self.ring[:, k % (self.D + 1)]
+            for j in range(n):
+                acc = 0.0
+                for i in range(n):
+                    acc += float(m_in[i]) * float(self.G[i, j])
+                col[j] = acc
+        else:
+            self.ring[:, k % (self.D + 1)] = m_in @ self.G             # mo[j] = sum_i G[i,j] in_i
         self.k = k + 1
         return L, R, o
 
@@ -377,7 +408,13 @@ class GutterNetwork:
         nodes = np.zeros((n_samples, self.n)) if node_out else None
         for i in range(n_samples):
             L, R, o = self.step()
-            out[i, 0] = L.sum(); out[i, 1] = R.sum()
+            if self.scalar_post:
+                sl = 0.0; sr_ = 0.0
+                for v in L: sl += float(v)
+                for v in R: sr_ += float(v)
+                out[i, 0] = sl; out[i, 1] = sr_
+            else:
+                out[i, 0] = L.sum(); out[i, 1] = R.sum()
             if node_out:
                 nodes[i] = o
         return out, nodes
