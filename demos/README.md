@@ -338,11 +338,25 @@ before int16.  Snapshot = everything (ring delays, nodes, all filters,
 coefficients / frequencies, ramps, held vector, model version): Continue is
 byte-exact.
 
-Entry: **`run_network_n1.bat`** opens `demos/network_n1_blinkers.json` directly
-in the live bench (`--live`; catalog `lab_catalog/network_n1_2026_09_15/`,
-created on the first Save): 32 x 32, B3/S23, torus, 2 generations / s, four
-vertical blinkers in columns 4 / 12 / 20 / 28 (rows 14..16); A follows the
-field, B = `Freeze CA` on.  Measurements (levels, spectra per 2 s window, the
+Entry: **`run_network_n1.bat`** opens the bench on the CATALOG screen of
+`lab_catalog/network_n1_2026_09_15/` (every listening goes through the
+experiment catalog: open the records in turn, compare A / B, write Notes;
+Continue = the live field from the record's end state).  Build the catalog once
+with `python demos/build_n1_demos.py` (refuses a catalog that already holds
+records; `--scenes-only` rewrites `demos/network_n1_blinkers.json` +
+`demos/n1_*.json` identically).  All records: 32 x 32, B3/S23, torus, four
+vertical blinkers in columns 4 / 12 / 20 / 28 (rows 14..16), 12 s of evolution
+at 2 generations / s unless noted:
+
+| Record | Scene | A | B | Purpose |
+|---|---|---|---|---|
+| N1-follow: follows the field / Freeze CA | `network_n1_blinkers` | Gutter | Gutter, Freeze CA | the REQ's A / B |
+| N1-edits: the field moved and back every 4 s | `n1_edits` (20 s, CA paused) | Gutter | Gutter, Freeze CA | the fixtures' edit schedule, no restart |
+| N1-depth: CA amount 1 / 0 | `n1_depth` | Gutter depth 1 | Gutter depth 0 | the field acting vs manual scale only |
+| N1-links: Links 127 / 230 | `n1_links` | Gutter Links 127 | Gutter Links 230 | coupling strength |
+| N1-routes: R1 fix / N0 routing | `n1_routes` | Gutter | Gutter (N0 routes) | review R1 as a listening control (`gutter_field_n0r`: the same model with node 6 also on the right) |
+
+Measurements (levels, spectra per 2 s window, the
 fixtures' edit schedule, invariance with depth 0 / Freeze CA, block timing
 p95 / p99 offline and on the device): `python demos/gutter_field_n1_report.py`
 -> `demos/results/network_n1/report.{json,md}` (WAVs in `artifacts/_n1/`).

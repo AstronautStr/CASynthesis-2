@@ -1,7 +1,7 @@
 {
  "format": 2,
- "id": "network_n1_blinkers",
- "title": "N1-follow: follows the field / Freeze CA",
+ "id": "n1_depth",
+ "title": "N1-depth: CA amount 1 / 0",
  "grid": {
   "rows": 32,
   "cols": 32
@@ -77,9 +77,9 @@
    "engine_id": "gutter_field",
    "engine_params": {
     "scale": 1.0,
-    "depth": 1.0,
+    "depth": 0.0,
     "interaction": 127,
-    "freeze_ca": 1
+    "freeze_ca": 0
    }
   }
  },

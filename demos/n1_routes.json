@@ -1,7 +1,7 @@
 {
  "format": 2,
- "id": "network_n1_blinkers",
- "title": "N1-follow: follows the field / Freeze CA",
+ "id": "n1_routes",
+ "title": "N1-routes: R1 fix / N0 routing",
  "grid": {
   "rows": 32,
   "cols": 32
@@ -74,12 +74,12 @@
    }
   },
   "B": {
-   "engine_id": "gutter_field",
+   "engine_id": "gutter_field_n0r",
    "engine_params": {
     "scale": 1.0,
     "depth": 1.0,
     "interaction": 127,
-    "freeze_ca": 1
+    "freeze_ca": 0
    }
   }
  },

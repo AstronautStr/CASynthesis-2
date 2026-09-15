@@ -61,6 +61,9 @@ except ImportError:                    # pragma: no cover  (environment without 
 
 ENGINE_ID = 'gutter_field'
 LABEL = 'Gutter'
+ENGINE_ID_N0R = 'gutter_field_n0r'    # listening control only: the N0 routing (node 6 right on)
+LABEL_N0R = 'Gutter (N0 routes)'
+MODEL_VERSION_N0R = 'gutter_field_n0routes_v1'
 PARAMS = [('scale', 'Resonators', 0.5, 2.0, False, 1.0),
           ('depth', 'CA amount', 0.0, 1.0, False, 1.0),
           ('interaction', 'Links', 0, 256, True, 127),
@@ -363,8 +366,9 @@ def overlay(params, rows, cols):
 class GutterFieldEngine(SoundEngine):
     STATE_VERSION = STATE_VERSION
 
-    def __init__(self, ctx, params, config=None):
+    def __init__(self, ctx, params, config=None, engine_id=ENGINE_ID):
         super().__init__(ctx, params)
+        self.engine_id = engine_id
         cfg = n1_config() if config is None else config
         if int(cfg['n_nodes']) != N_NODES or float(cfg['sr']) != float(ctx.sr) \
                 or int(cfg['dist_method']) != 2 or cfg.get('post_math') != 'scalar' \
@@ -539,7 +543,7 @@ class GutterFieldEngine(SoundEngine):
                'counts', 'ratio')
 
     def export_state(self):
-        st = dict(version=self.STATE_VERSION, engine_id=ENGINE_ID, model_version=self.model_version,
+        st = dict(version=self.STATE_VERSION, engine_id=self.engine_id, model_version=self.model_version,
                   params=dict(self.params), frozen=bool(self.frozen), gain_prev=float(self.gain_prev),
                   delay=int(self.D))
         for name in self._ARRAYS:
@@ -551,8 +555,8 @@ class GutterFieldEngine(SoundEngine):
             raise ValueError(f"engine {ENGINE_ID}: state version "
                              f"{state.get('version') if isinstance(state, dict) else state!r}"
                              f" != {self.STATE_VERSION}")
-        if state.get('engine_id') != ENGINE_ID:
-            raise ValueError(f"engine state is for {state.get('engine_id')!r}, not {ENGINE_ID!r}")
+        if state.get('engine_id') != self.engine_id:
+            raise ValueError(f"engine state is for {state.get('engine_id')!r}, not {self.engine_id!r}")
         if state.get('model_version') != self.model_version:
             raise ValueError(f"engine {ENGINE_ID}: model version {state.get('model_version')!r}"
                              f" != {self.model_version!r}")
@@ -588,5 +592,18 @@ class GutterFieldEngine(SoundEngine):
         return float(gain) * FIXED_SCALE
 
 
+def n0_routes_config():
+    """The N1 model with the N0 output routing (node 6 also on the right) -- a listening
+    control for review R1, nothing else differs."""
+    cfg = n1_config()
+    cfg['output_routes'] = {'L': [1] * N_NODES, 'R': [1] * N_NODES}
+    cfg['model_version'] = MODEL_VERSION_N0R
+    return cfg
+
+
 register(EngineSpec(ENGINE_ID, LABEL, PARAMS, lambda ctx, params: GutterFieldEngine(ctx, params),
+                    overlay=overlay))
+register(EngineSpec(ENGINE_ID_N0R, LABEL_N0R, PARAMS,
+                    lambda ctx, params: GutterFieldEngine(ctx, params, config=n0_routes_config(),
+                                                          engine_id=ENGINE_ID_N0R),
                     overlay=overlay))

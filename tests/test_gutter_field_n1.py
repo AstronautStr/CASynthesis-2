@@ -560,7 +560,8 @@ def test_limits_extremes_no_nan_clip_counter_and_prepared_scene():
     assert r.gen >= 2 and GF.region_counts(r.grid).sum() == 12   # blinkers keep 12 cells
     with open(os.path.join(ROOT, 'run_network_n1.bat'), encoding='ascii') as f:
         bat = f.read()
-    assert 'network_n1_blinkers.json' in bat and '--live' in bat and '--catalog' in bat
+    assert 'network_n1_blinkers.json' in bat and '--catalog' in bat and 'network_n1_2026_09_15' in bat
+    assert '--live' not in bat                    # listening goes through the catalog screen
 
 
 # =============================================================================
@@ -641,6 +642,64 @@ def test_registry_overlay_display_and_headless_draw():
     finally:
         eng.stop()
         pygame.quit()
+
+
+# =============================================================================
+# 9. the prepared listening material: scene files == builder documents, a record
+#    built offline replays exactly and continues, the N0-routes control differs on the right
+# =============================================================================
+def test_listening_catalog_builder_scenes_records_and_routes_control():
+    sys.path.insert(0, os.path.join(ROOT, 'demos'))
+    import build_n1_demos as B
+    from casynth_lab.catalog import Catalog
+    assert [r[0] for r in B.RECORDS] == ['network_n1_blinkers', 'n1_edits', 'n1_depth', 'n1_links', 'n1_routes']
+    for rec in B.RECORDS:
+        path = os.path.join(B.DEMOS_DIR, rec[0] + '.json')
+        with open(path, encoding='utf-8') as f:
+            assert json.load(f) == B.scene_for(rec), path
+        scene_from_doc(B.scene_for(rec))
+    assert sorted(map(tuple, B.field_vertical())) == sorted(map(tuple, _fx()['fields']['vertical']['cells']))
+    assert sorted(map(tuple, B.field_vertical(8))) == sorted(map(tuple, _fx()['fields']['moved']['cells']))
+    cmds = B.edit_commands()
+    ats = sorted({at for _k, at, _a in cmds if _k == 'set_cell'})
+    assert ats == [int(round(4 * k * SR)) for k in range(1, 5)] and cmds[0][0] == 'pause'
+    # the N0-routes control: same engine class, N0 routing, its own model version; the left
+    # master is identical to N1, the right differs; the snapshot refuses the other id
+    e1, e0 = _engine(_field('vertical')), None
+    params = dict(DEFAULTS)
+    e0 = registry.create('gutter_field_n0r', CTX, params)
+    e0.init(_field('vertical'), None, GAIN)
+    assert e0.model_version == GF.MODEL_VERSION_N0R and e0.routeR.tolist() == [1.0] * 8
+    a, b = _raw(e1, 3), _raw(e0, 3)
+    assert np.array_equal(a[:, 0], b[:, 0]) and not np.array_equal(a[:, 1], b[:, 1])
+    st = e0.export_state()
+    assert st['engine_id'] == 'gutter_field_n0r'
+    try:
+        e1.restore_state(_field('vertical'), None, st)
+        raise AssertionError("N1 engine accepted an N0-routes state")
+    except ValueError as err:
+        assert 'state is for' in str(err)
+    # a short offline record in a scratch catalog: saved, replays exactly, continues
+    root = os.path.join(ART, 'n1_catalog')
+    shutil.rmtree(root, ignore_errors=True)
+    os.makedirs(os.path.join(root, '.tmp'))
+    cat = Catalog(root, repo_root=None)
+    rec = B.RECORDS[1]                                    # the edit schedule (commands)
+    rid, snap = B.record_offline(cat, B.scene_for(rec), 4.5, B.commands_for('edits'), rec[1], rec[2])
+    assert snap['paused'] and snap['running'] and snap['gen'] == 0
+    r = cat.load(rid)
+    assert r.title == rec[1] and cat.ids() == [rid]
+    res = cat.replay(rid, yield_cpu=False)
+    assert res.status == 'match', (res.status, res.reason)
+    runner, state, rec2 = cat.continue_runner(rid)
+    assert rec2.id == rid and GF.region_counts(runner.grid).tolist() == [0.0] * 4 + [3.0] * 4
+    _drive(runner, 5, [], collect=False)
+    # an existing catalog with records is refused, an empty one (only .tmp) accepted
+    try:
+        B.build(root)
+        raise AssertionError("built into a catalog that holds records")
+    except SystemExit as err:
+        assert 'already holds records' in str(err)
 
 
 def _run():

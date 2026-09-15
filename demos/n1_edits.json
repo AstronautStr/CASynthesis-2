@@ -1,7 +1,7 @@
 {
  "format": 2,
- "id": "network_n1_blinkers",
- "title": "N1-follow: follows the field / Freeze CA",
+ "id": "n1_edits",
+ "title": "N1-edits: the field moved and back every 4 s",
  "grid": {
   "rows": 32,
   "cols": 32

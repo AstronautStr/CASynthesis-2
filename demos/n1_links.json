@@ -1,7 +1,7 @@
 {
  "format": 2,
- "id": "network_n1_blinkers",
- "title": "N1-follow: follows the field / Freeze CA",
+ "id": "n1_links",
+ "title": "N1-links: Links 127 / 230",
  "grid": {
   "rows": 32,
   "cols": 32
@@ -78,8 +78,8 @@
    "engine_params": {
     "scale": 1.0,
     "depth": 1.0,
-    "interaction": 127,
-    "freeze_ca": 1
+    "interaction": 230,
+    "freeze_ca": 0
    }
   }
  },

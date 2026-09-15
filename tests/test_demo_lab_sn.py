@@ -639,15 +639,15 @@ def test_registry_ui_hints_and_scene_validation():
         if os.path.isfile(path):
             with open(path, encoding='utf-8') as f:
                 assert json.load(f) == D.scene_for(rec), path
-    # the bench UI computes its geometry from the registry (8 engines -> 3 rows;
-    # 5 built-in + Scan + Network + Gutter/N1)
+    # the bench UI computes its geometry from the registry (9 engines -> 3 rows;
+    # 5 built-in + Scan + Network + Gutter/N1 + its N0-routes control)
     import demo_bench as db
     from casynth_lab.audio_out import LiveEngine
     scene = scene_from_doc(_doc('F1', D.scan(path=2), D.network()))
     runner = DemoRunner(scene)
     eng = LiveEngine(runner, sink=lambda m, b: None)
     app = db.BenchApp(scene, eng)
-    assert app.engine_rows == 3 and len(app.engine_btns) == 8
+    assert app.engine_rows == 3 and len(app.engine_btns) == 9
     ys = sorted({r[1] for r in app.engine_btns.values()})
     assert len(ys) == 3 and app.params_y > ys[-1] + db.ENG_H
     assert app.footer_y >= app.params_y + 7 * db.ROW_H
