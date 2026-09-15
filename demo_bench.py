@@ -107,13 +107,16 @@ class BenchApp:
         self.height = TOP_H + max(self.field_h, 420) + 20 + MARGIN   # +20: overlay caption
         self.buttons = {}
         x = MARGIN
-        for key, label in (('stop', 'Stop (S)'), ('pause', 'Pause CA (Space)'), ('reset', 'Restart (R)')):
+        for key, label in (('stop', 'Stop (S)'), ('pause', 'Pause CA (Space)'),
+                           ('reset', 'Restart (R)'), ('clear', 'Clear (C)')):
             self.buttons[key] = ((x, BTN_Y, BTN_W, BTN_H), label)
             x += BTN_W + 10
         self.vol_rect = (MARGIN + 92, BTN_Y + BTN_H + 14, VOL_W, 10)
         self.lab_buttons = {'save': (x + 10, BTN_Y, LAB_BTN_W, BTN_H),
                             'catalog': (x + 20 + LAB_BTN_W, BTN_Y, LAB_BTN_W, BTN_H),
                             'notes': (x + 30 + 2 * LAB_BTN_W, BTN_Y, LAB_BTN_W, BTN_H)}
+        # the top row must fit (four transport buttons + three lab buttons)
+        self.width = max(self.width, x + 30 + 3 * LAB_BTN_W + MARGIN)
         # listening notes (2026-09-14): the record this session belongs to --
         # the record continued / opened, or the last one saved here
         self.session_record = None
@@ -313,6 +316,9 @@ class BenchApp:
         if name == 's':
             self._post('stop')
             return 'stop'
+        if name == 'c':
+            self._post('clear')
+            return 'clear'
         if name == 'space':
             self._post('pause')
             return 'pause'

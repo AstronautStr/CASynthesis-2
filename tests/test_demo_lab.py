@@ -1025,6 +1025,72 @@ def test_cli_render_all_outputs_and_errors():
     assert r.returncode == 2 and "not found" in r.stdout
 
 
+def test_clear_and_set_cells_commands():
+    """2026-09-16: 'clear' empties the field (transport, engines, params
+    stay); 'set_cells' edits a whole pattern at once (one journal entry, one
+    events field).  Both are validated before any state change and replay
+    from the journal like every other command.  The bench has a Clear button
+    and the C hotkey, and the top row still fits the window."""
+    runner = DemoRunner(SCENE_AB)
+    runner.post('start', at=0)
+    runner.next_block()
+    assert runner.grid.any()
+    n_journal = len(runner.journal)
+    runner.post('clear')
+    runner.next_block()
+    assert not runner.grid.any() and runner.running and not runner.paused
+    assert [j for j in runner.journal[n_journal:] if j[2] == 'clear']
+    runner.post('clear')                                   # an empty field: a no-op
+    runner.next_block()
+    runner.post('set_cells', cells=[(1, 1, 1), (1, 2, 1), (1, 3, True)])
+    runner.next_block()
+    assert runner.grid[1, 1] == 1 and runner.grid[1, 2] == 1 and runner.grid[1, 3] == 1
+    assert int(runner.grid.sum()) == 3
+    entries = [j for j in runner.journal if j[2] == 'set_cells']
+    assert len(entries) == 1 and entries[0][3]['cells'] == [[1, 1, 1], [1, 2, 1], [1, 3, 1]]
+    json.dumps(entries[0][3])                              # the record's journal is JSON
+    for bad in (dict(cells=[(99, 0, 1)]), dict(cells=[(0, -1, 1)]), dict(cells=[(0,)]),
+                dict(cells='x')):
+        try:
+            runner.post('set_cells', **bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"set_cells accepted {bad}")
+    runner.next_block()
+    assert int(runner.grid.sum()) == 3
+    # the journal replays: a second runner fed the same commands ends on the same field
+    r2 = DemoRunner(SCENE_AB)
+    for t, _seq, kind, a in runner.journal:
+        if kind != 'step':
+            r2.post(kind, at=t, **a)
+    while r2.out_samples < runner.out_samples:
+        r2.next_block()
+    assert np.array_equal(r2.grid, runner.grid)
+    # the bench: Clear button + hotkey
+    import pygame
+    import demo_bench as db
+    eng = LiveEngine(DemoRunner(SCENE_AB), sink=lambda m, b: None)
+    pygame.init()
+    app = db.BenchApp(SCENE_AB, eng)
+    rect, label = app.buttons['clear']
+    assert label.startswith('Clear')
+    nb = app.lab_buttons['notes']
+    assert nb[0] + nb[2] <= app.width - db.MARGIN, "top row overflows the window"
+    eng.start()
+    try:
+        assert eng.snapshot()['grid'].any()
+        assert app.press((rect[0] + 3, rect[1] + 3), 1) == 'clear'
+        assert _wait(lambda: not eng.snapshot()['grid'].any()), "Clear did not empty the field"
+        assert eng.snapshot()['paused'], "Clear must not touch the transport"
+        assert app.key('c') == 'clear'
+        screen = pygame.Surface((app.width, app.height))
+        app.draw(screen, pygame.font.SysFont(db.FONT_NAMES, 17),
+                 pygame.font.SysFont(db.FONT_NAMES, 14))
+    finally:
+        eng.stop()
+
+
 def _run():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

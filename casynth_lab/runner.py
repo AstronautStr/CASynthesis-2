@@ -40,7 +40,8 @@ OUTPUTS = ('A', 'B', 'monitor')
 XFADE_MS = 20.0                    # A/B switch crossfade (output mixer only)
 XFADE_SAMPLES = int(round(XFADE_MS / 1000.0 * SR))   # 882
 COMMANDS = ('start', 'stop', 'pause', 'set_cell', 'reset', 'vol',
-            'select', 'set_param', 'set_engine', 'copy_side', 'factory')
+            'select', 'set_param', 'set_engine', 'copy_side', 'factory',
+            'clear', 'set_cells')      # 2026-09-16: Clear button, pattern drop
 RUNNER_STATE_VERSION = 1           # export_state() / from_state() format
 
 # re-exported for callers that only import the runner
@@ -227,6 +228,16 @@ class DemoRunner:
             v = args.get('value')
             if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
                 raise ValueError(f"vol: value must be a finite number, got {v!r}")
+        elif kind == 'set_cells':
+            try:
+                cells = [[int(r), int(c), int(bool(v))] for r, c, v in args.get('cells') or ()]
+            except (TypeError, ValueError):
+                raise ValueError("set_cells: cells must be [[row, col, value], ...]") from None
+            rows, cols = self.grid.shape
+            for r, c, _v in cells:
+                if not (0 <= r < rows and 0 <= c < cols):
+                    raise ValueError(f"set_cells: ({r},{c}) outside the {rows}x{cols} field")
+            args['cells'] = cells                  # plain lists: the journal is JSON
         return args
 
     def _apply_due(self):
@@ -263,6 +274,22 @@ class DemoRunner:
             if self.grid[r, c] != v:
                 prev = self.grid.copy()
                 self.grid[r, c] = v
+                self.exc = events_field(prev, self.grid)
+                self._field_changed()
+        elif kind == 'set_cells':
+            # one edit for a whole dropped pattern: one events field, one
+            # engine update, one journal entry (validated in _check)
+            prev = self.grid.copy()
+            for r, c, v in args['cells']:
+                self.grid[r, c] = v
+            if not np.array_equal(prev, self.grid):
+                self.exc = events_field(prev, self.grid)
+                self._field_changed()
+        elif kind == 'clear':
+            # Clear button: an empty field; transport / engines / params stay
+            if self.grid.any():
+                prev = self.grid.copy()
+                self.grid[:] = 0
                 self.exc = events_field(prev, self.grid)
                 self._field_changed()
         elif kind == 'reset':
