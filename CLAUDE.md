@@ -6,6 +6,7 @@ A synthesizer whose timbre is driven by a Cellular Automata.
 ## Project memory (version-controlled, under `memory/`)
 Read these at the start of every substantive session (lean — live state, not history):
 - `memory/current.md` — what is implemented, in-flight, prioritised next (snapshot, not a changelog)
+- Researcher sessions: first read `memory/research/sonification-criteria-2026-09-13.md` — the user-accepted central principles of the synthesizer — then `memory/research/research-resume-2026-09-13.md` for the handoff and current research status.
 
 Consult on demand, NOT at session start:
 - `memory/archive/` — resolved questions and trimmed history (recall a settled item)

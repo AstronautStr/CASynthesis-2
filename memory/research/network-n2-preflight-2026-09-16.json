@@ -1,0 +1,511 @@
+{
+  "status": "Researcher numerical preflight; not an implemented or listening-accepted bench",
+  "date": "2026-09-16",
+  "spec": "../req-network-events-n2-2026-09-16.md",
+  "source_sha256": {
+    "casynth_lab/gutter_field.py": "9c4e660942771ddc234ab4facb3eb88377e8e846969618727f39e9c4d20c279d",
+    "casynth_lab/gutter_field_n1_config.py": "35b1181daea7e381c8fe8a5d45af989410410bf8e026ff432b54698ceb9c4327",
+    "casynth_engine.py": "3fc9588732af88b91466dde7efba9bb614840f69bafabe3ae46ae8f0a030e8f1"
+  },
+  "context": {
+    "sr": 44100,
+    "block": 352,
+    "grid": [
+      32,
+      32
+    ],
+    "rule": "B3/S23 torus",
+    "gain": 0.028,
+    "seconds": 12,
+    "blocks": 1504,
+    "metrics": "mono mean of stereo from sample 88200 to end; B_peak is full stereo peak",
+    "post_event_tail_seconds": 2,
+    "late_tail_window_seconds": 1,
+    "initial_grid_previous": "all zero",
+    "step_timing": "gen=floor(block_index*352*rate/44100); advance when gen changes"
+  },
+  "model": {
+    "delays_samples": [
+      149,
+      211,
+      293,
+      401,
+      547,
+      743,
+      1009,
+      1361
+    ],
+    "matrix": "M_ij=0.25-delta_ij",
+    "rho": 0.88,
+    "loss_hz": 6000,
+    "pulse_fast_seconds": 0.00025,
+    "pulse_slow_seconds": 0.002,
+    "pulse_strength": 0.75,
+    "event_saturation": 2,
+    "readout": "periodic raised cosine 2x4; see spec",
+    "K_partition_error": 4.440892098500626e-16,
+    "q_fast": 0.9132889650634289,
+    "q_slow": 0.988726162928418,
+    "calibrated_B_output_multiplier": 96,
+    "calibrated_A_trim_db": -16.5
+  },
+  "cases": [
+    {
+      "id": "pulse",
+      "cells": [
+        [
+          9,
+          11
+        ],
+        [
+          9,
+          12
+        ],
+        [
+          9,
+          13
+        ],
+        [
+          9,
+          17
+        ],
+        [
+          9,
+          18
+        ],
+        [
+          9,
+          19
+        ],
+        [
+          11,
+          9
+        ],
+        [
+          11,
+          14
+        ],
+        [
+          11,
+          16
+        ],
+        [
+          11,
+          21
+        ],
+        [
+          12,
+          9
+        ],
+        [
+          12,
+          14
+        ],
+        [
+          12,
+          16
+        ],
+        [
+          12,
+          21
+        ],
+        [
+          13,
+          9
+        ],
+        [
+          13,
+          14
+        ],
+        [
+          13,
+          16
+        ],
+        [
+          13,
+          21
+        ],
+        [
+          14,
+          11
+        ],
+        [
+          14,
+          12
+        ],
+        [
+          14,
+          13
+        ],
+        [
+          14,
+          17
+        ],
+        [
+          14,
+          18
+        ],
+        [
+          14,
+          19
+        ],
+        [
+          16,
+          11
+        ],
+        [
+          16,
+          12
+        ],
+        [
+          16,
+          13
+        ],
+        [
+          16,
+          17
+        ],
+        [
+          16,
+          18
+        ],
+        [
+          16,
+          19
+        ],
+        [
+          17,
+          9
+        ],
+        [
+          17,
+          14
+        ],
+        [
+          17,
+          16
+        ],
+        [
+          17,
+          21
+        ],
+        [
+          18,
+          9
+        ],
+        [
+          18,
+          14
+        ],
+        [
+          18,
+          16
+        ],
+        [
+          18,
+          21
+        ],
+        [
+          19,
+          9
+        ],
+        [
+          19,
+          14
+        ],
+        [
+          19,
+          16
+        ],
+        [
+          19,
+          21
+        ],
+        [
+          21,
+          11
+        ],
+        [
+          21,
+          12
+        ],
+        [
+          21,
+          13
+        ],
+        [
+          21,
+          17
+        ],
+        [
+          21,
+          18
+        ],
+        [
+          21,
+          19
+        ]
+      ],
+      "rate": 6.0
+    },
+    {
+      "id": "travel",
+      "cells": [
+        [
+          28,
+          29
+        ],
+        [
+          29,
+          30
+        ],
+        [
+          30,
+          28
+        ],
+        [
+          30,
+          29
+        ],
+        [
+          30,
+          30
+        ]
+      ],
+      "rate": 16.0
+    },
+    {
+      "id": "growth",
+      "cells": [
+        [
+          14,
+          15
+        ],
+        [
+          14,
+          16
+        ],
+        [
+          15,
+          14
+        ],
+        [
+          15,
+          15
+        ],
+        [
+          16,
+          15
+        ]
+      ],
+      "rate": 6.0
+    }
+  ],
+  "scene_checks": [
+    {
+      "case": "pulse",
+      "period": 3,
+      "pop_range": [
+        48,
+        72
+      ],
+      "events_range": [
+        32,
+        56
+      ],
+      "pop_at_72": 48,
+      "events_after_72": 56
+    },
+    {
+      "case": "travel",
+      "period": 128,
+      "pop_range": [
+        5,
+        5
+      ],
+      "events_range": [
+        4,
+        4
+      ],
+      "pop_at_72": 5,
+      "events_after_72": 4
+    },
+    {
+      "case": "growth",
+      "period": null,
+      "pop_range": [
+        6,
+        115
+      ],
+      "events_range": [
+        2,
+        121
+      ],
+      "pop_at_72": 71,
+      "events_after_72": 66
+    }
+  ],
+  "measurements": [
+    {
+      "case": "pulse",
+      "A": {
+        "rms_db": -20.641690837834766,
+        "peak": 0.3532544549963708,
+        "centroid_hz": 2340.584786747182,
+        "spread_hz": 875.9093869848296,
+        "rolloff85_hz": 3133.0810546875,
+        "flatness_db": -38.66123902292586,
+        "spectral_flux": 0.04361104932275931,
+        "env_std_db_50ms": 0.4814767009735092,
+        "env_std_db_250ms": 0.24935354964174802,
+        "crest_db": 11.60344378916609
+      },
+      "B": {
+        "rms_db": -47.40492241044774,
+        "peak": 0.027316282050579236,
+        "centroid_hz": 900.3501498874424,
+        "spread_hz": 970.543676139216,
+        "rolloff85_hz": 1453.4912109375,
+        "flatness_db": -16.596840836008788,
+        "spectral_flux": 0.04138502215143179,
+        "env_std_db_50ms": 2.7319871592366747,
+        "env_std_db_250ms": 0.8701771625023476,
+        "crest_db": 16.13335417478057
+      },
+      "B_peak": 0.033055345230331414,
+      "late_tail_rms_db": -127.45876027912675,
+      "A_calibrated_rms_db": -37.141690837834766,
+      "B_calibrated_rms_db": -35.36372258388849,
+      "B_calibrated_stereo_peak": 0.13222138092132565,
+      "B_calibrated_late_tail_rms_db": -115.4175604525675
+    },
+    {
+      "case": "travel",
+      "A": {
+        "rms_db": -20.40255755484623,
+        "peak": 0.40129173699570064,
+        "centroid_hz": 1103.4219441803837,
+        "spread_hz": 896.3737061119543,
+        "rolloff85_hz": 2099.4873046875,
+        "flatness_db": -43.06648550762958,
+        "spectral_flux": 0.039814583601137606,
+        "env_std_db_50ms": 0.388200332287468,
+        "env_std_db_250ms": 0.2825149096712083,
+        "crest_db": 12.471761899986866
+      },
+      "B": {
+        "rms_db": -51.754904483269385,
+        "peak": 0.022979481564207115,
+        "centroid_hz": 848.8084912246936,
+        "spread_hz": 992.9308613920323,
+        "rolloff85_hz": 1313.525390625,
+        "flatness_db": -15.538870500779145,
+        "spectral_flux": 0.03558669626962279,
+        "env_std_db_50ms": 0.7247239809607188,
+        "env_std_db_250ms": 0.4961488004903795,
+        "crest_db": 18.98170900842917
+      },
+      "B_peak": 0.032134262040849966,
+      "late_tail_rms_db": -127.98540455308165,
+      "A_calibrated_rms_db": -36.902557554846226,
+      "B_calibrated_rms_db": -39.713704656710135,
+      "B_calibrated_stereo_peak": 0.12853704816339986,
+      "B_calibrated_late_tail_rms_db": -115.9442047265224
+    },
+    {
+      "case": "growth",
+      "A": {
+        "rms_db": -19.896532078479225,
+        "peak": 0.4130026947764713,
+        "centroid_hz": 1144.448862552513,
+        "spread_hz": 1361.9251168029095,
+        "rolloff85_hz": 2745.4833984375,
+        "flatness_db": -35.66049655991942,
+        "spectral_flux": 0.041394454182140786,
+        "env_std_db_50ms": 1.2670261857861065,
+        "env_std_db_250ms": 0.8614203808578833,
+        "crest_db": 12.215589785745792
+      },
+      "B": {
+        "rms_db": -47.23271978393001,
+        "peak": 0.027996911283788336,
+        "centroid_hz": 892.3265705518614,
+        "spread_hz": 941.8454395562417,
+        "rolloff85_hz": 1378.125,
+        "flatness_db": -16.817470482082776,
+        "spectral_flux": 0.04096897722121237,
+        "env_std_db_50ms": 3.2334049830956886,
+        "env_std_db_250ms": 1.9777771190638924,
+        "crest_db": 16.17492220420648
+      },
+      "B_peak": 0.039740436944712874,
+      "late_tail_rms_db": -129.441521881876,
+      "A_calibrated_rms_db": -36.396532078479225,
+      "B_calibrated_rms_db": -35.19151995737076,
+      "B_calibrated_stereo_peak": 0.1589617477788515,
+      "B_calibrated_late_tail_rms_db": -117.40032205531676
+    }
+  ],
+  "stress": {
+    "gain": 0.04,
+    "seconds": 4,
+    "seed": 20260916,
+    "rate_hz": 60,
+    "exceptions": "full_toggle_every_block: one event batch per 352 samples",
+    "output_multiplier": 96,
+    "measurements": [
+      {
+        "rho": 0.88,
+        "mode": "full_toggle",
+        "peak": 0.7042149962863126,
+        "rms_db": -15.67067792548259
+      },
+      {
+        "rho": 0.88,
+        "mode": "random",
+        "peak": 0.6961540178871272,
+        "rms_db": -15.773957614263754
+      },
+      {
+        "rho": 0.88,
+        "mode": "one_cell",
+        "peak": 0.07213992018939731,
+        "rms_db": -37.34395530226296
+      },
+      {
+        "rho": 0.95,
+        "mode": "full_toggle",
+        "peak": 0.9081365948537902,
+        "rms_db": -13.296588172175174
+      },
+      {
+        "rho": 0.95,
+        "mode": "random",
+        "peak": 0.8990580083985077,
+        "rms_db": -13.393549087365985
+      },
+      {
+        "rho": 0.95,
+        "mode": "one_cell",
+        "peak": 0.08980166722774284,
+        "rms_db": -34.99475326515488
+      },
+      {
+        "rho": 0.88,
+        "mode": "full_toggle_every_block",
+        "peak": 0.7781147860688356
+      },
+      {
+        "rho": 0.95,
+        "mode": "full_toggle_every_block",
+        "peak": 0.9717353084922915
+      }
+    ]
+  },
+  "limits": [
+    "B preflight used output multiplier 24; calibrated figures apply fixed x4, no model change.",
+    "A is current Gutter with weighted counts substituted and fixed output attenuation.",
+    "No live bench, snapshot, timing-performance, UI or perceptual validation performed.",
+    "Stress sequences are probes, not a proof of a peak bound for arbitrary playing."
+  ]
+}

@@ -1,0 +1,908 @@
+{
+  "cases": {
+    "n1h_rhythm": {
+      "scene": {
+        "format": 2,
+        "id": "n1h_rhythm",
+        "title": "N1.1 - Ритм: влияние демпфирования",
+        "grid": {
+          "rows": 32,
+          "cols": 32
+        },
+        "cells": [
+          [
+            14,
+            4
+          ],
+          [
+            15,
+            4
+          ],
+          [
+            16,
+            4
+          ],
+          [
+            14,
+            12
+          ],
+          [
+            15,
+            12
+          ],
+          [
+            16,
+            12
+          ],
+          [
+            14,
+            20
+          ],
+          [
+            15,
+            20
+          ],
+          [
+            16,
+            20
+          ],
+          [
+            14,
+            28
+          ],
+          [
+            15,
+            28
+          ],
+          [
+            16,
+            28
+          ]
+        ],
+        "rule": "B3/S23",
+        "boundary": "torus",
+        "rate_hz": 4.0,
+        "audio": {
+          "f0_hz": 110.0,
+          "level": 1.0
+        },
+        "variants": {
+          "A": {
+            "engine_id": "gutter_field",
+            "engine_params": {
+              "scale": 1.0,
+              "depth": 1.0,
+              "interaction": 127,
+              "freeze_ca": 0
+            }
+          },
+          "B": {
+            "engine_id": "gutter_ca_damping",
+            "engine_params": {
+              "scale": 1.0,
+              "depth": 1.0,
+              "interaction": 127,
+              "freeze_ca": 0
+            }
+          }
+        },
+        "initial_side": "A",
+        "listen": "1 / 2: A / B. Notes: hypothesis and your listening result. Draw and run the CA on either side."
+      },
+      "windows": {
+        "A": [
+          {
+            "start_seconds": 1,
+            "rms_db": -20.173326846642134,
+            "peak": 0.37038789025543994,
+            "centroid_hz": 2311.3976538525176,
+            "spread_hz": 1138.6301286388805,
+            "rolloff85_hz": 3273.046875,
+            "flatness_db": -41.928380434082946,
+            "spectral_flux": 0.02557789270335847,
+            "env_std_db_50ms": 0.15699750644501964,
+            "env_std_db_250ms": 0.12195324651250115,
+            "crest_db": 11.546462428284245
+          },
+          {
+            "start_seconds": 8,
+            "rms_db": -20.336994169766474,
+            "peak": 0.35718863490707115,
+            "centroid_hz": 2215.754783251994,
+            "spread_hz": 1225.4107358972997,
+            "rolloff85_hz": 3273.046875,
+            "flatness_db": -42.825896364189504,
+            "spectral_flux": 0.025656265856762617,
+            "env_std_db_50ms": 0.2966442083124208,
+            "env_std_db_250ms": 0.25415981761142076,
+            "crest_db": 11.394946809187285
+          },
+          {
+            "start_seconds": 16,
+            "rms_db": -20.527099378717214,
+            "peak": 0.33697012237922297,
+            "centroid_hz": 2158.8327601972546,
+            "spread_hz": 1255.6052570858308,
+            "rolloff85_hz": 3273.046875,
+            "flatness_db": -42.874105070911426,
+            "spectral_flux": 0.024230773397660645,
+            "env_std_db_50ms": 0.26452864323315517,
+            "env_std_db_250ms": 0.20422826258022803,
+            "crest_db": 11.078927291537351
+          },
+          {
+            "start_seconds": 28,
+            "rms_db": -20.181744465922907,
+            "peak": 0.3579668568987091,
+            "centroid_hz": 2221.796414905726,
+            "spread_hz": 1231.8287608272942,
+            "rolloff85_hz": 3273.046875,
+            "flatness_db": -42.739702869088674,
+            "spectral_flux": 0.024838312649260914,
+            "env_std_db_50ms": 0.26070362508422895,
+            "env_std_db_250ms": 0.2159076550538503,
+            "crest_db": 11.2586008348946
+          },
+          {
+            "start_seconds": 44,
+            "rms_db": -20.710438787555695,
+            "peak": 0.3568987090670491,
+            "centroid_hz": 2127.8061414800345,
+            "spread_hz": 1267.6438298920925,
+            "rolloff85_hz": 3262.2802734375,
+            "flatness_db": -43.15553116372912,
+            "spectral_flux": 0.02493616584733876,
+            "env_std_db_50ms": 0.2463533242895484,
+            "env_std_db_250ms": 0.14548409588963382,
+            "crest_db": 11.761338329030737
+          }
+        ],
+        "B": [
+          {
+            "start_seconds": 1,
+            "rms_db": -20.086330634407894,
+            "peak": 0.36278878139591664,
+            "centroid_hz": 2406.8034482216017,
+            "spread_hz": 1109.7017322794447,
+            "rolloff85_hz": 3283.8134765625,
+            "flatness_db": -42.84316649657032,
+            "spectral_flux": 0.022382919917308074,
+            "env_std_db_50ms": 0.11823469410944493,
+            "env_std_db_250ms": 0.06429628198234148,
+            "crest_db": 11.279407610395593
+          },
+          {
+            "start_seconds": 8,
+            "rms_db": -20.14949346694326,
+            "peak": 0.36904507583849605,
+            "centroid_hz": 2407.2988665546077,
+            "spread_hz": 1112.7182307628514,
+            "rolloff85_hz": 3283.8134765625,
+            "flatness_db": -42.55944726835693,
+            "spectral_flux": 0.022499444164610895,
+            "env_std_db_50ms": 0.12948998584460714,
+            "env_std_db_250ms": 0.042345935569323624,
+            "crest_db": 11.491081765230767
+          },
+          {
+            "start_seconds": 16,
+            "rms_db": -20.214717871632697,
+            "peak": 0.36594744712668237,
+            "centroid_hz": 2402.1078905424315,
+            "spread_hz": 1112.4831975335212,
+            "rolloff85_hz": 3283.8134765625,
+            "flatness_db": -42.444014245326535,
+            "spectral_flux": 0.02253818927262275,
+            "env_std_db_50ms": 0.17477830553153134,
+            "env_std_db_250ms": 0.11942121587460955,
+            "crest_db": 11.483092308305032
+          },
+          {
+            "start_seconds": 28,
+            "rms_db": -20.11077376460079,
+            "peak": 0.3621326334421827,
+            "centroid_hz": 2402.398638420433,
+            "spread_hz": 1115.4564178285532,
+            "rolloff85_hz": 3283.8134765625,
+            "flatness_db": -42.55643487956788,
+            "spectral_flux": 0.02336872865244515,
+            "env_std_db_50ms": 0.12389063610343945,
+            "env_std_db_250ms": 0.05808187368181745,
+            "crest_db": 11.288127021707536
+          },
+          {
+            "start_seconds": 44,
+            "rms_db": -20.265407724444877,
+            "peak": 0.3518326364940336,
+            "centroid_hz": 2402.4791543604583,
+            "spread_hz": 1109.4340280078068,
+            "rolloff85_hz": 3283.8134765625,
+            "flatness_db": -42.550433344003835,
+            "spectral_flux": 0.022774801494365768,
+            "env_std_db_50ms": 0.18130581866841267,
+            "env_std_db_250ms": 0.09728169018053039,
+            "crest_db": 11.19213017958997
+          }
+        ]
+      },
+      "ab": {
+        "level_change_db": -0.23638504257673887,
+        "log_spectral_distance_db": 6.311051130433092,
+        "pcm_difference_db_re_control": 2.818855281219386,
+        "centroid_change_ratio": 0.9141166994034445,
+        "flux_change_ratio": 1.1073971363645183,
+        "env_std_change_db": 0.23797979376538664,
+        "crest_change_db": -0.5353581984544569,
+        "reading": {
+          "level": false,
+          "spectrum": true,
+          "time_behaviour": false
+        }
+      },
+      "late_edit": {
+        "A": {
+          "level_change_db": -0.26724337053422076,
+          "log_spectral_distance_db": 12.249913462938114,
+          "pcm_difference_db_re_control": 2.8789411304587897,
+          "centroid_change_ratio": 1.3112328764140695,
+          "flux_change_ratio": 0.355795765345248,
+          "env_std_change_db": 0.06904777948416,
+          "crest_change_db": 0.46968357119161297,
+          "reading": {
+            "level": false,
+            "spectrum": true,
+            "time_behaviour": true
+          }
+        },
+        "B": {
+          "level_change_db": 0.23328076167234357,
+          "log_spectral_distance_db": 13.798411397115387,
+          "pcm_difference_db_re_control": 3.127750535691407,
+          "centroid_change_ratio": 1.262541879970237,
+          "flux_change_ratio": 1.8336422438538715,
+          "env_std_change_db": -0.06051827491484219,
+          "crest_change_db": -0.25950484402716434,
+          "reading": {
+            "level": false,
+            "spectrum": true,
+            "time_behaviour": true
+          }
+        }
+      },
+      "clip_blocks": {
+        "A": 0,
+        "B": 0
+      },
+      "node_resets": {
+        "A": 0,
+        "B": 0
+      },
+      "block_ms": {
+        "p95": 0.6406400076230054,
+        "p99": 0.7871920024626886,
+        "budget": 7.98185941043084
+      }
+    },
+    "n1h_travel": {
+      "scene": {
+        "format": 2,
+        "id": "n1h_travel",
+        "title": "N1.2 - Движение: влияние связей",
+        "grid": {
+          "rows": 32,
+          "cols": 32
+        },
+        "cells": [
+          [
+            3,
+            4
+          ],
+          [
+            4,
+            5
+          ],
+          [
+            5,
+            3
+          ],
+          [
+            5,
+            4
+          ],
+          [
+            5,
+            5
+          ],
+          [
+            3,
+            20
+          ],
+          [
+            4,
+            21
+          ],
+          [
+            5,
+            19
+          ],
+          [
+            5,
+            20
+          ],
+          [
+            5,
+            21
+          ],
+          [
+            19,
+            12
+          ],
+          [
+            20,
+            13
+          ],
+          [
+            21,
+            11
+          ],
+          [
+            21,
+            12
+          ],
+          [
+            21,
+            13
+          ],
+          [
+            19,
+            28
+          ],
+          [
+            20,
+            29
+          ],
+          [
+            21,
+            27
+          ],
+          [
+            21,
+            28
+          ],
+          [
+            21,
+            29
+          ]
+        ],
+        "rule": "B3/S23",
+        "boundary": "torus",
+        "rate_hz": 16.0,
+        "audio": {
+          "f0_hz": 110.0,
+          "level": 1.0
+        },
+        "variants": {
+          "A": {
+            "engine_id": "gutter_field",
+            "engine_params": {
+              "scale": 1.0,
+              "depth": 1.0,
+              "interaction": 127,
+              "freeze_ca": 0
+            }
+          },
+          "B": {
+            "engine_id": "gutter_ca_links",
+            "engine_params": {
+              "scale": 1.0,
+              "depth": 1.0,
+              "interaction": 127,
+              "freeze_ca": 0
+            }
+          }
+        },
+        "initial_side": "A",
+        "listen": "1 / 2: A / B. Notes: hypothesis and your listening result. Draw and run the CA on either side."
+      },
+      "windows": {
+        "A": [
+          {
+            "start_seconds": 1,
+            "rms_db": -20.508787582770566,
+            "peak": 0.35686819055757313,
+            "centroid_hz": 2115.9833778606335,
+            "spread_hz": 1640.2991135997188,
+            "rolloff85_hz": 3251.513671875,
+            "flatness_db": -39.74155912258532,
+            "spectral_flux": 0.02191701050667457,
+            "env_std_db_50ms": 0.3658496697072347,
+            "env_std_db_250ms": 0.27474076488389093,
+            "crest_db": 11.558944359612628
+          },
+          {
+            "start_seconds": 8,
+            "rms_db": -20.243731031760763,
+            "peak": 0.3770561845759453,
+            "centroid_hz": 1185.8276069566614,
+            "spread_hz": 1094.9769175853269,
+            "rolloff85_hz": 2583.984375,
+            "flatness_db": -42.17353769775863,
+            "spectral_flux": 0.032783497792386984,
+            "env_std_db_50ms": 0.6175008493413819,
+            "env_std_db_250ms": 0.3903064925941963,
+            "crest_db": 11.771852403599414
+          },
+          {
+            "start_seconds": 16,
+            "rms_db": -19.849936998409223,
+            "peak": 0.3740043336283456,
+            "centroid_hz": 1009.9048511748997,
+            "spread_hz": 1104.0168782922267,
+            "rolloff85_hz": 2260.986328125,
+            "flatness_db": -42.124625060595335,
+            "spectral_flux": 0.03358627534301382,
+            "env_std_db_50ms": 1.114906982720885,
+            "env_std_db_250ms": 1.0447637968156431,
+            "crest_db": 11.307469687251807
+          },
+          {
+            "start_seconds": 28,
+            "rms_db": -18.996857239931842,
+            "peak": 0.4701986754966887,
+            "centroid_hz": 313.7398307555584,
+            "spread_hz": 861.2907806561316,
+            "rolloff85_hz": 75.3662109375,
+            "flatness_db": -49.65458135694732,
+            "spectral_flux": 0.08111527409296153,
+            "env_std_db_50ms": 2.696748547272122,
+            "env_std_db_250ms": 2.123639141319779,
+            "crest_db": 12.442485268372572
+          },
+          {
+            "start_seconds": 44,
+            "rms_db": -19.2678027713282,
+            "peak": 0.4322336497085482,
+            "centroid_hz": 312.5389474898556,
+            "spread_hz": 851.0299628863116,
+            "rolloff85_hz": 75.3662109375,
+            "flatness_db": -50.69785022166119,
+            "spectral_flux": 0.08253519598295841,
+            "env_std_db_50ms": 2.783011789914459,
+            "env_std_db_250ms": 1.7548441106250774,
+            "crest_db": 11.982174251432731
+          }
+        ],
+        "B": [
+          {
+            "start_seconds": 1,
+            "rms_db": -20.531194051956145,
+            "peak": 0.3471175267799921,
+            "centroid_hz": 1887.5977913804281,
+            "spread_hz": 1556.7200542994203,
+            "rolloff85_hz": 3240.7470703125,
+            "flatness_db": -38.14056059048156,
+            "spectral_flux": 0.025169599324562343,
+            "env_std_db_50ms": 0.5250904926548328,
+            "env_std_db_250ms": 0.2320694316740938,
+            "crest_db": 11.340724907352804
+          },
+          {
+            "start_seconds": 8,
+            "rms_db": -20.239462897323207,
+            "peak": 0.3433637501144444,
+            "centroid_hz": 329.34729155816774,
+            "spread_hz": 769.4289580218291,
+            "rolloff85_hz": 312.2314453125,
+            "flatness_db": -46.67401026525867,
+            "spectral_flux": 0.06971884574009587,
+            "env_std_db_50ms": 1.8515705763965216,
+            "env_std_db_250ms": 1.5889267175649613,
+            "crest_db": 10.954551768113916
+          },
+          {
+            "start_seconds": 16,
+            "rms_db": -17.60358160622434,
+            "peak": 0.4209418012024293,
+            "centroid_hz": 219.3533844520203,
+            "spread_hz": 603.3512609473322,
+            "rolloff85_hz": 107.666015625,
+            "flatness_db": -48.42387604272345,
+            "spectral_flux": 0.068133480106862,
+            "env_std_db_50ms": 2.2121381407895386,
+            "env_std_db_250ms": 1.7542650096126864,
+            "crest_db": 10.088022707487989
+          },
+          {
+            "start_seconds": 28,
+            "rms_db": -19.748489686584758,
+            "peak": 0.41990417188024537,
+            "centroid_hz": 418.2077022283957,
+            "spread_hz": 946.4740048564337,
+            "rolloff85_hz": 312.2314453125,
+            "flatness_db": -44.80519204521777,
+            "spectral_flux": 0.06240704844187508,
+            "env_std_db_50ms": 2.1169354902376067,
+            "env_std_db_250ms": 1.8867896171433904,
+            "crest_db": 12.211493476738056
+          },
+          {
+            "start_seconds": 44,
+            "rms_db": -19.144733661086665,
+            "peak": 0.413129062776574,
+            "centroid_hz": 328.1244721832599,
+            "spread_hz": 828.4759737536418,
+            "rolloff85_hz": 269.1650390625,
+            "flatness_db": -46.37808612329817,
+            "spectral_flux": 0.06628496363839712,
+            "env_std_db_50ms": 2.6480997090827993,
+            "env_std_db_250ms": 2.3009927999535216,
+            "crest_db": 11.466448616435368
+          }
+        ]
+      },
+      "ab": {
+        "level_change_db": -0.28082909645898724,
+        "log_spectral_distance_db": 4.745421928705618,
+        "pcm_difference_db_re_control": 3.227006920336539,
+        "centroid_change_ratio": 2.5097270162289917,
+        "flux_change_ratio": 0.47255781086272136,
+        "env_std_change_db": -0.7780194034355006,
+        "crest_change_db": 0.7945212967850992,
+        "reading": {
+          "level": false,
+          "spectrum": true,
+          "time_behaviour": true
+        }
+      },
+      "late_edit": {
+        "A": {
+          "level_change_db": 0.10833982290133193,
+          "log_spectral_distance_db": 12.908457587721742,
+          "pcm_difference_db_re_control": 3.215644550576529,
+          "centroid_change_ratio": 0.36965087987732664,
+          "flux_change_ratio": 0.9526350051978848,
+          "env_std_change_db": 0.7031883895326143,
+          "crest_change_db": 0.7478665443150181,
+          "reading": {
+            "level": false,
+            "spectrum": true,
+            "time_behaviour": false
+          }
+        },
+        "B": {
+          "level_change_db": 1.5077881806066245,
+          "log_spectral_distance_db": 12.671049050905648,
+          "pcm_difference_db_re_control": 3.7963327569629164,
+          "centroid_change_ratio": 0.2926236027494744,
+          "flux_change_ratio": 1.1585564694135457,
+          "env_std_change_db": -0.33522406122472637,
+          "crest_change_db": -0.008999298385218069,
+          "reading": {
+            "level": false,
+            "spectrum": true,
+            "time_behaviour": false
+          }
+        }
+      },
+      "clip_blocks": {
+        "A": 0,
+        "B": 0
+      },
+      "node_resets": {
+        "A": 0,
+        "B": 0
+      },
+      "block_ms": {
+        "p95": 0.8275700049125588,
+        "p99": 1.2230509781511492,
+        "budget": 7.98185941043084
+      }
+    },
+    "n1h_return": {
+      "scene": {
+        "format": 2,
+        "id": "n1h_return",
+        "title": "N1.3 - Возврат: память сети",
+        "grid": {
+          "rows": 32,
+          "cols": 32
+        },
+        "cells": [
+          [
+            14,
+            4
+          ],
+          [
+            15,
+            4
+          ],
+          [
+            16,
+            4
+          ],
+          [
+            14,
+            12
+          ],
+          [
+            15,
+            12
+          ],
+          [
+            16,
+            12
+          ],
+          [
+            14,
+            20
+          ],
+          [
+            15,
+            20
+          ],
+          [
+            16,
+            20
+          ],
+          [
+            14,
+            28
+          ],
+          [
+            15,
+            28
+          ],
+          [
+            16,
+            28
+          ]
+        ],
+        "rule": "B3/S23",
+        "boundary": "torus",
+        "rate_hz": 4.0,
+        "audio": {
+          "f0_hz": 110.0,
+          "level": 1.0
+        },
+        "variants": {
+          "A": {
+            "engine_id": "gutter_ca_damping",
+            "engine_params": {
+              "scale": 1.0,
+              "depth": 1.0,
+              "interaction": 127,
+              "freeze_ca": 0
+            }
+          },
+          "B": {
+            "engine_id": "gutter_ca_links",
+            "engine_params": {
+              "scale": 1.0,
+              "depth": 1.0,
+              "interaction": 127,
+              "freeze_ca": 0
+            }
+          }
+        },
+        "initial_side": "A",
+        "listen": "1 / 2: A / B. Notes: hypothesis and your listening result. Draw and run the CA on either side."
+      },
+      "windows": {
+        "A": [
+          {
+            "start_seconds": 1,
+            "rms_db": -20.064866758083323,
+            "peak": 0.36346018860438856,
+            "centroid_hz": 2630.2956778696785,
+            "spread_hz": 1186.406538976802,
+            "rolloff85_hz": 4306.640625,
+            "flatness_db": -50.59265909243728,
+            "spectral_flux": 0.006283657565128644,
+            "env_std_db_50ms": 0.06314881162309115,
+            "env_std_db_250ms": 0.04128188957078188,
+            "crest_db": 11.274003710242795
+          },
+          {
+            "start_seconds": 8,
+            "rms_db": -20.031083926671055,
+            "peak": 0.36600848414563436,
+            "centroid_hz": 2490.7346681941085,
+            "spread_hz": 1329.4692105870881,
+            "rolloff85_hz": 4306.640625,
+            "flatness_db": -50.69049418475785,
+            "spectral_flux": 0.005937831701622098,
+            "env_std_db_50ms": 0.047284964993745064,
+            "env_std_db_250ms": 0.04256333536159396,
+            "crest_db": 11.3009069773643
+          },
+          {
+            "start_seconds": 16,
+            "rms_db": -20.062886741887365,
+            "peak": 0.36695455793939025,
+            "centroid_hz": 2497.7735356369744,
+            "spread_hz": 1307.8437232165572,
+            "rolloff85_hz": 4306.640625,
+            "flatness_db": -51.068608474262824,
+            "spectral_flux": 0.005787007551189379,
+            "env_std_db_50ms": 0.05754113926144372,
+            "env_std_db_250ms": 0.03519772320273816,
+            "crest_db": 11.35513247054293
+          },
+          {
+            "start_seconds": 28,
+            "rms_db": -19.997382866247268,
+            "peak": 0.3645588549455244,
+            "centroid_hz": 2493.592902435102,
+            "spread_hz": 1329.978144259967,
+            "rolloff85_hz": 4306.640625,
+            "flatness_db": -51.10554530912932,
+            "spectral_flux": 0.005681987570622423,
+            "env_std_db_50ms": 0.047153661163788045,
+            "env_std_db_250ms": 0.035628519492148195,
+            "crest_db": 11.232735895904746
+          },
+          {
+            "start_seconds": 44,
+            "rms_db": -20.106872639400763,
+            "peak": 0.35367900631733146,
+            "centroid_hz": 2489.876265954556,
+            "spread_hz": 1314.0511579133563,
+            "rolloff85_hz": 4306.640625,
+            "flatness_db": -51.4419246589535,
+            "spectral_flux": 0.005579751616098514,
+            "env_std_db_50ms": 0.035599678984171115,
+            "env_std_db_250ms": 0.018852638376706154,
+            "crest_db": 11.079058273768503
+          }
+        ],
+        "B": [
+          {
+            "start_seconds": 1,
+            "rms_db": -20.248302326575708,
+            "peak": 0.33629871517075105,
+            "centroid_hz": 2287.647627605358,
+            "spread_hz": 1433.653292322215,
+            "rolloff85_hz": 4306.640625,
+            "flatness_db": -44.4762007838312,
+            "spectral_flux": 0.011101540316275095,
+            "env_std_db_50ms": 0.1388337274765755,
+            "env_std_db_250ms": 0.13090171182736388,
+            "crest_db": 10.78280648840087
+          },
+          {
+            "start_seconds": 8,
+            "rms_db": -17.03202029106864,
+            "peak": 0.46398815881832334,
+            "centroid_hz": 202.4573373740926,
+            "spread_hz": 600.8873465038745,
+            "rolloff85_hz": 53.8330078125,
+            "flatness_db": -55.22541880243133,
+            "spectral_flux": 0.051344167520598144,
+            "env_std_db_50ms": 2.5025665973382445,
+            "env_std_db_250ms": 1.7201842913460152,
+            "crest_db": 10.362158237213116
+          },
+          {
+            "start_seconds": 16,
+            "rms_db": -18.91408969081372,
+            "peak": 0.4232764671773431,
+            "centroid_hz": 268.56158039782395,
+            "spread_hz": 717.2732240222712,
+            "rolloff85_hz": 64.599609375,
+            "flatness_db": -55.586794802481464,
+            "spectral_flux": 0.060090380710662146,
+            "env_std_db_50ms": 2.93146856619835,
+            "env_std_db_250ms": 2.2445239363812632,
+            "crest_db": 11.446572165857587
+          },
+          {
+            "start_seconds": 28,
+            "rms_db": -16.860289197897426,
+            "peak": 0.4662617877742851,
+            "centroid_hz": 194.68763131082596,
+            "spread_hz": 601.8546789254124,
+            "rolloff85_hz": 53.8330078125,
+            "flatness_db": -56.04354264871671,
+            "spectral_flux": 0.05540434318939194,
+            "env_std_db_50ms": 3.119480692369957,
+            "env_std_db_250ms": 2.0194026017367785,
+            "crest_db": 10.232885688836157
+          },
+          {
+            "start_seconds": 44,
+            "rms_db": -18.379134645140528,
+            "peak": 0.36890774254585407,
+            "centroid_hz": 237.8493802470835,
+            "spread_hz": 670.2554674724948,
+            "rolloff85_hz": 53.8330078125,
+            "flatness_db": -56.00958748252192,
+            "spectral_flux": 0.06259950344378827,
+            "env_std_db_50ms": 2.456691723183049,
+            "env_std_db_250ms": 1.4108097276354643,
+            "crest_db": 9.717490048853854
+          }
+        ]
+      },
+      "ab": {
+        "level_change_db": -2.7705439165957166,
+        "log_spectral_distance_db": 9.99581347272841,
+        "pcm_difference_db_re_control": 1.621163798314491,
+        "centroid_change_ratio": 9.136989514092248,
+        "flux_change_ratio": 0.47729674892963914,
+        "env_std_change_db": -1.644601655863326,
+        "crest_change_db": 0.7102290211458389,
+        "reading": {
+          "level": false,
+          "spectrum": true,
+          "time_behaviour": true
+        }
+      },
+      "late_edit": {
+        "A": {
+          "level_change_db": -0.0038434451217064236,
+          "log_spectral_distance_db": 13.460712687313944,
+          "pcm_difference_db_re_control": 3.0076896189360487,
+          "centroid_change_ratio": 1.0882886169377681,
+          "flux_change_ratio": 4.476871196835538,
+          "env_std_change_db": 0.0003226151864657231,
+          "crest_change_db": 0.2812702679642527,
+          "reading": {
+            "level": false,
+            "spectrum": true,
+            "time_behaviour": true
+          }
+        },
+        "B": {
+          "level_change_db": 1.4620095686782797,
+          "log_spectral_distance_db": 9.038775153185677,
+          "pcm_difference_db_re_control": 4.675559496263118,
+          "centroid_change_ratio": 0.5518100914319383,
+          "flux_change_ratio": 1.095775650716507,
+          "env_std_change_db": 0.17823400173321002,
+          "crest_change_db": -1.9091860968523005,
+          "reading": {
+            "level": false,
+            "spectrum": true,
+            "time_behaviour": false
+          }
+        }
+      },
+      "clip_blocks": {
+        "A": 0,
+        "B": 0
+      },
+      "node_resets": {
+        "A": 0,
+        "B": 0
+      },
+      "block_ms": {
+        "p95": 0.7273000082932413,
+        "p99": 1.0722469977918072,
+        "budget": 7.98185941043084
+      }
+    }
+  },
+  "catalog": [
+    {
+      "id": "20260916-031503-19a17b",
+      "scene": "n1h_rhythm",
+      "replay": "match",
+      "continue_exact": true,
+      "hypothesis_in_notes": true
+    },
+    {
+      "id": "20260916-031502-d0568c",
+      "scene": "n1h_travel",
+      "replay": "match",
+      "continue_exact": true,
+      "hypothesis_in_notes": true
+    },
+    {
+      "id": "20260916-031501-b66a5f",
+      "scene": "n1h_return",
+      "replay": "match",
+      "continue_exact": true,
+      "hypothesis_in_notes": true
+    }
+  ]
+}

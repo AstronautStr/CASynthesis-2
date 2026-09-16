@@ -148,3 +148,4 @@ from . import scan_surface    # noqa: E402,F401
 from . import pm_network      # noqa: E402,F401
 # N1 (2026-09-15): the field-driven Gutter network.
 from . import gutter_field    # noqa: E402,F401
+from . import gutter_controls    # noqa: E402,F401

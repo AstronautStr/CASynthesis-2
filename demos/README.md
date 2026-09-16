@@ -1,5 +1,12 @@
 # Demo bench (S1 + S2)
 
+Revised N1 experiments (2026-09-16): `run_network_n1.bat` opens three prepared
+records in `lab_catalog/network_n1_hypotheses_2026_09_16_r2/`. Each record's Notes
+starts with the researcher's hypothesis; append listening results there.
+Build into an empty directory: `python demos/build_n1_hypotheses.py --root DIR`.
+Both sides follow the live field. The comparisons test added field control of
+damping and delayed links. Technical verification: `python demos/n1_hypotheses_report.py`.
+
 Run (Windows, project Python with deps installed): `run_demo_bench.bat`
 (opens `demos/laplace_ab.json`) or
 `python demo_bench.py --demo demos/laplace_ab.json`.

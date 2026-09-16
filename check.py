@@ -119,6 +119,11 @@ def main():
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"}, timeout=600)))
 
+    results.append(("N1 hypothesis experiments",
+                    _run("N1 hypothesis tests", [py, os.path.join("tests", "test_n1_hypotheses.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"}, timeout=300)))
+
     results.append(("golden master",
                     _run("golden master", [py, os.path.join("tests", "golden", "golden_master.py")])))
 

@@ -1,0 +1,120 @@
+{
+ "format": 2,
+ "id": "n1h_travel",
+ "title": "N1.2 - Движение: влияние связей",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   3,
+   4
+  ],
+  [
+   4,
+   5
+  ],
+  [
+   5,
+   3
+  ],
+  [
+   5,
+   4
+  ],
+  [
+   5,
+   5
+  ],
+  [
+   3,
+   20
+  ],
+  [
+   4,
+   21
+  ],
+  [
+   5,
+   19
+  ],
+  [
+   5,
+   20
+  ],
+  [
+   5,
+   21
+  ],
+  [
+   19,
+   12
+  ],
+  [
+   20,
+   13
+  ],
+  [
+   21,
+   11
+  ],
+  [
+   21,
+   12
+  ],
+  [
+   21,
+   13
+  ],
+  [
+   19,
+   28
+  ],
+  [
+   20,
+   29
+  ],
+  [
+   21,
+   27
+  ],
+  [
+   21,
+   28
+  ],
+  [
+   21,
+   29
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 16.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0
+ },
+ "variants": {
+  "A": {
+   "engine_id": "gutter_field",
+   "engine_params": {
+    "scale": 1.0,
+    "depth": 1.0,
+    "interaction": 127,
+    "freeze_ca": 0
+   }
+  },
+  "B": {
+   "engine_id": "gutter_ca_links",
+   "engine_params": {
+    "scale": 1.0,
+    "depth": 1.0,
+    "interaction": 127,
+    "freeze_ca": 0
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: A / B. Notes: hypothesis and your listening result. Draw and run the CA on either side."
+}

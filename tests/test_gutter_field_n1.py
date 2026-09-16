@@ -560,7 +560,9 @@ def test_limits_extremes_no_nan_clip_counter_and_prepared_scene():
     assert r.gen >= 2 and GF.region_counts(r.grid).sum() == 12   # blinkers keep 12 cells
     with open(os.path.join(ROOT, 'run_network_n1.bat'), encoding='ascii') as f:
         bat = f.read()
-    assert 'network_n1_blinkers.json' in bat and '--catalog' in bat and 'network_n1_2026_09_15' in bat
+    # The public launcher now opens the corrected hypothesis set; the old scene
+    # above remains a diagnostic fixture for the original engine.
+    assert 'n1h_rhythm.json' in bat and '--catalog' in bat and 'network_n1_hypotheses_2026_09_16_r2' in bat
     assert '--live' not in bat                    # listening goes through the catalog screen
 
 
@@ -618,7 +620,7 @@ def test_registry_overlay_display_and_headless_draw():
     eng = LiveEngine(runner, sink=lambda m, b: None)
     pygame.init()
     app = db.BenchApp(scene, eng)
-    assert 'gutter_field' in app.engine_btns and app.engine_rows == 3
+    assert 'gutter_field' in app.engine_btns and app.engine_rows == 4
     data = app._overlay_runs('gutter_field', DEFAULTS)
     assert len(data['lines']) == 4 and len(data['labels']) == 8 and data['runs'] == []
     screen = pygame.Surface((app.width, app.height))

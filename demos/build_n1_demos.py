@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build the prepared listening material of N1 (REQ memory/req-network-ca-n1-2026-09-15.md;
+"""Historical N1 diagnostic fixtures. The public CLI now delegates to
+build_n1_hypotheses.py, which builds the corrected listening catalog.
+The functions and descriptions below preserve the old diagnostic set for tests.
+
+Original material (REQ memory/req-network-ca-n1-2026-09-15.md;
 user rule 2026-09-15: every listening goes through the experiment catalog):
 
     python demos/build_n1_demos.py                 -> scenes demos/n1_*.json (rewritten,
@@ -207,17 +211,10 @@ def build(root):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="build the N1 listening scenes and catalog")
-    ap.add_argument('--root', default=CATALOG_ROOT, help="catalog root (must hold no records)")
-    ap.add_argument('--scenes-only', action='store_true')
-    a = ap.parse_args(argv)
-    paths = write_scenes()
-    print(f"scenes: {len(paths)} files in {DEMOS_DIR}")
-    if a.scenes_only:
-        return 0
-    res = build(a.root)
-    print(f"catalog: {len(res)} records in {a.root}")
-    return 0
+    # Public entry point now builds the replacement listening set. The old
+    # scene helpers above remain only as reproducible diagnostic test fixtures.
+    from demos.build_n1_hypotheses import main as current_main
+    return current_main(argv)
 
 
 if __name__ == '__main__':
