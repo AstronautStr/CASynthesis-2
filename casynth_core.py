@@ -233,6 +233,32 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=
     A = csr_matrix((np.ones(len(ri)), (ri, ci_)), shape=(cnt, cnt))
     L = sparse_laplacian(A).toarray().astype(float)
 
+    # e_ev: excitation values at each graph node (row-major order of
+    # argwhere(patch>0) == boolean-indexing order of exc[patch>0]); read only
+    # when the shape>0 / dyn>0 branch of laplacian_modes will use it.
+    e_ev = None
+    if shape > 0.0 and dyn > 0.0 and exc is not None:
+        e_ev = exc[patch > 0].astype(float)
+    return laplacian_modes(L, f0, n, spread, alpha, shape, harm, dyn, e_ev)
+
+
+def laplacian_modes(L, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.0,
+                    harm=0.0, dyn=0.0, e_ev=None):
+    """The spectral part of map_laplacian on a READY Laplacian matrix (2026-09-17,
+    REQ memory/req-objects-laplace-comparison-2026-09-17.md): eigen-decomposition,
+    normalisation of the lowest mode to f0, anti-alias guard, mode selection
+    (spread), harmonic pull (harm) and the amplitude law (alpha / shape / dyn),
+    exactly the operations map_laplacian performed after building L -- map_laplacian
+    calls this and stays bit-for-bit as before.  A caller that owns another graph
+    construction (the bench's Objects engine: the full torus graph of a figure, no
+    crop, no decimation) gets the same frequencies / weights for the same matrix.
+
+    L    : float64 (N, N) graph Laplacian D - A (any construction; a matrix without
+           edges gives zeros).
+    e_ev : per-node dynamic excitation (N,) in the node order of L, or None; used
+           only when shape > 0 and dyn > 0 (map_laplacian passes exc[patch > 0]).
+    Returns (freqs, amps), each (n,), zero-padded."""
+    L = np.asarray(L, dtype=float)
     # sqrt(lambda) is proportional to resonant mode frequency (membrane analogy).
     # shape>0 needs eigenvectors; shape==0 uses the faster eigvalsh-only path.
     if shape > 0.0:
@@ -290,10 +316,8 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=
             # Both vectors are unit-normalised BEFORE blending so a sparse event
             # is not drowned by the full-boundary deg (decisions.md 2026-07-05).
             # dyn=0 or exc=None -> this block is skipped entirely (bit-for-bit).
-            if dyn > 0.0 and exc is not None:
-                # e_ev: excitation values at each graph node (row-major order of
-                # argwhere(patch>0) == boolean-indexing order of exc[patch>0]).
-                e_ev = exc[patch > 0].astype(float)
+            if dyn > 0.0 and e_ev is not None:
+                e_ev = np.asarray(e_ev, dtype=float)
                 norm_ev = float(np.linalg.norm(e_ev))
                 norm_deg = float(np.linalg.norm(e))
                 e_hat_deg = e / (norm_deg + 1e-12)
