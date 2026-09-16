@@ -1,0 +1,649 @@
+{
+  "cases": [
+    {
+      "name": "Octagon II",
+      "cells": [
+        [
+          12,
+          15
+        ],
+        [
+          12,
+          16
+        ],
+        [
+          13,
+          14
+        ],
+        [
+          13,
+          17
+        ],
+        [
+          14,
+          13
+        ],
+        [
+          14,
+          18
+        ],
+        [
+          15,
+          12
+        ],
+        [
+          15,
+          19
+        ],
+        [
+          16,
+          12
+        ],
+        [
+          16,
+          19
+        ],
+        [
+          17,
+          13
+        ],
+        [
+          17,
+          18
+        ],
+        [
+          18,
+          14
+        ],
+        [
+          18,
+          17
+        ],
+        [
+          19,
+          15
+        ],
+        [
+          19,
+          16
+        ]
+      ],
+      "rate": 6.0
+    },
+    {
+      "name": "Tumbler",
+      "cells": [
+        [
+          13,
+          12
+        ],
+        [
+          13,
+          13
+        ],
+        [
+          13,
+          17
+        ],
+        [
+          13,
+          18
+        ],
+        [
+          14,
+          12
+        ],
+        [
+          14,
+          14
+        ],
+        [
+          14,
+          16
+        ],
+        [
+          14,
+          18
+        ],
+        [
+          15,
+          12
+        ],
+        [
+          15,
+          14
+        ],
+        [
+          15,
+          16
+        ],
+        [
+          15,
+          18
+        ],
+        [
+          16,
+          14
+        ],
+        [
+          16,
+          16
+        ],
+        [
+          17,
+          13
+        ],
+        [
+          17,
+          14
+        ],
+        [
+          17,
+          16
+        ],
+        [
+          17,
+          17
+        ],
+        [
+          18,
+          13
+        ],
+        [
+          18,
+          14
+        ],
+        [
+          18,
+          16
+        ],
+        [
+          18,
+          17
+        ]
+      ],
+      "rate": 6.0
+    },
+    {
+      "name": "Glider",
+      "cells": [
+        [
+          28,
+          29
+        ],
+        [
+          29,
+          30
+        ],
+        [
+          30,
+          28
+        ],
+        [
+          30,
+          29
+        ],
+        [
+          30,
+          30
+        ]
+      ],
+      "rate": 16.0
+    },
+    {
+      "name": "R-pentomino",
+      "cells": [
+        [
+          14,
+          15
+        ],
+        [
+          14,
+          16
+        ],
+        [
+          15,
+          14
+        ],
+        [
+          15,
+          15
+        ],
+        [
+          16,
+          15
+        ]
+      ],
+      "rate": 6.0
+    }
+  ],
+  "measurements": [
+    {
+      "mode": "scene",
+      "case": "Octagon II",
+      "tune": false,
+      "T60": 0.8,
+      "raw_rms_db": -17.92738813836497,
+      "raw_peak": 0.5399461984027984,
+      "finite": true,
+      "ratio_span": 0.0,
+      "tail_raw_last_second_rms_db": -143.7846316566155,
+      "gain": 0.028,
+      "output_scale": 4,
+      "rms_dbfs": -36.943027684961336,
+      "peak": 0.060473974221113426,
+      "tail_last_second_rms_dbfs": -162.80027120321185
+    },
+    {
+      "mode": "scene",
+      "case": "Octagon II",
+      "tune": true,
+      "T60": 0.8,
+      "raw_rms_db": -17.474134848118283,
+      "raw_peak": 0.6017956067166734,
+      "finite": true,
+      "ratio_span": 0.15429251247822218,
+      "tail_raw_last_second_rms_db": -133.62152956742995,
+      "gain": 0.028,
+      "output_scale": 4,
+      "rms_dbfs": -36.48977439471465,
+      "peak": 0.06740110795226742,
+      "tail_last_second_rms_dbfs": -152.6371691140263
+    },
+    {
+      "mode": "scene",
+      "case": "Tumbler",
+      "tune": false,
+      "T60": 0.8,
+      "raw_rms_db": -19.060446712065506,
+      "raw_peak": 0.4855088571035033,
+      "finite": true,
+      "ratio_span": 0.0,
+      "tail_raw_last_second_rms_db": -143.1328232409931,
+      "gain": 0.028,
+      "output_scale": 4,
+      "rms_dbfs": -38.076086258661874,
+      "peak": 0.054376991995592365,
+      "tail_last_second_rms_dbfs": -162.14846278758947
+    },
+    {
+      "mode": "scene",
+      "case": "Tumbler",
+      "tune": true,
+      "T60": 0.8,
+      "raw_rms_db": -18.531805749865775,
+      "raw_peak": 0.6116310911838841,
+      "finite": true,
+      "ratio_span": 0.24141074309632504,
+      "tail_raw_last_second_rms_db": -137.40465752423208,
+      "gain": 0.028,
+      "output_scale": 4,
+      "rms_dbfs": -37.54744529646214,
+      "peak": 0.06850268221259502,
+      "tail_last_second_rms_dbfs": -156.42029707082844
+    },
+    {
+      "mode": "scene",
+      "case": "Glider",
+      "tune": false,
+      "T60": 0.8,
+      "raw_rms_db": -18.54468402585926,
+      "raw_peak": 0.5058437945363541,
+      "finite": true,
+      "ratio_span": 0.0,
+      "tail_raw_last_second_rms_db": -146.14349836483112,
+      "gain": 0.028,
+      "output_scale": 4,
+      "rms_dbfs": -37.56032357245563,
+      "peak": 0.05665450498807166,
+      "tail_last_second_rms_dbfs": -165.15913791142748
+    },
+    {
+      "mode": "scene",
+      "case": "Glider",
+      "tune": true,
+      "T60": 0.8,
+      "raw_rms_db": -18.650861486573554,
+      "raw_peak": 0.5565336733962893,
+      "finite": true,
+      "ratio_span": 0.802973884274558,
+      "tail_raw_last_second_rms_db": -143.18323174433536,
+      "gain": 0.028,
+      "output_scale": 4,
+      "rms_dbfs": -37.66650103316992,
+      "peak": 0.06233177142038441,
+      "tail_last_second_rms_dbfs": -162.19887129093172
+    },
+    {
+      "mode": "scene",
+      "case": "R-pentomino",
+      "tune": false,
+      "T60": 0.8,
+      "raw_rms_db": -15.873619449972225,
+      "raw_peak": 0.781030904848289,
+      "finite": true,
+      "ratio_span": 0.0,
+      "tail_raw_last_second_rms_db": -141.92493144532958,
+      "gain": 0.028,
+      "output_scale": 4,
+      "rms_dbfs": -34.88925899656859,
+      "peak": 0.08747546134300836,
+      "tail_last_second_rms_dbfs": -160.94057099192594
+    },
+    {
+      "mode": "scene",
+      "case": "R-pentomino",
+      "tune": true,
+      "T60": 0.8,
+      "raw_rms_db": -14.89377318463047,
+      "raw_peak": 0.9382104478750719,
+      "finite": true,
+      "ratio_span": 1.1554935902674708,
+      "tail_raw_last_second_rms_db": -141.71708525367816,
+      "gain": 0.028,
+      "output_scale": 4,
+      "rms_dbfs": -33.90941273122684,
+      "peak": 0.10507957016200806,
+      "tail_last_second_rms_dbfs": -160.73272480027453
+    },
+    {
+      "mode": "full_toggle",
+      "case": "Octagon II",
+      "tune": false,
+      "T60": 0.2,
+      "raw_rms_db": 2.1076660099383075,
+      "raw_peak": 2.7591696439237974,
+      "finite": true,
+      "ratio_span": 0.0,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -13.809934336943195,
+      "peak": 0.4414671430278076
+    },
+    {
+      "mode": "full_toggle",
+      "case": "Octagon II",
+      "tune": false,
+      "T60": 1.5,
+      "raw_rms_db": 8.371923012419428,
+      "raw_peak": 5.604249480028129,
+      "finite": true,
+      "ratio_span": 0.0,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -7.545677334462075,
+      "peak": 0.8966799168045005
+    },
+    {
+      "mode": "full_toggle",
+      "case": "Octagon II",
+      "tune": true,
+      "T60": 0.2,
+      "raw_rms_db": 1.5403859542587528,
+      "raw_peak": 3.6613677873580848,
+      "finite": true,
+      "ratio_span": 1.4577964390764497,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -14.37721439262275,
+      "peak": 0.5858188459772936
+    },
+    {
+      "mode": "full_toggle",
+      "case": "Octagon II",
+      "tune": true,
+      "T60": 1.5,
+      "raw_rms_db": 3.5336343495885956,
+      "raw_peak": 4.595329796284209,
+      "finite": true,
+      "ratio_span": 1.4577964390764497,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -12.383965997292908,
+      "peak": 0.7352527674054734
+    },
+    {
+      "mode": "random",
+      "case": "Octagon II",
+      "tune": false,
+      "T60": 0.2,
+      "raw_rms_db": 2.011400268842671,
+      "raw_peak": 2.7302261725044774,
+      "finite": true,
+      "ratio_span": 0.0,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -13.906200078038832,
+      "peak": 0.4368361876007164
+    },
+    {
+      "mode": "random",
+      "case": "Octagon II",
+      "tune": false,
+      "T60": 1.5,
+      "raw_rms_db": 8.273507776422814,
+      "raw_peak": 5.543420048562688,
+      "finite": true,
+      "ratio_span": 0.0,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -7.644092570458689,
+      "peak": 0.8869472077700301
+    },
+    {
+      "mode": "random",
+      "case": "Octagon II",
+      "tune": true,
+      "T60": 0.2,
+      "raw_rms_db": -2.953456098075644,
+      "raw_peak": 2.227840473437916,
+      "finite": true,
+      "ratio_span": 0.0380851115091263,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -18.871056444957148,
+      "peak": 0.35645447575006656
+    },
+    {
+      "mode": "random",
+      "case": "Octagon II",
+      "tune": true,
+      "T60": 1.5,
+      "raw_rms_db": 3.5416412910904773,
+      "raw_peak": 4.2816371717060395,
+      "finite": true,
+      "ratio_span": 0.0380851115091263,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -12.375959055791025,
+      "peak": 0.6850619474729663
+    },
+    {
+      "mode": "edits",
+      "case": "Octagon II",
+      "tune": false,
+      "T60": 0.2,
+      "raw_rms_db": -19.044679099247833,
+      "raw_peak": 0.6196563863872143,
+      "finite": true,
+      "ratio_span": 0.0,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -34.96227944612934,
+      "peak": 0.0991450218219543
+    },
+    {
+      "mode": "edits",
+      "case": "Octagon II",
+      "tune": false,
+      "T60": 1.5,
+      "raw_rms_db": -13.342935729569003,
+      "raw_peak": 1.0865928466695887,
+      "finite": true,
+      "ratio_span": 0.0,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -29.260536076450506,
+      "peak": 0.1738548554671342
+    },
+    {
+      "mode": "edits",
+      "case": "Octagon II",
+      "tune": true,
+      "T60": 0.2,
+      "raw_rms_db": -18.897966094148472,
+      "raw_peak": 0.5680880341316075,
+      "finite": true,
+      "ratio_span": 1.4207144395687694,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -34.81556644102997,
+      "peak": 0.09089408546105719
+    },
+    {
+      "mode": "edits",
+      "case": "Octagon II",
+      "tune": true,
+      "T60": 1.5,
+      "raw_rms_db": -12.104225899537067,
+      "raw_peak": 1.0753978044464396,
+      "finite": true,
+      "ratio_span": 1.4207144395687694,
+      "gain": 0.04,
+      "output_scale": 4,
+      "rms_dbfs": -28.02182624641857,
+      "peak": 0.17206364871143034
+    }
+  ],
+  "status": "Researcher numerical preflight of N3; live implementation and listening not validated",
+  "date": "2026-09-16",
+  "spec": "../req-network-combined-n3-2026-09-16.md",
+  "source_sha256": {
+    "casynth_lab/gutter_field_n1_config.py": "35b1181daea7e381c8fe8a5d45af989410410bf8e026ff432b54698ceb9c4327",
+    "casynth_lab/event_network.py": "629c264e18ea3c6d0336dab5ffe984d80c1b41251d9e0ce8874d9043ecd01668",
+    "casynth_lab/periodic_readout.py": "fd4853fbde04506f57c0c0024fa0a0b32b23925164ccabe22881dba6bb980590",
+    "patterns.py": "c663694eac4fd48fe0a881227ffc6c9cdf212a5486aca899e6a9e6c957906759"
+  },
+  "model": {
+    "sr": 44100,
+    "block": 352,
+    "grid": [
+      32,
+      32
+    ],
+    "rule": "B3/S23 torus",
+    "rho": 0.88,
+    "delays": [
+      149,
+      211,
+      293,
+      401,
+      547,
+      743,
+      1009,
+      1361
+    ],
+    "base_frequencies": "CONFIG.filters_hz in the hashed gutter_field_n1_config.py",
+    "frequencies_cast": "min(base*ratio,19000) -> float32 -> float64",
+    "modal_step": "z_next = 10^(-3/(SR*T60))*exp(i*2*pi*f/SR)*z + lp_node",
+    "modal_output": "mean(real(z_next)) over 24 filters per node",
+    "highpass_hz": 20,
+    "output_scale": 4,
+    "pan": "N2 cos/sin normalized by 8",
+    "events": "N2 XOR with last rendered field; previous grid initially zero"
+  },
+  "conditions": {
+    "scene_seconds": 12,
+    "tail_seconds": 3,
+    "tail_metric": "last second of 3 seconds without new events; last frequency coefficients retained",
+    "stress_seconds": 6,
+    "stress_seed": 20260916,
+    "stress_modes": {
+      "full_toggle": "complement whole grid every block",
+      "random": "rng.integers(0,2,(32,32),dtype=uint8) every block",
+      "edits": "invert random 5x5 region every 12 blocks, no CA steps"
+    },
+    "rms_metric": "stereo RMS from sample 2*SR to rounded-up block end",
+    "CA_timing": "gen=floor(block_index*352*rate/44100); step when gen changes"
+  },
+  "gutter_direct_probe": [
+    {
+      "case": "n2_rhythm",
+      "J": 0.1,
+      "rms_db": -35.30736448368501,
+      "peak": 0.06326562478211564,
+      "tail_rms_db": -35.34061427277339,
+      "resets": 0
+    },
+    {
+      "case": "n2_rhythm",
+      "J": 0.75,
+      "rms_db": -35.413840543724376,
+      "peak": 0.06365969866887751,
+      "tail_rms_db": -35.30143782298451,
+      "resets": 0
+    },
+    {
+      "case": "n2_rhythm",
+      "J": 3.0,
+      "rms_db": -35.31383060834371,
+      "peak": 0.06490861359208754,
+      "tail_rms_db": -35.3601841759282,
+      "resets": 0
+    },
+    {
+      "case": "n2_travel",
+      "J": 0.1,
+      "rms_db": -35.76416123847517,
+      "peak": 0.06633816542783454,
+      "tail_rms_db": -35.4118087768578,
+      "resets": 0
+    },
+    {
+      "case": "n2_travel",
+      "J": 0.75,
+      "rms_db": -35.86695810643657,
+      "peak": 0.061507195657808454,
+      "tail_rms_db": -35.314006055675414,
+      "resets": 0
+    },
+    {
+      "case": "n2_travel",
+      "J": 3.0,
+      "rms_db": -35.89799350703373,
+      "peak": 0.0644429588007274,
+      "tail_rms_db": -35.31253376234979,
+      "resets": 0
+    },
+    {
+      "case": "n2_growth",
+      "J": 0.1,
+      "rms_db": -35.992147333621034,
+      "peak": 0.06375811396083869,
+      "tail_rms_db": -35.150527179626906,
+      "resets": 0
+    },
+    {
+      "case": "n2_growth",
+      "J": 0.75,
+      "rms_db": -36.004840633355954,
+      "peak": 0.0656956521553495,
+      "tail_rms_db": -35.15034598634344,
+      "resets": 0
+    },
+    {
+      "case": "n2_growth",
+      "J": 3.0,
+      "rms_db": -36.02357853565018,
+      "peak": 0.06520168940839279,
+      "tail_rms_db": -35.147817082636024,
+      "resets": 0
+    }
+  ],
+  "limitations": [
+    "No listening by Researcher.",
+    "The 24-second scene with pattern replacement was not run in this preflight; the two patterns were checked separately.",
+    "Gain bounds are observed for these finite probes, not guaranteed for arbitrary inputs.",
+    "Preflight matrix uses equivalent 0.25*sum(lp)-lp form; implementation must preserve N2 operation order and is compared with scalar reference within 1e-12."
+  ]
+}

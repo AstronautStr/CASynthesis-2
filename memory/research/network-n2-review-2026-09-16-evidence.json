@@ -1,0 +1,582 @@
+{
+  "status": "Researcher audit and mapping diagnosis; see associated report for hearing verdict",
+  "date": "2026-09-16",
+  "revision": "73204f2",
+  "source_sha256": {
+    "casynth_lab/event_network.py": "629c264e18ea3c6d0336dab5ffe984d80c1b41251d9e0ce8874d9043ecd01668",
+    "casynth_lab/periodic_readout.py": "fd4853fbde04506f57c0c0024fa0a0b32b23925164ccabe22881dba6bb980590",
+    "casynth_lab/gutter_field_periodic.py": "927d7d81cd5203ca2da6b37b7c80b59045e6aaafe998364a980dfc7cea3fca59",
+    "casynth_lab/gutter_field.py": "9c4e660942771ddc234ab4facb3eb88377e8e846969618727f39e9c4d20c279d",
+    "patterns.py": "c663694eac4fd48fe0a881227ffc6c9cdf212a5486aca899e6a9e6c957906759",
+    "demos/build_n2_events.py": "7d4baa0b178f2752de033d04f48dd2e4ff8c2e98bca9e2fe336cfd069eae65d1"
+  },
+  "acceptance": {
+    "head": "73204f2",
+    "catalog": [
+      {
+        "id": "20260916-125311-831b09",
+        "title": "N2.1 - Ритм: pulsar, 6 поколений/с",
+        "replay": "match",
+        "continue_exact_blocks": 250,
+        "generations_advanced": 12,
+        "peak": {
+          "A": 0.06314279610583819,
+          "B": 0.13220618305001983
+        },
+        "notes_sha256": "60495f8aba15e8089ed5d0f5eef2379016b20fabd7f39b17e868bfae5c7ccee9"
+      },
+      {
+        "id": "20260916-125310-0fc015",
+        "title": "N2.2 - Движение: glider, 16 поколений/с",
+        "replay": "match",
+        "continue_exact_blocks": 250,
+        "generations_advanced": 32,
+        "peak": {
+          "A": 0.06167790765099033,
+          "B": 0.1076082644123661
+        },
+        "notes_sha256": "ca32e62c14055de90c768f839201cc41ad5aa3318e31939eecf67f5fca5d9669"
+      },
+      {
+        "id": "20260916-125309-83b2de",
+        "title": "N2.3 - Рост: R-pentomino, 6 поколений/с",
+        "replay": "match",
+        "continue_exact_blocks": 250,
+        "generations_advanced": 12,
+        "peak": {
+          "A": 0.06888027588732566,
+          "B": 0.14929654835657827
+        },
+        "notes_sha256": "2e8a9181ac4ebe88ada194de6833ed7b70cdbdc540f19be35e8ec92658c5a4b7"
+      }
+    ],
+    "stress": [
+      {
+        "engine": "gutter_field",
+        "period_blocks": 1,
+        "updates_per_second": 125.2840909090909,
+        "resets": 1047363,
+        "peak": 3.896703757157541,
+        "clipped_samples": 478376
+      },
+      {
+        "engine": "gutter_field",
+        "period_blocks": 2,
+        "updates_per_second": 62.64204545454545,
+        "resets": 0,
+        "peak": 3.965613249714323,
+        "clipped_samples": 289464
+      },
+      {
+        "engine": "gutter_field",
+        "period_blocks": 3,
+        "updates_per_second": 41.76136363636363,
+        "resets": 0,
+        "peak": 2.883393542853973,
+        "clipped_samples": 260151
+      },
+      {
+        "engine": "gutter_field",
+        "period_blocks": 4,
+        "updates_per_second": 31.321022727272727,
+        "resets": 0,
+        "peak": 3.5120031987444644,
+        "clipped_samples": 154146
+      },
+      {
+        "engine": "gutter_field",
+        "period_blocks": 8,
+        "updates_per_second": 15.660511363636363,
+        "resets": 0,
+        "peak": 3.7842791538494307,
+        "clipped_samples": 170410
+      },
+      {
+        "engine": "gutter_field",
+        "period_blocks": 16,
+        "updates_per_second": 7.830255681818182,
+        "resets": 0,
+        "peak": 3.9637503026800434,
+        "clipped_samples": 103784
+      },
+      {
+        "engine": "gutter_field_periodic",
+        "period_blocks": 1,
+        "updates_per_second": 125.2840909090909,
+        "resets": 1047363,
+        "peak": 0.5830387102696257,
+        "clipped_samples": 0
+      },
+      {
+        "engine": "gutter_field_periodic",
+        "period_blocks": 2,
+        "updates_per_second": 62.64204545454545,
+        "resets": 0,
+        "peak": 0.5933491942503089,
+        "clipped_samples": 0
+      },
+      {
+        "engine": "gutter_field_periodic",
+        "period_blocks": 3,
+        "updates_per_second": 41.76136363636363,
+        "resets": 0,
+        "peak": 0.43142362293705677,
+        "clipped_samples": 0
+      },
+      {
+        "engine": "gutter_field_periodic",
+        "period_blocks": 4,
+        "updates_per_second": 31.321022727272727,
+        "resets": 0,
+        "peak": 0.5254784410279173,
+        "clipped_samples": 0
+      },
+      {
+        "engine": "gutter_field_periodic",
+        "period_blocks": 8,
+        "updates_per_second": 15.660511363636363,
+        "resets": 0,
+        "peak": 0.566217340260439,
+        "clipped_samples": 0
+      },
+      {
+        "engine": "gutter_field_periodic",
+        "period_blocks": 16,
+        "updates_per_second": 7.830255681818182,
+        "resets": 0,
+        "peak": 0.5930704534724984,
+        "clipped_samples": 0
+      }
+    ]
+  },
+  "old_N1_replays": [
+    {
+      "id": "20260916-031503-19a17b",
+      "status": "match"
+    },
+    {
+      "id": "20260916-031502-d0568c",
+      "status": "match"
+    },
+    {
+      "id": "20260916-031501-b66a5f",
+      "status": "match"
+    }
+  ],
+  "notes_sha256": {
+    "lab_catalog/network_n1_hypotheses_2026_09_16_r2/20260916-031503-19a17b": "2c7295cdb6f35353b9fa7038b41fa8f188256007f04f9b4e9c9da6695f2eecbb",
+    "lab_catalog/network_n1_hypotheses_2026_09_16_r2/20260916-031502-d0568c": "cae1cd1fd281ef5d090bfa36a8b604b8f1666927a3f82f056d822fe7e27e7feb",
+    "lab_catalog/network_n1_hypotheses_2026_09_16_r2/20260916-031501-b66a5f": "c64fe1a4c06e153472e420d1ab88c6f28870984c7c7b6b59b7efee53ad7b6003",
+    "lab_catalog/network_n2_events_2026_09_16/20260916-125311-831b09": "60495f8aba15e8089ed5d0f5eef2379016b20fabd7f39b17e868bfae5c7ccee9",
+    "lab_catalog/network_n2_events_2026_09_16/20260916-125310-0fc015": "ca32e62c14055de90c768f839201cc41ad5aa3318e31939eecf67f5fca5d9669",
+    "lab_catalog/network_n2_events_2026_09_16/20260916-125309-83b2de": "2e8a9181ac4ebe88ada194de6833ed7b70cdbdc540f19be35e8ec92658c5a4b7"
+  },
+  "mapping_probe": {
+    "patterns": [
+      {
+        "pattern": "Blinker",
+        "placement": [
+          15,
+          14
+        ],
+        "period": 2,
+        "events": [
+          4,
+          4
+        ],
+        "population": [
+          3,
+          3
+        ],
+        "packet_each_generation": true,
+        "identical_xor_masks": true,
+        "packet_sums": [
+          1.320094,
+          1.320094
+        ],
+        "minimum_pairwise_packet_cosine": 0.9999999999999999,
+        "max_per_node_packet_span": 0.0,
+        "packets": [
+          [
+            0.0,
+            0.3944809260849516,
+            0.3082456224070556,
+            0.0,
+            0.0,
+            0.34903864355773523,
+            0.26832929143018536,
+            0.0
+          ],
+          [
+            0.0,
+            0.3944809260849516,
+            0.3082456224070556,
+            0.0,
+            0.0,
+            0.34903864355773523,
+            0.26832929143018536,
+            0.0
+          ]
+        ]
+      },
+      {
+        "pattern": "Pulsar",
+        "placement": [
+          9,
+          9
+        ],
+        "period": 3,
+        "events": [
+          56,
+          32,
+          40
+        ],
+        "population": [
+          48,
+          56,
+          72
+        ],
+        "packet_each_generation": true,
+        "identical_xor_masks": false,
+        "packet_sums": [
+          4.494708,
+          3.914726,
+          3.746876
+        ],
+        "minimum_pairwise_packet_cosine": 0.9875723660230358,
+        "max_per_node_packet_span": 0.17981453106732856,
+        "packets": [
+          [
+            0.35871446014267855,
+            0.8804004205818761,
+            0.8719880005088333,
+            0.18139947413927193,
+            0.3221542776067115,
+            0.8656169399628986,
+            0.8559284385417356,
+            0.15850622860300517
+          ],
+          [
+            0.2602892429506375,
+            0.8039113250113828,
+            0.7962036493905263,
+            0.14178947061629435,
+            0.23172192090277838,
+            0.7828519167838989,
+            0.774178841354442,
+            0.12377917940776757
+          ],
+          [
+            0.17889992907535,
+            0.8459675607414926,
+            0.8323692531462565,
+            0.05337256910788424,
+            0.15431564429746147,
+            0.82623619213204,
+            0.8107350129966017,
+            0.044979646244903984
+          ]
+        ]
+      },
+      {
+        "pattern": "Octagon II",
+        "placement": [
+          12,
+          12
+        ],
+        "period": 5,
+        "events": [
+          8,
+          32,
+          8,
+          8,
+          24
+        ],
+        "population": [
+          16,
+          24,
+          24,
+          16,
+          24
+        ],
+        "packet_each_generation": true,
+        "identical_xor_masks": false,
+        "packet_sums": [
+          2.0,
+          3.2,
+          2.0,
+          2.0,
+          3.0
+        ],
+        "minimum_pairwise_packet_cosine": 1.0,
+        "max_per_node_packet_span": 0.30000000000000004,
+        "packets": [
+          [
+            0.0,
+            0.5000000000000001,
+            0.5000000000000001,
+            0.0,
+            0.0,
+            0.5,
+            0.5,
+            0.0
+          ],
+          [
+            0.0,
+            0.8,
+            0.8,
+            0.0,
+            0.0,
+            0.8,
+            0.8,
+            0.0
+          ],
+          [
+            0.0,
+            0.5,
+            0.5,
+            0.0,
+            0.0,
+            0.5000000000000001,
+            0.5000000000000001,
+            0.0
+          ],
+          [
+            0.0,
+            0.5000000000000001,
+            0.5000000000000001,
+            0.0,
+            0.0,
+            0.5,
+            0.5,
+            0.0
+          ],
+          [
+            0.0,
+            0.7500000000000001,
+            0.7500000000000001,
+            0.0,
+            0.0,
+            0.7500000000000001,
+            0.7500000000000001,
+            0.0
+          ]
+        ]
+      },
+      {
+        "pattern": "Tumbler",
+        "placement": [
+          13,
+          12
+        ],
+        "period": 14,
+        "events": [
+          8,
+          12,
+          18,
+          6,
+          10,
+          10,
+          8,
+          8,
+          12,
+          18,
+          6,
+          10,
+          10,
+          8
+        ],
+        "population": [
+          22,
+          18,
+          18,
+          16,
+          18,
+          16,
+          18,
+          22,
+          18,
+          18,
+          16,
+          18,
+          16,
+          18
+        ],
+        "packet_each_generation": true,
+        "identical_xor_masks": false,
+        "packet_sums": [
+          1.997364,
+          2.37198,
+          2.753962,
+          1.693709,
+          2.18599,
+          2.189773,
+          1.988979,
+          1.970561,
+          2.311868,
+          2.753751,
+          1.714853,
+          2.21791,
+          2.210841,
+          1.979045
+        ],
+        "minimum_pairwise_packet_cosine": 0.9722736622271175,
+        "max_per_node_packet_span": 0.3170511999737423,
+        "packets": [
+          [
+            0.00308948280000589,
+            0.5071179627925837,
+            0.4657789041606711,
+            0.0,
+            0.0017017218215093883,
+            0.5386476505102016,
+            0.4810285939101779,
+            0.0
+          ],
+          [
+            0.0035216138713826946,
+            0.5747671174759891,
+            0.516866611073932,
+            0.0,
+            0.0012680105428812206,
+            0.672845209031199,
+            0.602711879188336,
+            0.0
+          ],
+          [
+            0.0,
+            0.7334383606808682,
+            0.6831708407105147,
+            0.0,
+            0.0,
+            0.7004008956395983,
+            0.6369515950173285,
+            0.0
+          ],
+          [
+            0.00308948280000589,
+            0.4961300550454171,
+            0.4599134469817751,
+            0.0,
+            0.0017017218215093883,
+            0.38334969566585597,
+            0.3495247380070529,
+            0.0
+          ],
+          [
+            0.0035216138713826946,
+            0.6328620823189197,
+            0.5814556321021369,
+            0.0,
+            0.0012680105428812206,
+            0.5101944528492767,
+            0.4566885042544943,
+            0.0
+          ],
+          [
+            0.0,
+            0.6290928830537555,
+            0.5639201800508961,
+            0.0,
+            0.0,
+            0.5369139295288979,
+            0.45984582215500647,
+            0.0
+          ],
+          [
+            0.0,
+            0.5445563232595749,
+            0.4676252208445376,
+            0.0,
+            0.0,
+            0.5217330570189443,
+            0.4550647178275289,
+            0.0
+          ],
+          [
+            0.0021617352430578687,
+            0.5786347713367584,
+            0.5228989999962409,
+            0.0,
+            0.002630324579415388,
+            0.45150951215600266,
+            0.4127251860015355,
+            0.0
+          ],
+          [
+            0.0017017218215093883,
+            0.7022119204103154,
+            0.6358329613636171,
+            0.0,
+            0.00308948280000589,
+            0.5122467150730339,
+            0.45678569366265476,
+            0.0
+          ],
+          [
+            0.0,
+            0.737663717267035,
+            0.6792762463329463,
+            0.0,
+            0.0,
+            0.6948772934429722,
+            0.6419339383797117,
+            0.0
+          ],
+          [
+            0.0021617352430578687,
+            0.43728441196463796,
+            0.4018166841185649,
+            0.0,
+            0.002630324579415388,
+            0.45331504194567457,
+            0.41764451661682117,
+            0.0
+          ],
+          [
+            0.0017017218215093883,
+            0.565683036661122,
+            0.5123585731430371,
+            0.0,
+            0.00308948280000589,
+            0.5939799701756703,
+            0.5410971801201149,
+            0.0
+          ],
+          [
+            0.0,
+            0.5860385818975488,
+            0.5104682637350118,
+            0.0,
+            0.0,
+            0.5901361342591441,
+            0.5241976334140243,
+            0.0
+          ],
+          [
+            0.0,
+            0.5650401593589517,
+            0.4977957886087668,
+            0.0,
+            0.0,
+            0.4968505086681573,
+            0.4193589546633583,
+            0.0
+          ]
+        ]
+      }
+    ],
+    "independent_reference_max_abs_error": 1.3877787807814457e-17
+  },
+  "limitations": [
+    "User live edits were not saved as separate recordings; probe positions are canonical centered examples, not a reconstruction of the listening session.",
+    "Numerical distances do not override user listening feedback."
+  ],
+  "full_regression": {
+    "command": "python check.py",
+    "exit_code": 0,
+    "result": "ALL GATES PASS",
+    "log_sha256": "e5544b198067c4236c30fe7042506bd1685cb5e08c44f99b6f8a0f5064629aed",
+    "new_n2_tests": 19
+  }
+}
