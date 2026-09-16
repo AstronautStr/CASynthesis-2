@@ -482,7 +482,11 @@ Bench: the LISTENED side's figures come from the engine's `display()` (the same
 geometry the audio uses): cells, circle (continued across the seam) and centre in
 one stable colour per id; Own = outlined cells + a dotted reference circle; a figure
 panel (id, cells, modes, lowest Hz, packet bar, level tick).  The static overlays of
-the other engines are unchanged.
+the other engines are unchanged.  **Radius x** (2026-09-16, user's addition): the
+Disk detector uses `R_eff = radius_mul * R` (0.25..4.0, default 1.0 = bit-exact); the
+geometric R is untouched, a single cell keeps R 0, Own ignores it, a change acts on
+the masks of the next events only (no packet); the circle on screen and the panel
+show the effective radius; older snapshots without the parameter restore with 1.0.
 
 Entry: **`run_object_resonators_n4.bat`** opens the bench on the CATALOG screen of
 `lab_catalog/object_resonators_n4_2026_09_16/` (build once with

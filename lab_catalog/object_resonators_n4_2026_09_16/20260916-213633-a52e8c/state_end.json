@@ -51,6 +51,7 @@
      "engine_id": "ca_object_resonators",
      "engine_params": {
       "detector": 1,
+      "radius_mul": 1.0,
       "frequency_scale": 220.0,
       "decay_s": 0.8
      }
@@ -95,6 +96,7 @@
    "B": {
     "ca_object_resonators": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -186,6 +188,7 @@
     "engine_id": "ca_object_resonators",
     "params": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     },
@@ -198,6 +201,7 @@
      "model_version": "ca_object_resonators_n4_v1",
      "params": {
       "detector": 1,
+      "radius_mul": 1.0,
       "frequency_scale": 220.0,
       "decay_s": 0.8
      },

@@ -87,8 +87,9 @@ def tumbler(r0=13, c0=12):
     return [(r0 + r, c0 + c) for r, c in rel]
 
 
-def engine(cells, detector=1, scale=220.0, decay=0.8, gain=GAIN, rows=32, cols=32):
-    e = registry.create(orz.ENGINE_ID, CTX, dict(detector=detector, frequency_scale=scale, decay_s=decay))
+def engine(cells, detector=1, scale=220.0, decay=0.8, gain=GAIN, rows=32, cols=32, radius_mul=1.0):
+    e = registry.create(orz.ENGINE_ID, CTX, dict(detector=detector, radius_mul=radius_mul,
+                                                 frequency_scale=scale, decay_s=decay))
     e.init(grid(cells, rows, cols), None, gain)
     return e
 
@@ -463,7 +464,7 @@ class ExcitationTests(unittest.TestCase):
         zf_after = float(e.zf[0])
         # unchanged field, parameter changes, update_field with the same field: no packet
         e.update_field(grid(blinker()), None)
-        e.set_params(dict(detector=0, frequency_scale=330.0, decay_s=1.2))
+        e.set_params(dict(detector=0, radius_mul=2.0, frequency_scale=330.0, decay_s=1.2))
         run(e, 5)
         self.assertLess(float(e.zf[0]), zf_after)
         self.assertEqual(e.display()['figures'][0]['e'], 3.0)                 # the last packet shown
@@ -540,11 +541,62 @@ class ExcitationTests(unittest.TestCase):
         run(e, 1)
         self.assertEqual(int(e.counters[3]), 1)
         self.assertLess(float(e.zf[0]), zf)
-        e.set_params(dict(detector=0, frequency_scale=220.0, decay_s=0.8))
-        e.set_params(dict(detector=1, frequency_scale=220.0, decay_s=0.8))
+        e.set_params(dict(detector=0, radius_mul=1.0, frequency_scale=220.0, decay_s=0.8))
+        e.set_params(dict(detector=1, radius_mul=3.0, frequency_scale=220.0, decay_s=0.8))
         zf = float(e.zf[0])
         run(e, 1)
         self.assertLess(float(e.zf[0]), zf)
+
+    def test_radius_multiplier_scales_the_disk_only_and_is_no_hit(self):
+        cells = neighbor_cells()
+        # x0.5: the receiver's circle (R 5.33 -> 2.66) no longer holds the blinker -> Disk hears 0
+        e = engine(cells, detector=1, radius_mul=0.5)
+        g = grid(cells)
+        run(e, 1)
+        recv = fig_by_id(e, 1)
+        self.assertAlmostEqual(recv['radius'], 0.5 * 5.32962, places=4)
+        self.assertAlmostEqual(recv['radius_geom'], 5.32962, places=4)
+        inside = fg.disk_mask(tuple(recv['centre']), recv['radius'], 32, 32)
+        own_inside = int(inside[grid(receiver_cells()) == 1].sum())
+        self.assertTrue(0 < own_inside < 17)                 # a shrunk circle no longer holds all own cells
+        self.assertEqual(recv['e'], float(own_inside))       # start packet: births inside the circle only
+        for _ in range(6):
+            g = step(g)
+            e.update_field(g, None)
+            run(e, 1)
+            self.assertEqual(fig_by_id(e, 1)['e'], 0.0)      # the blinker is outside the shrunk circle
+            self.assertEqual(fig_by_id(e, 2)['e'], 0.0)      # blinker R 1 -> 0.5: its births / deaths at distance 1 fall outside
+        # x3: the blinker's circle (R 1 -> 3) reaches the still receiver, which has no changes:
+        # still 0 for the receiver's sake; the receiver's circle x3 hears the blinker as before
+        e = engine(cells, detector=1, radius_mul=3.0)
+        g = grid(cells)
+        run(e, 1)
+        for _ in range(4):
+            g = step(g)
+            e.update_field(g, None)
+            run(e, 1)
+            self.assertEqual(fig_by_id(e, 1)['e'], 4.0)
+            self.assertEqual(fig_by_id(e, 2)['e'], 4.0)
+        # Own ignores the multiplier; a single cell keeps R = 0; the knob itself is no hit
+        e = engine(cells + [(25, 25)], detector=0, radius_mul=4.0)
+        run(e, 1)
+        one = [f for f in e.display()['figures'] if f['n'] == 1][0]
+        self.assertEqual((one['radius'], one['radius_geom'], one['slot']), (0.0, 0.0, -1))
+        self.assertEqual(fig_by_id(e, 1)['e'], 17.0)
+        zf = e.zf.copy()
+        e.set_params(dict(e.params, radius_mul=0.25))
+        run(e, 1)
+        self.assertTrue((e.zf <= zf).all())
+        self.assertEqual(e.display()['radius_mul'], 0.25)
+        # a change of the multiplier alone never makes an event on still cells (Disk)
+        e = engine(receiver_cells(), detector=1)
+        run(e, 2)
+        for mul in (0.5, 4.0, 1.0):
+            e.set_params(dict(e.params, radius_mul=mul))
+            zf = float(e.zf[0])
+            run(e, 1)
+            self.assertLess(float(e.zf[0]), zf)
+            self.assertEqual(int(e.counters[3]), 1)
 
 
 # ======================================================================================
@@ -748,7 +800,15 @@ class SnapshotTests(unittest.TestCase):
             back = load_state(tmp, 'n4')
         other = registry.create(orz.ENGINE_ID, CTX, dict(detector=1, frequency_scale=220.0, decay_s=0.8))
         other.init(np.zeros((32, 32), np.uint8), None, 0.0)
+        self.assertEqual(other.params['radius_mul'], 1.0)          # optional parameter filled in
         other.restore_state(g3, None, back)
+        # a snapshot written before the radius knob existed restores with the default 1.0
+        old = dict(back)
+        old['params'] = {k: v for k, v in back['params'].items() if k != 'radius_mul'}
+        older = registry.create(orz.ENGINE_ID, CTX, registry.defaults(orz.ENGINE_ID))
+        older.init(np.zeros((32, 32), np.uint8), None, 0.0)
+        older.restore_state(g3, None, old)
+        self.assertEqual(older.params, other.params)
         self.assertEqual(other.params, e.params)
         self.assertEqual(sorted(other.figures), sorted(e.figures))
         gg = g3
@@ -782,6 +842,7 @@ class SnapshotTests(unittest.TestCase):
             runner.post('start', at=0)
             runner.post('set_param', at=int(0.7 * SR), side='B', name='decay_s', value=1.2)
             runner.post('set_param', at=int(0.9 * SR), side='B', name='frequency_scale', value=330.0)
+            runner.post('set_param', at=int(0.95 * SR), side='B', name='radius_mul', value=2.5)
             for _ in range(int(1.0 * SR / BLOCK)):
                 runner.next_block()
             st = runner.export_state()
@@ -831,7 +892,7 @@ class LevelsTimingAndContractTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 registry.create(orz.ENGINE_ID, ctx, registry.defaults(orz.ENGINE_ID))
         spec = registry.get(orz.ENGINE_ID)
-        self.assertEqual(spec.defaults(), dict(detector=1, frequency_scale=220.0, decay_s=0.8))
+        self.assertEqual(spec.defaults(), dict(detector=1, radius_mul=1.0, frequency_scale=220.0, decay_s=0.8))
         self.assertEqual(registry.value_text(orz.ENGINE_ID, 'detector', 0), 'Own')
         self.assertEqual(registry.value_text(orz.ENGINE_ID, 'detector', 1), 'Disk')
         with self.assertRaises(ValueError):
@@ -920,10 +981,10 @@ class BenchTests(unittest.TestCase):
                                           radius=1.4, modes=4, f_low=220.0, e=4.0, a=0.67, level=2.0)],
                             n_figures=1, n_sounding=1, n_single=0, n_tails=3, n_fading=0, evictions=1,
                             drops=0, unvoiced_blocks=0, changes=1, detector=0, detector_name='Own',
-                            rows=32, cols=32, frequency_scale=220.0, decay_s=0.8, r=0.99, r_target=0.98,
+                            rows=32, cols=32, radius_mul=1.0, frequency_scale=220.0, decay_s=0.8, r=0.99, r_target=0.98,
                             ramp_left=100, gain=0.028, model='x')
                 app._draw_figures(screen, small, fake, False)
-                app._draw_display(screen, small, fake, app.panel_x, app.params_y + 3 * db.ROW_H + 6)
+                app._draw_display(screen, small, fake, app.panel_x, app.params_y + 4 * db.ROW_H + 6)
             finally:
                 eng.stop()
                 pygame.quit()
@@ -947,10 +1008,10 @@ class CatalogTests(unittest.TestCase):
             self.assertTrue(case['hypothesis'].startswith('Гипотеза - '))
         a, b = CASES[0]['A'], CASES[0]['B']
         self.assertEqual(a, (te.ENGINE_ID, dict(field_tuning=1, decay_s=0.8)))
-        self.assertEqual(b, (orz.ENGINE_ID, dict(detector=1, frequency_scale=220.0, decay_s=0.8)))
+        self.assertEqual(b, (orz.ENGINE_ID, dict(detector=1, radius_mul=1.0, frequency_scale=220.0, decay_s=0.8)))
         a, b = CASES[1]['A'], CASES[1]['B']
-        self.assertEqual(a, (orz.ENGINE_ID, dict(detector=0, frequency_scale=220.0, decay_s=0.8)))
-        self.assertEqual(b, (orz.ENGINE_ID, dict(detector=1, frequency_scale=220.0, decay_s=0.8)))
+        self.assertEqual(a, (orz.ENGINE_ID, dict(detector=0, radius_mul=1.0, frequency_scale=220.0, decay_s=0.8)))
+        self.assertEqual(b, (orz.ENGINE_ID, dict(detector=1, radius_mul=1.0, frequency_scale=220.0, decay_s=0.8)))
         # the N4.2 figures evolve as independently placed figures and never merge
         g = grid(neighbor_cells())
         recv = grid(receiver_cells())

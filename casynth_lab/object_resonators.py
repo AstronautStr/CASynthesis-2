@@ -63,8 +63,12 @@ fading slots are busy the quietest fading slot is dropped at once (counted, show
 Undriven modes below TAIL_FLOOR are zeroed at block boundaries (deterministic).
 
 Controls: `detector` (Own / Disk, default Disk; changes the masks of the NEXT
-events, no packet), `frequency_scale` (55..880 Hz, default 220; retunes every
-slot at once, states kept), `decay_s` (0.20..1.50 s, default 0.80; r ramp 20 ms).
+events, no packet), `radius_mul` ("Radius x", 0.25..4.0, default 1.0: the Disk
+detector uses R_eff = radius_mul * R -- the geometric R of the figure is never
+changed, a single cell keeps R = 0, Own ignores it; a change acts on the masks of
+the NEXT events only, no packet; absent from an older snapshot = 1.0),
+`frequency_scale` (55..880 Hz, default 220; retunes every slot at once, states
+kept), `decay_s` (0.20..1.50 s, default 0.80; r ramp 20 ms).
 Only SR 44100 / block 352 / stereo.  Own model_version / STATE_VERSION; the
 snapshot holds every slot array, the tracker (ids, slots, cells, centres, radii),
 the id counter, both fields, the ramps, the DC filters and the gain.
@@ -90,8 +94,10 @@ except ImportError:                    # pragma: no cover
 ENGINE_ID = 'ca_object_resonators'
 LABEL = 'Objects'
 PARAMS = [('detector', 'Detector', 0, 1, True, 1),
+          ('radius_mul', 'Radius x', 0.25, 4.0, False, 1.0),
           ('frequency_scale', 'Freq scale', 55.0, 880.0, False, 220.0),
           ('decay_s', 'Decay', 0.20, 1.50, False, 0.80)]
+OPTIONAL_PARAMS = {'radius_mul': 1.0}   # absent from older snapshots: the bit-exact default
 CHOICES = {'detector': ('Own', 'Disk')}
 DET_OWN, DET_DISK = 0, 1
 MODEL_VERSION = 'ca_object_resonators_n4_v1'
@@ -247,6 +253,8 @@ class ObjectResonatorsEngine(SoundEngine):
         if int(ctx.sr) != SR_REQUIRED or int(ctx.block) != BLOCK_REQUIRED or ctx.channels != 2:
             raise ValueError(f"engine {ENGINE_ID}: only sr {SR_REQUIRED} / block {BLOCK_REQUIRED} / "
                              f"stereo are supported (got {ctx.sr} / {ctx.block} / {ctx.channels})")
+        for k, v in OPTIONAL_PARAMS.items():
+            self.params.setdefault(k, v)
         self.engine_id = ENGINE_ID
         self.model_version = MODEL_VERSION
         self.sr = float(ctx.sr)
@@ -300,11 +308,18 @@ class ObjectResonatorsEngine(SoundEngine):
                 self.rr, self.gg, self.ints, self.consts, self.hp_h, self.hp, OUT_SCALE, self.level)
 
     # -- geometry helpers -------------------------------------------------------------
+    def _radius_mul(self):
+        return float(self.params.get('radius_mul', OPTIONAL_PARAMS['radius_mul']))
+
+    def _eff_radius(self, fig):
+        """The Disk detector radius: radius_mul * the geometric R (0 stays 0)."""
+        return self._radius_mul() * fig.radius
+
     def _mask(self, fig):
         rows, cols = self._grid.shape
         if int(self.params['detector']) == DET_OWN:
             return fg.own_mask(fig.cells, rows, cols)
-        return fg.disk_mask(fig.centre, fig.radius, rows, cols)
+        return fg.disk_mask(fig.centre, self._eff_radius(fig), rows, cols)
 
     def _scale(self):
         return float(self.params['frequency_scale'])
@@ -572,6 +587,8 @@ class ObjectResonatorsEngine(SoundEngine):
     def set_params(self, params):
         old = dict(self.params)
         super().set_params(params)
+        for k, v in OPTIONAL_PARAMS.items():
+            self.params.setdefault(k, v)
         if self._grid is None:
             return
         if float(self.params['frequency_scale']) != float(old['frequency_scale']):
@@ -642,7 +659,7 @@ class ObjectResonatorsEngine(SoundEngine):
             nd = int(self.ndrive[s]) if s >= 0 else 0
             figs.append(dict(id=fid, color=(fid - 1) % N_PALETTE, slot=s, n=int(len(f.cells)),
                              cells=f.cells.tolist(), centre=[f.centre[0], f.centre[1]],
-                             radius=f.radius, modes=nd,
+                             radius=self._eff_radius(f), radius_geom=f.radius, modes=nd,
                              f_low=(float(self.ffreq[s, 0]) if s >= 0 and nd > 0 else 0.0),
                              e=(float(self.last_e[s]) if s >= 0 else 0.0),
                              a=(float(self.last_a[s]) if s >= 0 else 0.0),
@@ -656,6 +673,7 @@ class ObjectResonatorsEngine(SoundEngine):
                     drops=int(self.counters[1]), unvoiced_blocks=int(self.counters[2]),
                     changes=int(self.counters[3]), detector=det,
                     detector_name=CHOICES['detector'][det], rows=rows, cols=cols,
+                    radius_mul=self._radius_mul(),
                     frequency_scale=self._scale(), decay_s=float(self.params['decay_s']),
                     r=float(self.rr[R_CUR]), r_target=float(self.rr[R_TGT]),
                     ramp_left=int(self.ints[I_R_LEFT]), gain=float(self.gg[R_CUR]),
@@ -719,6 +737,10 @@ class ObjectResonatorsEngine(SoundEngine):
         if int(state.get('sr', -1)) != int(self.sr) or int(state.get('block', -1)) != self._out.shape[0]:
             raise ValueError(f"engine {ENGINE_ID}: state sr / block do not match the context")
         params = state.get('params')
+        if isinstance(params, dict):
+            params = dict(params)
+            for k, v in OPTIONAL_PARAMS.items():       # older snapshots: the bit-exact default
+                params.setdefault(k, v)
         if not isinstance(params, dict) or sorted(params) != sorted(p[0] for p in PARAMS):
             raise ValueError(f"engine {ENGINE_ID}: state params do not match the registry")
         if float(state.get('out_scale', OUT_SCALE)) != OUT_SCALE:

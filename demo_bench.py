@@ -923,7 +923,8 @@ class BenchApp:
                 extra = f"   faded {disp.get('evictions', 0)} dropped {disp.get('drops', 0)}"
             screen.blit(small.render(f"Figures: sounding {disp['n_sounding']} of {disp['n_figures']}"
                                      f"   tails {disp['n_tails']}{extra}", True, C_DIM), (x, y))
-            screen.blit(small.render(f"scale {float(disp['frequency_scale']):.0f} Hz   decay "
+            screen.blit(small.render(f"R x{float(disp.get('radius_mul', 1.0)):.2f}   scale "
+                                     f"{float(disp['frequency_scale']):.0f} Hz   decay "
                                      f"{float(disp['decay_s']):.2f} s{ramp}   a | level", True, C_DIM),
                         (x, y + 14))
             bar_x, bar_w = x + 98, 76

@@ -42,8 +42,9 @@ RATE_HZ = 6.0
 SECONDS = 12.0
 DECAY_S = 0.8
 SCALE_HZ = 220.0
-N4_OWN = dict(detector=DET_OWN, frequency_scale=SCALE_HZ, decay_s=DECAY_S)
-N4_DISK = dict(detector=DET_DISK, frequency_scale=SCALE_HZ, decay_s=DECAY_S)
+RADIUS_MUL = 1.0
+N4_OWN = dict(detector=DET_OWN, radius_mul=RADIUS_MUL, frequency_scale=SCALE_HZ, decay_s=DECAY_S)
+N4_DISK = dict(detector=DET_DISK, radius_mul=RADIUS_MUL, frequency_scale=SCALE_HZ, decay_s=DECAY_S)
 N3_FIELD = dict(field_tuning=1, decay_s=DECAY_S)
 
 

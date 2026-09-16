@@ -1,6 +1,6 @@
 {
  "format": 3,
- "id": "20260916-203922-cbe78b",
+ "id": "20260916-213632-002902",
  "provenance": {
   "schema": 1,
   "sound_set": 2,
@@ -11,13 +11,13 @@
    "casynth_engine.py": "ede4e4db4fb4181e7afeb92531a35880f49d1701b3ffe0596a26a3168fcf83f8",
    "casynth_lab/engine_api.py": "2ab95105862e8f2644ab9ed534179e9ffea77142759125eb5fe2b49be5962d1b",
    "casynth_lab/event_network.py": "629c264e18ea3c6d0336dab5ffe984d80c1b41251d9e0ce8874d9043ecd01668",
-   "casynth_lab/figures.py": "4c278856f7d6d30261d8d0597f26702118a1dde8a326c6b727fc4f72da2f1b5c",
+   "casynth_lab/figures.py": "4e63d9cfc369903b92ebdb86e456d77ca12cc91fb7f1fcc52a1e3bbe5dcb1328",
    "casynth_lab/gutter_controls.py": "f2cb31f79286ec3a9233f5e4733e207b46f87bf3f7b1d5b1a8c6922d8166fb1d",
    "casynth_lab/gutter_field.py": "9c4e660942771ddc234ab4facb3eb88377e8e846969618727f39e9c4d20c279d",
    "casynth_lab/gutter_field_n1_config.py": "35b1181daea7e381c8fe8a5d45af989410410bf8e026ff432b54698ceb9c4327",
    "casynth_lab/gutter_field_periodic.py": "927d7d81cd5203ca2da6b37b7c80b59045e6aaafe998364a980dfc7cea3fca59",
    "casynth_lab/legacy_engine.py": "13494afbe3ceaf31bf4a090cc4e1442fe914c6c074852985516cd01ce6c63652",
-   "casynth_lab/object_resonators.py": "bcf8ad7272c17a5b81d74037234880639ffbbf9a6d07e01b40f41171383867d8",
+   "casynth_lab/object_resonators.py": "61c5613acf5461f495b670a8f5ce504bdd53d1c714f3cfbb6ed7bb4ed90fe2b7",
    "casynth_lab/periodic_readout.py": "fd4853fbde04506f57c0c0024fa0a0b32b23925164ccabe22881dba6bb980590",
    "casynth_lab/pm_network.py": "7e1fc88b58ef8623ead0194facb59d5a7f14b4e40a66732f99e95a86286f88ce",
    "casynth_lab/registry.py": "7ea4837af1a0956f152fa5a62b999fc4adccc363de32c9c920fb9e667ca638f7",
@@ -27,12 +27,14 @@
    "casynth_lab/snapshot.py": "6886e8dd0d1d2615d836ec1390e6310c27783e42748c0153008ae7f02de30576",
    "casynth_lab/tuned_events.py": "7e917e2352e1e1108f33829fbe2f563ab0d4d248ea71392398216389309f6fc1"
   },
-  "digest": "68e4988a7264bb38cb8f747cce3d1d8fe275790cf74bc819065770474eb2403f",
+  "digest": "13317c61b4e1fc0e5171b48d4dd91ca6940aad2d764afc7740748c0e030d95bd",
   "repo_id": "22b46903073195905f029c3c587445203c41ebbe",
-  "commit": "27bf753330a1d9521ba72856eeefefd5ce8dc289",
-  "match": "clean",
-  "dirty": [],
-  "reason": "",
+  "commit": "7af96e391a2550c75544e287edaa42c8c3caa4d6",
+  "match": "dirty",
+  "dirty": [
+   "casynth_lab/object_resonators.py"
+  ],
+  "reason": "sound files differ from HEAD: casynth_lab/object_resonators.py",
   "environment": {
    "python": "3.14.5",
    "executable": "C:\\Users\\Astro\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
@@ -58,11 +60,8 @@
    "casynth_lab": true
   }
  },
- "status_reason": "",
- "pin": {
-  "commit": "27bf753330a1d9521ba72856eeefefd5ce8dc289",
-  "ref": "refs/casynth/pins/27bf753330a1d9521ba72856eeefefd5ce8dc289"
- },
+ "status_reason": "sound files differ from HEAD: casynth_lab/object_resonators.py",
+ "pin": null,
  "origin_kind": "fresh",
  "parent_record_id": null,
  "snapshot": {
@@ -79,10 +78,10 @@
    "B": 1
   }
  },
- "created": "2026-09-16T20:39:22",
+ "created": "2026-09-16T21:36:32",
  "title": "N4.2 - Фигура слышит соседа: неподвижная фигура + blinker, 6 поколений/с",
  "note": "А — N4 Objects, детектор Own / Б — N4 Objects, детектор Disk. Связная неподвижная фигура из 17 клеток (центр (11.7647, 11.7647), R = 5.32962) и отдельный blinker (9,14)-(9,16) внутри её круга; 12 с, 6 поколений/с. А — детектор Own (только свои клетки), Б — детектор Disk (круг); остальные параметры одинаковы. Фигуры не сливаются и эволюционируют независимо: blinker даёт четыре изменения за поколение внутри круга приёмника, сам приёмник не меняется.",
- "status": "pinned",
+ "status": "local",
  "scene": {
   "format": 2,
   "id": "n4_neighbor",
@@ -185,6 +184,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 0,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -193,6 +193,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -205,6 +206,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 0,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -213,6 +215,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -222,6 +225,7 @@
    "A": {
     "ca_object_resonators": {
      "detector": 0,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -229,6 +233,7 @@
    "B": {
     "ca_object_resonators": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -337,6 +342,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 0,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -345,6 +351,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -444,6 +451,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 0,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -452,6 +460,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -461,6 +470,7 @@
    "A": {
     "ca_object_resonators": {
      "detector": 0,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -468,6 +478,7 @@
    "B": {
     "ca_object_resonators": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -478,6 +489,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 0,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -486,6 +498,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -1112,6 +1125,7 @@
    "engine_id": "ca_object_resonators",
    "engine_params": {
     "detector": 0,
+    "radius_mul": 1.0,
     "frequency_scale": 220.0,
     "decay_s": 0.8
    }
@@ -1120,6 +1134,7 @@
    "engine_id": "ca_object_resonators",
    "engine_params": {
     "detector": 1,
+    "radius_mul": 1.0,
     "frequency_scale": 220.0,
     "decay_s": 0.8
    }
@@ -1216,6 +1231,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 0,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -1224,6 +1240,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -1233,6 +1250,7 @@
    "A": {
     "ca_object_resonators": {
      "detector": 0,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -1240,6 +1258,7 @@
    "B": {
     "ca_object_resonators": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -1250,6 +1269,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 0,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
@@ -1258,6 +1278,7 @@
     "engine_id": "ca_object_resonators",
     "engine_params": {
      "detector": 1,
+     "radius_mul": 1.0,
      "frequency_scale": 220.0,
      "decay_s": 0.8
     }
