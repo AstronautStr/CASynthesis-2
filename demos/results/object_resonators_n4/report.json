@@ -1,0 +1,1085 @@
+{
+ "generated": "2026-09-16 20:54:23",
+ "commit": "27bf753",
+ "scenes": [
+  {
+   "id": "n4_spectrum",
+   "title": "N4.1 - Спектр самой фигуры: glider, 6 поколений/с",
+   "engines": {
+    "A": "ca_tuned_events",
+    "B": "ca_object_resonators"
+   },
+   "params": {
+    "A": {
+     "field_tuning": 1,
+     "decay_s": 0.8
+    },
+    "B": {
+     "detector": 1,
+     "frequency_scale": 220.0,
+     "decay_s": 0.8
+    }
+   },
+   "A": {
+    "rms_db": -42.35717930869114,
+    "peak": 0.041261024811548204,
+    "peak_db": -27.689199790721638,
+    "clip_blocks": 0,
+    "finite": true,
+    "tail_rms_db": [
+     -45.670658798343254,
+     -115.85406840311839,
+     -600.0
+    ]
+   },
+   "B": {
+    "rms_db": -40.105708312948174,
+    "peak": 0.05609302041688284,
+    "peak_db": -25.02182348183213,
+    "clip_blocks": 0,
+    "finite": true,
+    "preflight_rms_db": -40.0965833084095,
+    "preflight_peak": 0.05611146604971274,
+    "rms_diff_db": -0.009125004538674375,
+    "ids_seen": [
+     1
+    ],
+    "f_low_values": [
+     183.699916,
+     220.0
+    ],
+    "tail_rms_db": [
+     -57.40711816804607,
+     -600.0,
+     -600.0
+    ],
+    "tails_after_clear_4s": 0
+   },
+   "a_minus_b_db": -2.251470995742963,
+   "block_ms": {
+    "p50": 0.269199998001568,
+    "p99": 0.7193710020510473,
+    "max": 0.981999997748062,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "continue": {
+    "exact": true,
+    "field_changed": true
+   },
+   "late_edit": {
+    "A": {
+     "differs": true,
+     "max_abs_diff": 0.0575884273812067
+    },
+    "B": {
+     "differs": true,
+     "max_abs_diff": 0.30472731711783196
+    }
+   }
+  },
+  {
+   "id": "n4_neighbor",
+   "title": "N4.2 - Фигура слышит соседа: неподвижная фигура + blinker, 6 поколений/с",
+   "engines": {
+    "A": "ca_object_resonators",
+    "B": "ca_object_resonators"
+   },
+   "params": {
+    "A": {
+     "detector": 0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.8
+    },
+    "B": {
+     "detector": 1,
+     "frequency_scale": 220.0,
+     "decay_s": 0.8
+    }
+   },
+   "A": {
+    "rms_db": -35.5577684964588,
+    "peak": 0.08172856837672048,
+    "peak_db": -21.752522169314176,
+    "clip_blocks": 0,
+    "finite": true,
+    "preflight_rms_db": -35.535787435952834,
+    "preflight_peak": 0.08173796626909544,
+    "rms_diff_db": -0.021981060505964933,
+    "ids_seen": [
+     1,
+     2
+    ],
+    "f_low_values": [
+     80.849788
+    ],
+    "tail_rms_db": [
+     -52.59807090467756,
+     -600.0,
+     -600.0
+    ],
+    "tails_after_clear_4s": 0
+   },
+   "B": {
+    "rms_db": -35.20411995258142,
+    "peak": 0.08545182653279214,
+    "peak_db": -21.36557299598959,
+    "clip_blocks": 0,
+    "finite": true,
+    "preflight_rms_db": -35.17794739931033,
+    "preflight_peak": 0.08548218287160615,
+    "rms_diff_db": -0.026172553271095467,
+    "ids_seen": [
+     1,
+     2
+    ],
+    "f_low_values": [
+     80.849788
+    ],
+    "tail_rms_db": [
+     -52.311858175944856,
+     -600.0,
+     -600.0
+    ],
+    "tails_after_clear_4s": 0
+   },
+   "a_minus_b_db": -0.35364854387737665,
+   "block_ms": {
+    "p50": 0.19229997997172177,
+    "p99": 1.0570180119248103,
+    "max": 1.777699973899871,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "continue": {
+    "exact": true,
+    "field_changed": true
+   },
+   "late_edit": {
+    "A": {
+     "differs": true,
+     "max_abs_diff": 0.30475783562730796
+    },
+    "B": {
+     "differs": true,
+     "max_abs_diff": 0.30472731711783196
+    }
+   }
+  }
+ ],
+ "receiver": {
+  "own": {
+   "receiver_e_per_gen": [
+    0.0
+   ],
+   "blinker_e_per_gen": [
+    4.0
+   ],
+   "receiver_centre": [
+    11.764705882352942,
+    11.764705882352942
+   ],
+   "receiver_radius": 5.329619525881508,
+   "receiver_modes": 16,
+   "receiver_f_low": 80.84978783929087,
+   "n_figures": 2,
+   "rms_db": -35.55179652599507
+  },
+  "disk": {
+   "receiver_e_per_gen": [
+    4.0
+   ],
+   "blinker_e_per_gen": [
+    4.0
+   ],
+   "receiver_centre": [
+    11.764705882352942,
+    11.764705882352942
+   ],
+   "receiver_radius": 5.329619525881508,
+   "receiver_modes": 16,
+   "receiver_f_low": 80.84978783929087,
+   "n_figures": 2,
+   "rms_db": -35.198394513688875
+  },
+  "disk_minus_own_rel_own_db": -11.05988555147227,
+  "disk_vs_own_total_db": 0.35340201230619783,
+  "receiver_e_after_blinker_moved_outside": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "glider": {
+  "ids_seen": [
+   1
+  ],
+  "distinct_spectra": 2,
+  "spectra_hz": [
+   [
+    183.699916,
+    258.625511,
+    418.464867,
+    456.348924
+   ],
+   [
+    220.0,
+    311.126984,
+    440.0,
+    491.934955
+   ]
+  ],
+  "alternating_every_generation": true,
+  "generations": 383,
+  "rms_db": -35.99398309807158,
+  "peak": 0.06651993269709823,
+  "cache_misses": 4,
+  "cache_hits": 380
+ },
+ "limits": [
+  {
+   "detector": 0,
+   "frequency_scale": 55.0,
+   "decay_s": 0.2,
+   "mode": "dense_random_evolving",
+   "gain": 0.04,
+   "block_ms_p99": 10.485742978635248,
+   "block_ms_max": 13.81589999073185,
+   "A": {
+    "rms_db": -21.206464741174045,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.077075092806713,
+    "clip_blocks": 2,
+    "finite": true,
+    "n_figures": 13,
+    "n_sounding": 12,
+    "n_tails": 20,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 21
+   },
+   "B": {
+    "rms_db": -21.206464741174045,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.077075092806713,
+    "clip_blocks": 2,
+    "finite": true,
+    "n_figures": 13,
+    "n_sounding": 12,
+    "n_tails": 20,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 21
+   }
+  },
+  {
+   "detector": 0,
+   "frequency_scale": 55.0,
+   "decay_s": 0.2,
+   "mode": "random_every_block",
+   "gain": 0.04,
+   "block_ms_p99": 80.02320001891349,
+   "block_ms_max": 97.4885999748949,
+   "A": {
+    "rms_db": -17.90652845104733,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.2190405303676128,
+    "clip_blocks": 18,
+    "finite": true,
+    "n_figures": 5,
+    "n_sounding": 3,
+    "n_tails": 96,
+    "evictions": 2266,
+    "drops": 159,
+    "unvoiced_blocks": 13
+   },
+   "B": {
+    "rms_db": -17.90652845104733,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.2190405303676128,
+    "clip_blocks": 18,
+    "finite": true,
+    "n_figures": 5,
+    "n_sounding": 3,
+    "n_tails": 96,
+    "evictions": 2266,
+    "drops": 159,
+    "unvoiced_blocks": 13
+   }
+  },
+  {
+   "detector": 0,
+   "frequency_scale": 55.0,
+   "decay_s": 0.2,
+   "mode": "full_toggle_every_block",
+   "gain": 0.04,
+   "block_ms_p99": 5.719433016784024,
+   "block_ms_max": 7.214199984446168,
+   "A": {
+    "rms_db": -29.77768657632815,
+    "peak": 0.1480758079775384,
+    "peak_db": -16.59031777894327,
+    "pre_clip_peak": 0.16432418620276903,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 0,
+    "n_sounding": 0,
+    "n_tails": 31,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   },
+   "B": {
+    "rms_db": -29.77768657632815,
+    "peak": 0.1480758079775384,
+    "peak_db": -16.59031777894327,
+    "pre_clip_peak": 0.16432418620276903,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 0,
+    "n_sounding": 0,
+    "n_tails": 31,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "detector": 0,
+   "frequency_scale": 55.0,
+   "decay_s": 0.2,
+   "mode": "repeated_edits_paused",
+   "gain": 0.04,
+   "block_ms_p99": 36.62077298737131,
+   "block_ms_max": 43.299200013279915,
+   "A": {
+    "rms_db": -38.58812739779557,
+    "peak": 0.1619312112796411,
+    "peak_db": -15.813388709907771,
+    "pre_clip_peak": 0.16195001449864477,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 2,
+    "n_sounding": 1,
+    "n_tails": 1,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   },
+   "B": {
+    "rms_db": -38.58812739779557,
+    "peak": 0.1619312112796411,
+    "peak_db": -15.813388709907771,
+    "pre_clip_peak": 0.16195001449864477,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 2,
+    "n_sounding": 1,
+    "n_tails": 1,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "detector": 0,
+   "frequency_scale": 55.0,
+   "decay_s": 0.2,
+   "mode": "knobs_moving",
+   "gain": 0.04,
+   "block_ms_p99": 12.74261699552881,
+   "block_ms_max": 13.98769998922944,
+   "A": {
+    "rms_db": -20.28472787167641,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.2103687019760991,
+    "clip_blocks": 4,
+    "finite": true,
+    "n_figures": 18,
+    "n_sounding": 16,
+    "n_tails": 75,
+    "evictions": 3,
+    "drops": 0,
+    "unvoiced_blocks": 110
+   },
+   "B": {
+    "rms_db": -20.28472787167641,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.2103687019760991,
+    "clip_blocks": 4,
+    "finite": true,
+    "n_figures": 18,
+    "n_sounding": 16,
+    "n_tails": 75,
+    "evictions": 3,
+    "drops": 0,
+    "unvoiced_blocks": 110
+   }
+  },
+  {
+   "detector": 0,
+   "frequency_scale": 880.0,
+   "decay_s": 1.5,
+   "mode": "dense_random_evolving",
+   "gain": 0.04,
+   "block_ms_p99": 19.298381011467438,
+   "block_ms_max": 22.617399983573705,
+   "A": {
+    "rms_db": -25.043879140176024,
+    "peak": 0.5149693288979766,
+    "peak_db": -5.764372727410235,
+    "pre_clip_peak": 0.5149900766908267,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 26,
+    "n_sounding": 20,
+    "n_tails": 96,
+    "evictions": 341,
+    "drops": 0,
+    "unvoiced_blocks": 83
+   },
+   "B": {
+    "rms_db": -25.043879140176024,
+    "peak": 0.5149693288979766,
+    "peak_db": -5.764372727410235,
+    "pre_clip_peak": 0.5149900766908267,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 26,
+    "n_sounding": 20,
+    "n_tails": 96,
+    "evictions": 341,
+    "drops": 0,
+    "unvoiced_blocks": 83
+   }
+  },
+  {
+   "detector": 0,
+   "frequency_scale": 880.0,
+   "decay_s": 1.5,
+   "mode": "random_every_block",
+   "gain": 0.04,
+   "block_ms_p99": 78.85015199542977,
+   "block_ms_max": 82.85020000766963,
+   "A": {
+    "rms_db": -20.143757950262223,
+    "peak": 0.5893429364909818,
+    "peak_db": -4.592638345861345,
+    "pre_clip_peak": 0.5893511313377894,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 4,
+    "n_sounding": 1,
+    "n_tails": 96,
+    "evictions": 2267,
+    "drops": 164,
+    "unvoiced_blocks": 18
+   },
+   "B": {
+    "rms_db": -20.143757950262223,
+    "peak": 0.5893429364909818,
+    "peak_db": -4.592638345861345,
+    "pre_clip_peak": 0.5893511313377894,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 4,
+    "n_sounding": 1,
+    "n_tails": 96,
+    "evictions": 2267,
+    "drops": 164,
+    "unvoiced_blocks": 18
+   }
+  },
+  {
+   "detector": 0,
+   "frequency_scale": 880.0,
+   "decay_s": 1.5,
+   "mode": "full_toggle_every_block",
+   "gain": 0.04,
+   "block_ms_p99": 6.350795988400932,
+   "block_ms_max": 9.45410001440905,
+   "A": {
+    "rms_db": -29.81525597666758,
+    "peak": 0.15598010193182166,
+    "peak_db": -16.13861600372924,
+    "pre_clip_peak": 0.21989501531532474,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 0,
+    "n_sounding": 0,
+    "n_tails": 96,
+    "evictions": 286,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   },
+   "B": {
+    "rms_db": -29.81525597666758,
+    "peak": 0.15598010193182166,
+    "peak_db": -16.13861600372924,
+    "pre_clip_peak": 0.21989501531532474,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 0,
+    "n_sounding": 0,
+    "n_tails": 96,
+    "evictions": 286,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "detector": 0,
+   "frequency_scale": 880.0,
+   "decay_s": 1.5,
+   "mode": "repeated_edits_paused",
+   "gain": 0.04,
+   "block_ms_p99": 44.95716798934155,
+   "block_ms_max": 49.61489999550395,
+   "A": {
+    "rms_db": -38.36392328560636,
+    "peak": 0.09646900845362713,
+    "peak_db": -20.312243706042384,
+    "pre_clip_peak": 0.0964807404940966,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 4,
+    "n_sounding": 4,
+    "n_tails": 15,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   },
+   "B": {
+    "rms_db": -38.36392328560636,
+    "peak": 0.09646900845362713,
+    "peak_db": -20.312243706042384,
+    "pre_clip_peak": 0.0964807404940966,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 4,
+    "n_sounding": 4,
+    "n_tails": 15,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "detector": 0,
+   "frequency_scale": 880.0,
+   "decay_s": 1.5,
+   "mode": "knobs_moving",
+   "gain": 0.04,
+   "block_ms_p99": 12.063888015400153,
+   "block_ms_max": 13.544200017349795,
+   "A": {
+    "rms_db": -20.39083032894842,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.125829896902441,
+    "clip_blocks": 4,
+    "finite": true,
+    "n_figures": 26,
+    "n_sounding": 23,
+    "n_tails": 66,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 39
+   },
+   "B": {
+    "rms_db": -20.39083032894842,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.125829896902441,
+    "clip_blocks": 4,
+    "finite": true,
+    "n_figures": 26,
+    "n_sounding": 23,
+    "n_tails": 66,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 39
+   }
+  },
+  {
+   "detector": 1,
+   "frequency_scale": 55.0,
+   "decay_s": 0.2,
+   "mode": "dense_random_evolving",
+   "gain": 0.04,
+   "block_ms_p99": 10.710097993141973,
+   "block_ms_max": 12.307299999520183,
+   "A": {
+    "rms_db": -21.226737641634486,
+    "peak": 0.9751579332865383,
+    "peak_db": -0.21850083474134163,
+    "pre_clip_peak": 1.0717056821028093,
+    "clip_blocks": 2,
+    "finite": true,
+    "n_figures": 19,
+    "n_sounding": 19,
+    "n_tails": 24,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 84
+   },
+   "B": {
+    "rms_db": -21.226737641634486,
+    "peak": 0.9751579332865383,
+    "peak_db": -0.21850083474134163,
+    "pre_clip_peak": 1.0717056821028093,
+    "clip_blocks": 2,
+    "finite": true,
+    "n_figures": 19,
+    "n_sounding": 19,
+    "n_tails": 24,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 84
+   }
+  },
+  {
+   "detector": 1,
+   "frequency_scale": 55.0,
+   "decay_s": 0.2,
+   "mode": "random_every_block",
+   "gain": 0.04,
+   "block_ms_p99": 78.07721499004401,
+   "block_ms_max": 84.52999999281019,
+   "A": {
+    "rms_db": -17.995269187484972,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.173378642073566,
+    "clip_blocks": 15,
+    "finite": true,
+    "n_figures": 8,
+    "n_sounding": 6,
+    "n_tails": 96,
+    "evictions": 2253,
+    "drops": 158,
+    "unvoiced_blocks": 9
+   },
+   "B": {
+    "rms_db": -17.995269187484972,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.173378642073566,
+    "clip_blocks": 15,
+    "finite": true,
+    "n_figures": 8,
+    "n_sounding": 6,
+    "n_tails": 96,
+    "evictions": 2253,
+    "drops": 158,
+    "unvoiced_blocks": 9
+   }
+  },
+  {
+   "detector": 1,
+   "frequency_scale": 55.0,
+   "decay_s": 0.2,
+   "mode": "full_toggle_every_block",
+   "gain": 0.04,
+   "block_ms_p99": 5.062214985664468,
+   "block_ms_max": 5.460299988044426,
+   "A": {
+    "rms_db": -29.77768657632815,
+    "peak": 0.1480758079775384,
+    "peak_db": -16.59031777894327,
+    "pre_clip_peak": 0.1648137925035621,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 0,
+    "n_sounding": 0,
+    "n_tails": 31,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   },
+   "B": {
+    "rms_db": -29.77768657632815,
+    "peak": 0.1480758079775384,
+    "peak_db": -16.59031777894327,
+    "pre_clip_peak": 0.1648137925035621,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 0,
+    "n_sounding": 0,
+    "n_tails": 31,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "detector": 1,
+   "frequency_scale": 55.0,
+   "decay_s": 0.2,
+   "mode": "repeated_edits_paused",
+   "gain": 0.04,
+   "block_ms_p99": 45.67930600926047,
+   "block_ms_max": 49.13050000322983,
+   "A": {
+    "rms_db": -37.48994011072952,
+    "peak": 0.217261268959624,
+    "peak_db": -13.260353764093951,
+    "pre_clip_peak": 0.2172839892033671,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 2,
+    "n_sounding": 2,
+    "n_tails": 0,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   },
+   "B": {
+    "rms_db": -37.48994011072952,
+    "peak": 0.217261268959624,
+    "peak_db": -13.260353764093951,
+    "pre_clip_peak": 0.2172839892033671,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 2,
+    "n_sounding": 2,
+    "n_tails": 0,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "detector": 1,
+   "frequency_scale": 55.0,
+   "decay_s": 0.2,
+   "mode": "knobs_moving",
+   "gain": 0.04,
+   "block_ms_p99": 12.307422010926532,
+   "block_ms_max": 14.025700016645715,
+   "A": {
+    "rms_db": -20.44022340652098,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.1308254942552627,
+    "clip_blocks": 7,
+    "finite": true,
+    "n_figures": 22,
+    "n_sounding": 16,
+    "n_tails": 76,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 76
+   },
+   "B": {
+    "rms_db": -20.44022340652098,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.1308254942552627,
+    "clip_blocks": 7,
+    "finite": true,
+    "n_figures": 22,
+    "n_sounding": 16,
+    "n_tails": 76,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 76
+   }
+  },
+  {
+   "detector": 1,
+   "frequency_scale": 880.0,
+   "decay_s": 1.5,
+   "mode": "dense_random_evolving",
+   "gain": 0.04,
+   "block_ms_p99": 19.02038998581702,
+   "block_ms_max": 21.909200004301965,
+   "A": {
+    "rms_db": -25.052182056189118,
+    "peak": 0.521408734397412,
+    "peak_db": -5.656433960138347,
+    "pre_clip_peak": 0.5214271722315642,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 24,
+    "n_sounding": 20,
+    "n_tails": 96,
+    "evictions": 361,
+    "drops": 0,
+    "unvoiced_blocks": 105
+   },
+   "B": {
+    "rms_db": -25.052182056189118,
+    "peak": 0.521408734397412,
+    "peak_db": -5.656433960138347,
+    "pre_clip_peak": 0.5214271722315642,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 24,
+    "n_sounding": 20,
+    "n_tails": 96,
+    "evictions": 361,
+    "drops": 0,
+    "unvoiced_blocks": 105
+   }
+  },
+  {
+   "detector": 1,
+   "frequency_scale": 880.0,
+   "decay_s": 1.5,
+   "mode": "random_every_block",
+   "gain": 0.04,
+   "block_ms_p99": 79.71483800502028,
+   "block_ms_max": 84.81269999174401,
+   "A": {
+    "rms_db": -20.36112765126607,
+    "peak": 0.6601763969847713,
+    "peak_db": -3.606800137603141,
+    "pre_clip_peak": 0.6601918988722707,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 2,
+    "n_sounding": 1,
+    "n_tails": 96,
+    "evictions": 2253,
+    "drops": 169,
+    "unvoiced_blocks": 17
+   },
+   "B": {
+    "rms_db": -20.36112765126607,
+    "peak": 0.6601763969847713,
+    "peak_db": -3.606800137603141,
+    "pre_clip_peak": 0.6601918988722707,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 2,
+    "n_sounding": 1,
+    "n_tails": 96,
+    "evictions": 2253,
+    "drops": 169,
+    "unvoiced_blocks": 17
+   }
+  },
+  {
+   "detector": 1,
+   "frequency_scale": 880.0,
+   "decay_s": 1.5,
+   "mode": "full_toggle_every_block",
+   "gain": 0.04,
+   "block_ms_p99": 6.4613179879961535,
+   "block_ms_max": 9.154600003967062,
+   "A": {
+    "rms_db": -29.815183260806318,
+    "peak": 0.15594958342234566,
+    "peak_db": -16.140315620139724,
+    "pre_clip_peak": 0.2206174493353462,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 0,
+    "n_sounding": 0,
+    "n_tails": 96,
+    "evictions": 286,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   },
+   "B": {
+    "rms_db": -29.815183260806318,
+    "peak": 0.15594958342234566,
+    "peak_db": -16.140315620139724,
+    "pre_clip_peak": 0.2206174493353462,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 0,
+    "n_sounding": 0,
+    "n_tails": 96,
+    "evictions": 286,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "detector": 1,
+   "frequency_scale": 880.0,
+   "decay_s": 1.5,
+   "mode": "repeated_edits_paused",
+   "gain": 0.04,
+   "block_ms_p99": 43.50389399885901,
+   "block_ms_max": 48.293500003637746,
+   "A": {
+    "rms_db": -37.196823682300895,
+    "peak": 0.11175878170110172,
+    "peak_db": -19.034366823520426,
+    "pre_clip_peak": 0.11178487892912455,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 3,
+    "n_sounding": 2,
+    "n_tails": 12,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   },
+   "B": {
+    "rms_db": -37.196823682300895,
+    "peak": 0.11175878170110172,
+    "peak_db": -19.034366823520426,
+    "pre_clip_peak": 0.11178487892912455,
+    "clip_blocks": 0,
+    "finite": true,
+    "n_figures": 3,
+    "n_sounding": 2,
+    "n_tails": 12,
+    "evictions": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "detector": 1,
+   "frequency_scale": 880.0,
+   "decay_s": 1.5,
+   "mode": "knobs_moving",
+   "gain": 0.04,
+   "block_ms_p99": 12.836846011632591,
+   "block_ms_max": 14.442100015003234,
+   "A": {
+    "rms_db": -20.494183102005632,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.1308556231058662,
+    "clip_blocks": 5,
+    "finite": true,
+    "n_figures": 18,
+    "n_sounding": 14,
+    "n_tails": 73,
+    "evictions": 4,
+    "drops": 0,
+    "unvoiced_blocks": 120
+   },
+   "B": {
+    "rms_db": -20.494183102005632,
+    "peak": 1.0,
+    "peak_db": 0.0,
+    "pre_clip_peak": 1.1308556231058662,
+    "clip_blocks": 5,
+    "finite": true,
+    "n_figures": 18,
+    "n_sounding": 14,
+    "n_tails": 73,
+    "evictions": 4,
+    "drops": 0,
+    "unvoiced_blocks": 120
+   }
+  }
+ ],
+ "tails": {
+  "figures": 48,
+  "sounding": 24,
+  "after_cycles": {
+   "tails": 96,
+   "fading": 24,
+   "evictions": 96,
+   "drops": 72
+  },
+  "after_3s_silence": {
+   "tails": 0,
+   "fading": 0
+  },
+  "peak": 2.564704644207198,
+  "finite": true
+ },
+ "analysis_cost": [
+  {
+   "cells": 64,
+   "spectrum_ms": 0.3899000003002584,
+   "over_budget": false
+  },
+  {
+   "cells": 121,
+   "spectrum_ms": 0.8202000171877444,
+   "over_budget": false
+  },
+  {
+   "cells": 256,
+   "spectrum_ms": 6.745899998350069,
+   "over_budget": false
+  },
+  {
+   "cells": 529,
+   "spectrum_ms": 33.253700006753206,
+   "over_budget": true
+  },
+  {
+   "cells": 1024,
+   "spectrum_ms": 92.34699999797158,
+   "over_budget": true
+  }
+ ],
+ "timing": {
+  "n4_spectrum": {
+   "p50": 0.20559999393299222,
+   "p95": 0.5785999761428643,
+   "p99": 0.697145982994698,
+   "max": 1.3532000011764467,
+   "budget": 7.98185941043084,
+   "ok": true
+  },
+  "n4_neighbor": {
+   "p50": 0.19725000311154872,
+   "p95": 0.5582299883826555,
+   "p99": 1.100377996917814,
+   "max": 1.414500002283603,
+   "budget": 7.98185941043084,
+   "ok": true
+  },
+  "numba": true
+ },
+ "catalog_root": "C:\\Users\\Astro\\Documents\\Projects\\CASynth-2\\lab_catalog\\object_resonators_n4_2026_09_16",
+ "catalog": [
+  {
+   "rid": "20260916-203922-cbe78b",
+   "title": "N4.2 - Фигура слышит соседа: неподвижная фигура + blinker, 6 поколений/с",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - В А после стартового хвоста о"
+  },
+  {
+   "rid": "20260916-203922-b08ea2",
+   "title": "N4.1 - Спектр самой фигуры: glider, 6 поколений/с",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - В Б спектр принадлежит глайде"
+  }
+ ],
+ "problems": {
+  "scenes": [],
+  "stress": []
+ },
+ "summary": {
+  "scenes": "no clipping, no NaN, levels within 0.5 dB of the preflight, tails decay, late edits change the sound, receiver Own 0 / Disk 4 per generation and 0 outside the circle, glider one identity with two alternating spectra, continuation exact, all records replay exactly",
+  "stress": "finite in all 20 probes; clipping at gain 0.04 in 8 probes and hard drops in 4 (listed under limitations); worst pre-clip peak 1.219",
+  "limitations": [
+   "stress clipping at gain 0.04 (vol 1) in 8 of 20 probes, none in the scenes (peaks <= 0.09): dense_random_evolving det 0 scale 55 decay 0.2: pre-clip peak 1.08, 2 clipped blocks; random_every_block det 0 scale 55 decay 0.2: pre-clip peak 1.22, 18 clipped blocks; knobs_moving det 0 scale 55 decay 0.2: pre-clip peak 1.21, 4 clipped blocks; knobs_moving det 0 scale 880 decay 1.5: pre-clip peak 1.13, 4 clipped blocks; dense_random_evolving det 1 scale 55 decay 0.2: pre-clip peak 1.07, 2 clipped blocks; random_every_block det 1 scale 55 decay 0.2: pre-clip peak 1.17, 15 clipped blocks; knobs_moving det 1 scale 55 decay 0.2: pre-clip peak 1.13, 7 clipped blocks; knobs_moving det 1 scale 880 decay 1.5: pre-clip peak 1.13, 5 clipped blocks. No AGC and no division by the figure count by the REQ; the only common lever is the N4 output x0.5",
+   "hard drops (the fading pool of 24 full: the quietest fading tail zeroed at once, counted and shown as 'dropped') only under whole-field replacement every block: random_every_block det 0 scale 55: 159 dropped (shown in the panel); random_every_block det 0 scale 880: 164 dropped (shown in the panel); random_every_block det 1 scale 55: 158 dropped (shown in the panel); random_every_block det 1 scale 880: 169 dropped (shown in the panel)",
+   "16 of 20 stress probes exceed the block budget at p99 (worst 80.0 ms, modes ['dense_random_evolving', 'knobs_moving', 'random_every_block', 'repeated_edits_paused']): the figure analysis (eigvalsh) of dense fields on the render thread -- offline exact, live underruns possible",
+   "tails probe (48 blinkers cleared / re-added 8 times within 16 blocks): 72 hard drops, 96 faded, all freed after 3 s of silence",
+   "N4.1 level: A (N3 Tuned) - B (N4 Disk) = -2.25 dB RMS at the same bench gain; no scene parameter acts on one side only, the only lever would be the N4 output x0.5 (kept at the preflight value; the preflight numbers are reproduced)",
+   "figure analysis (eigvalsh of L) runs on the render thread at every field change: 64 cells 0 ms, 121 cells 1 ms, 256 cells 7 ms, 529 cells 33 ms, 1024 cells 92 ms -- a component above ~300 cells exceeds the block budget by itself (the two scenes: <= 17 cells)",
+   "worst stress pre-clip peak 1.219 at gain 0.04 (random_every_block, detector 0, scale 55, decay 0.2 s): measured for these finite probes, not guaranteed for any playing",
+   "split / merge retire identities (first model): the Tumbler and the R-pentomino change colours often",
+   "tails are measured on the float output (int16 quantises below -90 dBFS to zero)",
+   "no listening in this report: hearing the difference is the user's verdict"
+  ]
+ }
+}

@@ -451,6 +451,55 @@ both modes, through a decay ramp).  Measurements:
 control probes, stress probes at gain 0.04, timing, catalog check; the summary
 keeps scenes and stress probes apart and lists the limitations).
 
+## N4 -- every figure a resonator bank of its own Laplacian (2026-09-16)
+
+REQ `memory/req-object-resonators-n4-2026-09-16.md`: one NEW engine
+`ca_object_resonators` ("Objects", `casynth_lab/object_resonators.py`, geometry
+in `casynth_lab/figures.py`).  Every 8-connected figure of the field (across the
+torus seam) owns a bank of up to 24 decaying complex resonators at
+`f_j = frequency_scale * sqrt(lambda_j)` of its own Laplacian `L = D - A` (full
+8-connectivity graph, zero mode dropped, multiplicities kept, no crop / decimation,
+matrix built from the canonical placement so the same shape anywhere gives the
+same eigenvalues bit for bit).  At a block boundary where the field changed:
+components are matched to the tracked figures (overlap graph; split / merge retire
+the old ones to tails and give new identities; zero-overlap continuation by a
+centre displacement <= 1.5 cells), then
+`e = sum(births * K_cur) + sum(deaths * K_prev)` (new figure: births in K_cur),
+`a = e / (e + 2)` into the N2 pulse pair of the figure's slot.  `K` = the detector:
+Disk (default) = every cell within `R = max torus distance centre -> cell` of the
+periodic centre of mass (boundary included, no hidden margin, one cell -> R 0), Own =
+the figure's cells; circles are not normalised against each other.  Mode j -> mode
+j on retune, new modes from zero, vanished modes ring on undriven, weights 1 / n
+ramp 20 ms; panning cos / sin of `cx / (cols - 1)` (ramp 20 ms); sum of all slots ->
+HP 20 Hz -> x0.5 -> bench gain (ramp 20 ms); no AGC, no division by the count.
+Slots: 24 banks + 96 tails + 24 fading (quiet tails released, the quietest faded
+when full, hard drops counted); "sounding X of Y" in the panel.  Controls:
+`Detector` Own / Disk (masks of the next events, no packet), `Freq scale` 55..880
+(retunes every slot, states kept), `Decay` 0.20..1.50 s (r ramp 20 ms).  Only SR
+44100 / block 352 / stereo.  Snapshot = every slot array + the tracker (ids, slots,
+cells, centres, radii) + both fields + ramps + DC filters + gain; Continue byte-exact.
+Bench: the LISTENED side's figures come from the engine's `display()` (the same
+geometry the audio uses): cells, circle (continued across the seam) and centre in
+one stable colour per id; Own = outlined cells + a dotted reference circle; a figure
+panel (id, cells, modes, lowest Hz, packet bar, level tick).  The static overlays of
+the other engines are unchanged.
+
+Entry: **`run_object_resonators_n4.bat`** opens the bench on the CATALOG screen of
+`lab_catalog/object_resonators_n4_2026_09_16/` (build once with
+`python demos/build_n4_objects.py`; refuses a catalog that holds records).  Records
+(32 x 32 torus, B3/S23, 6 gen/s, 12 s, cells = the preflight
+`memory/research/object-resonators-n4-preflight-2026-09-16.json`): N4.1
+`n4_spectrum` glider from (28, 28) across the seam, A = N3 `ca_tuned_events` (Field,
+decay 0.8), B = N4 Disk; N4.2 `n4_neighbor` a still 17-cell figure (centre (11.7647,
+11.7647), R 5.32962) + a blinker inside its circle, A = N4 Own, B = N4 Disk.  Gates:
+`tests/test_n4_object_resonators.py` (1l; the sample path against an independent
+scalar reference within 1e-12 through every ramp).  Measurements:
+`python demos/n4_objects_report.py` -> `demos/results/object_resonators_n4/report.{json,md}`
+(scenes against the preflight, the receiver's packets per generation, Disk - Own,
+glider identity / phases, tails, continuation, late edits, stress probes at gain
+0.04, the analysis cost by figure size, timing, catalog check; the summary keeps
+scenes and stress apart and lists the limitations).
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B

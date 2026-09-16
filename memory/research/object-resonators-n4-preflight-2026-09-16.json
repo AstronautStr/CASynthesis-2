@@ -1,0 +1,971 @@
+{
+  "status": "Researcher scratch preflight, not production or listening validation",
+  "sr": 44100,
+  "block": 352,
+  "duration_s": 12,
+  "rate_hz": 6,
+  "freq_scale_hz": 220,
+  "T60_s": 0.8,
+  "pulse": "N2 0.25/2 ms, 0.75, a=e/(e+2)",
+  "bank": "complex damped resonators, mean modes, sum voices, HP20",
+  "limits": "Prototype matches unique actual cell overlap; no final tracking fallback, gain/pan ramps, resource limits or live snapshots implemented. Numbers are not production acceptance.",
+  "cases": {
+    "glider": {
+      "parts": [
+        [
+          "Glider",
+          [
+            28,
+            28
+          ]
+        ]
+      ],
+      "cells": [
+        [
+          28,
+          29
+        ],
+        [
+          29,
+          30
+        ],
+        [
+          30,
+          28
+        ],
+        [
+          30,
+          29
+        ],
+        [
+          30,
+          30
+        ]
+      ],
+      "modes": {
+        "own": {
+          "raw_rms_db": -3.0191440219742556,
+          "raw_peak": 4.007961860693767,
+          "neighbor_events": 0,
+          "diagnostic_generations": [
+            {
+              "gen": 0,
+              "groups": 1,
+              "own_events": 5,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 1,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 2,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 3,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 4,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 5,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 6,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 7,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 8,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 9,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 10,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 11,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 12,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 13,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 14,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 15,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            }
+          ],
+          "rms_at_scale_0p5_gain_0p028_db": -40.0965833084095,
+          "peak_at_scale_0p5_gain_0p028": 0.05611146604971274
+        },
+        "disk": {
+          "raw_rms_db": -3.0191440219742556,
+          "raw_peak": 4.007961860693767,
+          "neighbor_events": 0,
+          "diagnostic_generations": [
+            {
+              "gen": 0,
+              "groups": 1,
+              "own_events": 5,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 1,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 2,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 3,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 4,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 5,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 6,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 7,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 8,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 9,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 10,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 11,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 12,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 13,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 14,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            },
+            {
+              "gen": 15,
+              "groups": 1,
+              "own_events": 4,
+              "neighbor_events": 0,
+              "receivers": []
+            }
+          ],
+          "rms_at_scale_0p5_gain_0p028_db": -40.0965833084095,
+          "peak_at_scale_0p5_gain_0p028": 0.05611146604971274
+        }
+      },
+      "difference_vs_own_db": -300.0
+    },
+    "neighbors": {
+      "receiver": "elongated stable boat (explicit cells, no external pattern attribution)",
+      "receiver_cells": [
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          9
+        ],
+        [
+          9,
+          8
+        ],
+        [
+          9,
+          10
+        ],
+        [
+          10,
+          9
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          11,
+          10
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          12,
+          11
+        ],
+        [
+          12,
+          13
+        ],
+        [
+          13,
+          12
+        ],
+        [
+          13,
+          14
+        ],
+        [
+          14,
+          13
+        ],
+        [
+          14,
+          15
+        ],
+        [
+          15,
+          14
+        ],
+        [
+          15,
+          16
+        ],
+        [
+          16,
+          15
+        ]
+      ],
+      "source": "Blinker",
+      "source_cells": [
+        [
+          9,
+          14
+        ],
+        [
+          9,
+          15
+        ],
+        [
+          9,
+          16
+        ]
+      ],
+      "cells": [
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          9
+        ],
+        [
+          9,
+          8
+        ],
+        [
+          9,
+          10
+        ],
+        [
+          9,
+          14
+        ],
+        [
+          9,
+          15
+        ],
+        [
+          9,
+          16
+        ],
+        [
+          10,
+          9
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          11,
+          10
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          12,
+          11
+        ],
+        [
+          12,
+          13
+        ],
+        [
+          13,
+          12
+        ],
+        [
+          13,
+          14
+        ],
+        [
+          14,
+          13
+        ],
+        [
+          14,
+          15
+        ],
+        [
+          15,
+          14
+        ],
+        [
+          15,
+          16
+        ],
+        [
+          16,
+          15
+        ]
+      ],
+      "receiver_center_rc": [
+        11.764705882352942,
+        11.764705882352942
+      ],
+      "receiver_radius": 5.329619525881508,
+      "receiver_frequencies_hz": [
+        80.84978783929087,
+        158.94633312234726,
+        231.63015166603665,
+        296.4260832044851,
+        313.7645677105659,
+        333.61501953804986,
+        351.12758000330535,
+        367.78385935014614,
+        393.8718481962274,
+        408.7901938171005,
+        423.2032829960404,
+        438.1230375698152,
+        450.03508440570243,
+        486.56702810524376,
+        514.9136463398108,
+        532.7882429317874
+      ],
+      "receiver_stable": true,
+      "ca_evolution_equals_separate_figures": true,
+      "sources_remain_disconnected": true,
+      "events_in_receiver_disk_by_generation": [
+        20,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4
+      ],
+      "modes": {
+        "own": {
+          "raw_rms_db": 1.541651850482411,
+          "raw_peak": 5.838426162078245,
+          "rms_at_scale_0p5_gain_0p028_db": -35.535787435952834,
+          "peak_at_scale_0p5_gain_0p028": 0.08173796626909544
+        },
+        "disk": {
+          "raw_rms_db": 1.8994918871249136,
+          "raw_peak": 6.105870205114725,
+          "rms_at_scale_0p5_gain_0p028_db": -35.17794739931033,
+          "peak_at_scale_0p5_gain_0p028": 0.08548218287160615
+        }
+      },
+      "difference_vs_own_db": -11.013910970012917,
+      "reference_method": "Constant-frequency scipy.signal.lfilter, finite impulse truncation at 4000 samples (<exp(-45)); no live tracking or gain ramps. 72 generations at first 352-sample boundary at/after t/6."
+    }
+  },
+  "rejected_neighbor_candidate": {
+    "parts": [
+      [
+        "Figure-8",
+        [
+          8,
+          8
+        ]
+      ],
+      [
+        "Blinker",
+        [
+          15,
+          7
+        ]
+      ],
+      [
+        "Blinker",
+        [
+          8,
+          14
+        ]
+      ]
+    ],
+    "cells": [
+      [
+        8,
+        8
+      ],
+      [
+        8,
+        9
+      ],
+      [
+        8,
+        10
+      ],
+      [
+        8,
+        14
+      ],
+      [
+        8,
+        15
+      ],
+      [
+        8,
+        16
+      ],
+      [
+        9,
+        8
+      ],
+      [
+        9,
+        9
+      ],
+      [
+        9,
+        10
+      ],
+      [
+        10,
+        8
+      ],
+      [
+        10,
+        9
+      ],
+      [
+        10,
+        10
+      ],
+      [
+        11,
+        11
+      ],
+      [
+        11,
+        12
+      ],
+      [
+        11,
+        13
+      ],
+      [
+        12,
+        11
+      ],
+      [
+        12,
+        12
+      ],
+      [
+        12,
+        13
+      ],
+      [
+        13,
+        11
+      ],
+      [
+        13,
+        12
+      ],
+      [
+        13,
+        13
+      ],
+      [
+        15,
+        7
+      ],
+      [
+        15,
+        8
+      ],
+      [
+        15,
+        9
+      ]
+    ],
+    "modes": {
+      "own": {
+        "raw_rms_db": 9.478204174491303,
+        "raw_peak": 15.595480562830687,
+        "neighbor_events": 18,
+        "diagnostic_generations": [
+          {
+            "gen": 0,
+            "groups": 3,
+            "own_events": 24,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 1,
+            "groups": 3,
+            "own_events": 28,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 2,
+            "groups": 3,
+            "own_events": 14,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 3,
+            "groups": 5,
+            "own_events": 18,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 4,
+            "groups": 3,
+            "own_events": 20,
+            "neighbor_events": 2,
+            "receivers": [
+              {
+                "size": 26,
+                "own": 12,
+                "extra": 2
+              }
+            ]
+          },
+          {
+            "gen": 5,
+            "groups": 7,
+            "own_events": 12,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 6,
+            "groups": 7,
+            "own_events": 22,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 7,
+            "groups": 6,
+            "own_events": 14,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 8,
+            "groups": 3,
+            "own_events": 18,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 9,
+            "groups": 3,
+            "own_events": 28,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 10,
+            "groups": 3,
+            "own_events": 14,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 11,
+            "groups": 5,
+            "own_events": 18,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 12,
+            "groups": 3,
+            "own_events": 20,
+            "neighbor_events": 2,
+            "receivers": [
+              {
+                "size": 26,
+                "own": 12,
+                "extra": 2
+              }
+            ]
+          },
+          {
+            "gen": 13,
+            "groups": 7,
+            "own_events": 12,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 14,
+            "groups": 7,
+            "own_events": 22,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 15,
+            "groups": 6,
+            "own_events": 14,
+            "neighbor_events": 0,
+            "receivers": []
+          }
+        ]
+      },
+      "disk": {
+        "raw_rms_db": 9.47893787662271,
+        "raw_peak": 15.595480573296472,
+        "neighbor_events": 18,
+        "diagnostic_generations": [
+          {
+            "gen": 0,
+            "groups": 3,
+            "own_events": 24,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 1,
+            "groups": 3,
+            "own_events": 28,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 2,
+            "groups": 3,
+            "own_events": 14,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 3,
+            "groups": 5,
+            "own_events": 18,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 4,
+            "groups": 3,
+            "own_events": 20,
+            "neighbor_events": 2,
+            "receivers": [
+              {
+                "size": 26,
+                "own": 12,
+                "extra": 2
+              }
+            ]
+          },
+          {
+            "gen": 5,
+            "groups": 7,
+            "own_events": 12,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 6,
+            "groups": 7,
+            "own_events": 22,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 7,
+            "groups": 6,
+            "own_events": 14,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 8,
+            "groups": 3,
+            "own_events": 18,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 9,
+            "groups": 3,
+            "own_events": 28,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 10,
+            "groups": 3,
+            "own_events": 14,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 11,
+            "groups": 5,
+            "own_events": 18,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 12,
+            "groups": 3,
+            "own_events": 20,
+            "neighbor_events": 2,
+            "receivers": [
+              {
+                "size": 26,
+                "own": 12,
+                "extra": 2
+              }
+            ]
+          },
+          {
+            "gen": 13,
+            "groups": 7,
+            "own_events": 12,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 14,
+            "groups": 7,
+            "own_events": 22,
+            "neighbor_events": 0,
+            "receivers": []
+          },
+          {
+            "gen": 15,
+            "groups": 6,
+            "own_events": 14,
+            "neighbor_events": 0,
+            "receivers": []
+          }
+        ]
+      }
+    },
+    "difference_vs_own_db": -59.795346756331014,
+    "ca_evolution_equals_separate_figures": true,
+    "sources_remain_disconnected": true,
+    "reason": "Difference only -59.8 dB relative to own: reject for user-facing test."
+  },
+  "suggested_output_scale": 0.5,
+  "bench_gain": 0.028
+}
