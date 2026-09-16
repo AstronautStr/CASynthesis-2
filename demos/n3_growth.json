@@ -1,0 +1,56 @@
+{
+ "format": 2,
+ "id": "n3_growth",
+ "title": "N3.3 - Рост: R-pentomino, 6 поколений/с",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   14,
+   15
+  ],
+  [
+   14,
+   16
+  ],
+  [
+   15,
+   14
+  ],
+  [
+   15,
+   15
+  ],
+  [
+   16,
+   15
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 6.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0
+ },
+ "variants": {
+  "A": {
+   "engine_id": "ca_tuned_events",
+   "engine_params": {
+    "field_tuning": 0,
+    "decay_s": 0.8
+   }
+  },
+  "B": {
+   "engine_id": "ca_tuned_events",
+   "engine_params": {
+    "field_tuning": 1,
+    "decay_s": 0.8
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: А — удары, фиксированные резонансы / Б — удары + настройка от поля. Notes: hypothesis and your listening result. Draw, pause and run the CA on either side."
+}

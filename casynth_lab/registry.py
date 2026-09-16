@@ -152,3 +152,5 @@ from . import gutter_controls    # noqa: E402,F401
 # N2 (2026-09-16): the periodic-readout Gutter (A) and the event-driven delay network (B).
 from . import gutter_field_periodic    # noqa: E402,F401
 from . import event_network            # noqa: E402,F401
+# N3 (2026-09-16): the field tunes the resonances, its events strike them.
+from . import tuned_events             # noqa: E402,F401

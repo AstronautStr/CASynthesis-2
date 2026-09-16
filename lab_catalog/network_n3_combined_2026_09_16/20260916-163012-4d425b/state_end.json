@@ -1,0 +1,266 @@
+{
+ "snapshot_file_version": 1,
+ "state": {
+  "version": 1,
+  "scene": {
+   "format": 2,
+   "id": "n3_travel",
+   "title": "N3.2 - Движение: glider, 16 поколений/с",
+   "grid": {
+    "rows": 32,
+    "cols": 32
+   },
+   "cells": [
+    [
+     28,
+     29
+    ],
+    [
+     29,
+     30
+    ],
+    [
+     30,
+     28
+    ],
+    [
+     30,
+     29
+    ],
+    [
+     30,
+     30
+    ]
+   ],
+   "rule": "B3/S23",
+   "boundary": "torus",
+   "rate_hz": 16.0,
+   "audio": {
+    "f0_hz": 110.0,
+    "level": 1.0
+   },
+   "variants": {
+    "A": {
+     "engine_id": "ca_tuned_events",
+     "engine_params": {
+      "field_tuning": 0,
+      "decay_s": 0.8
+     }
+    },
+    "B": {
+     "engine_id": "ca_tuned_events",
+     "engine_params": {
+      "field_tuning": 1,
+      "decay_s": 0.8
+     }
+    }
+   },
+   "initial_side": "A",
+   "listen": "1 / 2: А — удары, фиксированные резонансы / Б — удары + настройка от поля. Notes: hypothesis and your listening result. Draw, pause and run the CA on either side."
+  },
+  "ctx": {
+   "sr": 44100,
+   "block": 352,
+   "channels": 2,
+   "f0": 110.0,
+   "level": 1.0,
+   "rate_hz": 16.0
+  },
+  "grid": {
+   "__array__": "grid"
+  },
+  "exc": {
+   "__array__": "exc"
+  },
+  "gen": 191,
+  "out_samples": 529408,
+  "t_samples": 529408,
+  "ca_samples": 529408,
+  "running": true,
+  "paused": false,
+  "vol": 0.7,
+  "selected": "A",
+  "xfade_from": null,
+  "xfade_pos": 0,
+  "seq": 1,
+  "pending": [],
+  "memory": {
+   "A": {
+    "ca_tuned_events": {
+     "field_tuning": 0,
+     "decay_s": 0.8
+    }
+   },
+   "B": {
+    "ca_tuned_events": {
+     "field_tuning": 1,
+     "decay_s": 0.8
+    }
+   }
+  },
+  "sides": {
+   "A": {
+    "engine_id": "ca_tuned_events",
+    "params": {
+     "field_tuning": 0,
+     "decay_s": 0.8
+    },
+    "peak": 0.031396660216445306,
+    "clip_blocks": 0,
+    "engine_state_version": 1,
+    "engine": {
+     "version": 1,
+     "engine_id": "ca_tuned_events",
+     "model_version": "ca_tuned_events_n3_v1",
+     "params": {
+      "field_tuning": 0,
+      "decay_s": 0.8
+     },
+     "sr": 44100,
+     "block": 352,
+     "gain_prev": 0.11199999999999999,
+     "out_scale": 4.0,
+     "rho": 0.88,
+     "grid_pending": {
+      "__array__": "sides.A.engine.grid_pending"
+     },
+     "grid_prev": {
+      "__array__": "sides.A.engine.grid_prev"
+     },
+     "ring": {
+      "__array__": "sides.A.engine.ring"
+     },
+     "D": {
+      "__array__": "sides.A.engine.D"
+     },
+     "lfilt": {
+      "__array__": "sides.A.engine.lfilt"
+     },
+     "zf": {
+      "__array__": "sides.A.engine.zf"
+     },
+     "zs": {
+      "__array__": "sides.A.engine.zs"
+     },
+     "M": {
+      "__array__": "sides.A.engine.M"
+     },
+     "ints": {
+      "__array__": "sides.A.engine.ints"
+     },
+     "rr": {
+      "__array__": "sides.A.engine.rr"
+     },
+     "zre": {
+      "__array__": "sides.A.engine.zre"
+     },
+     "zim": {
+      "__array__": "sides.A.engine.zim"
+     },
+     "ffreq": {
+      "__array__": "sides.A.engine.ffreq"
+     },
+     "hp": {
+      "__array__": "sides.A.engine.hp"
+     },
+     "last_e": {
+      "__array__": "sides.A.engine.last_e"
+     },
+     "last_a": {
+      "__array__": "sides.A.engine.last_a"
+     },
+     "level": {
+      "__array__": "sides.A.engine.level"
+     },
+     "ratio": {
+      "__array__": "sides.A.engine.ratio"
+     },
+     "counts": {
+      "__array__": "sides.A.engine.counts"
+     }
+    }
+   },
+   "B": {
+    "engine_id": "ca_tuned_events",
+    "params": {
+     "field_tuning": 1,
+     "decay_s": 0.8
+    },
+    "peak": 0.023899619238850776,
+    "clip_blocks": 0,
+    "engine_state_version": 1,
+    "engine": {
+     "version": 1,
+     "engine_id": "ca_tuned_events",
+     "model_version": "ca_tuned_events_n3_v1",
+     "params": {
+      "field_tuning": 1,
+      "decay_s": 0.8
+     },
+     "sr": 44100,
+     "block": 352,
+     "gain_prev": 0.11199999999999999,
+     "out_scale": 4.0,
+     "rho": 0.88,
+     "grid_pending": {
+      "__array__": "sides.B.engine.grid_pending"
+     },
+     "grid_prev": {
+      "__array__": "sides.B.engine.grid_prev"
+     },
+     "ring": {
+      "__array__": "sides.B.engine.ring"
+     },
+     "D": {
+      "__array__": "sides.B.engine.D"
+     },
+     "lfilt": {
+      "__array__": "sides.B.engine.lfilt"
+     },
+     "zf": {
+      "__array__": "sides.B.engine.zf"
+     },
+     "zs": {
+      "__array__": "sides.B.engine.zs"
+     },
+     "M": {
+      "__array__": "sides.B.engine.M"
+     },
+     "ints": {
+      "__array__": "sides.B.engine.ints"
+     },
+     "rr": {
+      "__array__": "sides.B.engine.rr"
+     },
+     "zre": {
+      "__array__": "sides.B.engine.zre"
+     },
+     "zim": {
+      "__array__": "sides.B.engine.zim"
+     },
+     "ffreq": {
+      "__array__": "sides.B.engine.ffreq"
+     },
+     "hp": {
+      "__array__": "sides.B.engine.hp"
+     },
+     "last_e": {
+      "__array__": "sides.B.engine.last_e"
+     },
+     "last_a": {
+      "__array__": "sides.B.engine.last_a"
+     },
+     "level": {
+      "__array__": "sides.B.engine.level"
+     },
+     "ratio": {
+      "__array__": "sides.B.engine.ratio"
+     },
+     "counts": {
+      "__array__": "sides.B.engine.counts"
+     }
+    }
+   }
+  }
+ }
+}

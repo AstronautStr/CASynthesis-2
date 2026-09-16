@@ -646,7 +646,7 @@ def test_registry_ui_hints_and_scene_validation():
     runner = DemoRunner(scene)
     eng = LiveEngine(runner, sink=lambda m, b: None)
     app = db.BenchApp(scene, eng)
-    assert app.engine_rows == 5 and len(app.engine_btns) == 13
+    assert app.engine_rows == 5 and len(app.engine_btns) == 14
     ys = sorted({r[1] for r in app.engine_btns.values()})
     assert len(ys) == 5 and app.params_y > ys[-1] + db.ENG_H
     assert app.footer_y >= app.params_y + 7 * db.ROW_H

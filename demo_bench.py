@@ -854,7 +854,9 @@ class BenchApp:
         the target as a tick, frozen / gate state; gutter_field: the held
         control vector u per node as bars, the field's own u as a tick, the
         frequency ratio, links / resets; ca_event_network: the last event
-        packet per node as bars, the response level as a tick, rho)."""
+        packet per node as bars, the response level as a tick, rho;
+        ca_tuned_events: the packet as bars, the bank level as a tick, the
+        frequency multiplier, tuning mode and decay)."""
         import pygame
         if not disp:
             return
@@ -873,6 +875,27 @@ class BenchApp:
                 tx = bar_x + int(bar_w * min(uf, 1.0))
                 pygame.draw.line(screen, C_TXT, (tx, ry - 2), (tx, ry + 10), 1)
                 screen.blit(small.render(f"x{disp['ratio'][k]:.3f}", True, C_TXT),
+                            (bar_x + bar_w + 8, ry - 3))
+            return
+        if 'tuning' in disp:
+            # N3 ca_tuned_events: the last packet a_i per node (bar), the bank level
+            # max |b_i| of the last block (tick, /5), the node's frequency multiplier,
+            # the tuning mode and the decay (with its 20 ms ramp)
+            mode = "field" if disp.get('tuning') else "fixed"
+            ramp = "  (ramping)" if int(disp.get('ramp_left', 0)) > 0 else ""
+            screen.blit(small.render(f"Nodes: events a | bank |b|   tuning {mode}   decay "
+                                     f"{float(disp.get('decay_s', 0.0)):.2f} s{ramp}", True, C_DIM), (x, y))
+            bar_x, bar_w = x + 44, 150
+            for k in range(len(disp['events'])):
+                ry = y + 18 + k * DISPLAY_ROW_H
+                a, lv = float(disp['events'][k]), float(disp['level'][k])
+                screen.blit(small.render(f"{k} ({disp['counts'][k]})", True, C_DIM), (x, ry - 2))
+                pygame.draw.rect(screen, C_EDGE, (bar_x, ry, bar_w, 8), border_radius=3)
+                pygame.draw.rect(screen, C_ACCENT, (bar_x, ry, int(bar_w * min(a, 1.0)), 8),
+                                 border_radius=3)
+                tx = bar_x + int(bar_w * min(lv / 5.0, 1.0))
+                pygame.draw.line(screen, C_TXT, (tx, ry - 2), (tx, ry + 10), 1)
+                screen.blit(small.render(f"x{float(disp['ratio'][k]):.3f}  a {a:.2f}", True, C_TXT),
                             (bar_x + bar_w + 8, ry - 3))
             return
         if 'events' in disp:
