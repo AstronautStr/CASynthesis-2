@@ -1,0 +1,57 @@
+{
+ "format": 2,
+ "id": "n2_growth",
+ "title": "N2.3 - Рост: R-pentomino, 6 поколений/с",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   14,
+   15
+  ],
+  [
+   14,
+   16
+  ],
+  [
+   15,
+   14
+  ],
+  [
+   15,
+   15
+  ],
+  [
+   16,
+   15
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 6.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0
+ },
+ "variants": {
+  "A": {
+   "engine_id": "gutter_field_periodic",
+   "engine_params": {
+    "scale": 1.0,
+    "depth": 1.0,
+    "interaction": 127,
+    "freeze_ca": 0
+   }
+  },
+  "B": {
+   "engine_id": "ca_event_network",
+   "engine_params": {
+    "rho": 0.88
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: А — поле меняет частоты / Б — события возбуждают сеть. Notes: hypothesis and your listening result. Draw, pause and run the CA on either side."
+}

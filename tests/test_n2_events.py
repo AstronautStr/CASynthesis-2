@@ -449,5 +449,134 @@ class EventNetworkTests(unittest.TestCase):
         self.assertLess(float(np.percentile(times[100:], 99)), 0.5 * BLOCK / SR * 1000.0)
 
 
+class BenchTests(unittest.TestCase):
+    def test_headless_draw_overlay_and_display_for_both_sides(self):
+        import time
+        import pygame
+        import demo_bench as db
+        from casynth_lab import DemoRunner, load_scene
+        from casynth_lab.audio_out import LiveEngine
+        scene = load_scene(os.path.join(ROOT, 'demos', 'n2_rhythm.json'))
+        runner = DemoRunner(scene)
+        eng = LiveEngine(runner, sink=lambda m, b: None)
+        pygame.init()
+        app = db.BenchApp(scene, eng)
+        self.assertEqual(app.engine_rows, 5)
+        self.assertIn(en.ENGINE_ID, app.engine_btns)
+        self.assertIn(gp.ENGINE_ID, app.engine_btns)
+        self.assertGreater(app.height - app.footer_y, 40)
+        for eid, params in ((gp.ENGINE_ID, GUTTER_PARAMS), (en.ENGINE_ID, dict(rho=0.88))):
+            data = app._overlay_runs(eid, params)
+            self.assertEqual(data['lines'], [])
+            self.assertEqual(len(data['circles']), 16)
+            self.assertEqual(len(data['labels']), 8)
+            self.assertTrue(data['text'])
+        screen = pygame.Surface((app.width, app.height))
+        font, small = pygame.font.SysFont(db.FONT_NAMES, 17), pygame.font.SysFont(db.FONT_NAMES, 14)
+        eng.start()
+        try:
+            app.draw(screen, font, small)
+            snap = eng.snapshot()
+            self.assertEqual(snap['display']['A']['readout'], 'periodic')
+            self.assertIn('events', snap['display']['B'])
+            eng.post('select', side='B')
+            t0 = time.time()
+            while time.time() - t0 < 5 and eng.snapshot()['selected'] != 'B':
+                time.sleep(0.02)
+            self.assertEqual(eng.snapshot()['selected'], 'B')
+            app.draw(screen, font, small)
+            app._draw_display(screen, small, dict(events=[0.5] * 8, e=[1.0] * 8, level=[0.1] * 8,
+                                                  rho=0.7, rho_target=0.9, ramp_left=100, model='x'),
+                              app.panel_x, app.params_y + 4 * db.ROW_H + 6)
+        finally:
+            eng.stop()
+            pygame.quit()
+
+
+class CatalogTests(unittest.TestCase):
+    def test_scenes_periods_and_events_match_the_req(self):
+        from casynth_engine import step
+        from demos.build_n2_events import CASES, scene_for, write_scenes
+        import json
+        pf_path = os.path.join(ROOT, 'memory', 'research', 'network-n2-preflight-2026-09-16.json')
+        pf = json.load(open(pf_path, encoding='utf-8')) if os.path.isfile(pf_path) else None
+        names = dict(pulse='n2_rhythm', travel='n2_travel', growth='n2_growth')
+        want = dict(n2_rhythm=(3, 6.0, (32, 56)), n2_travel=(128, 16.0, (4, 4)), n2_growth=(None, 6.0, None))
+        for case in CASES:
+            doc = scene_for(case)
+            path = os.path.join(ROOT, 'demos', case['id'] + '.json')
+            self.assertEqual(json.load(open(path, encoding='utf-8')), doc)
+            self.assertEqual((doc['variants']['A']['engine_id'], doc['variants']['B']['engine_id']),
+                             (gp.ENGINE_ID, en.ENGINE_ID))
+            self.assertEqual(doc['variants']['B']['engine_params'], dict(rho=0.88))
+            self.assertEqual(doc['variants']['A']['engine_params'],
+                             dict(scale=1.0, depth=1.0, interaction=127, freeze_ca=0))
+            g = grid(case['cells'])
+            period, rate, ev_range = want[case['id']]
+            self.assertEqual(case['rate'], rate)
+            seen = {g.tobytes(): 0}
+            cur, events, pops = g, [], [int(g.sum())]
+            found = None
+            for gen in range(1, 130):
+                nxt = step(cur)
+                events.append(int((nxt != cur).sum()))
+                pops.append(int(nxt.sum()))
+                if found is None and nxt.tobytes() in seen:
+                    found = gen - seen[nxt.tobytes()]
+                seen.setdefault(nxt.tobytes(), gen)
+                cur = nxt
+            self.assertEqual(found, period, case['id'])
+            if ev_range:
+                self.assertEqual((min(events[:72]), max(events[:72])), ev_range)
+            if case['id'] == 'n2_growth':
+                self.assertEqual((pops[72], events[72]), (71, 66))
+            if pf:
+                ref = next(c for c in pf['cases'] if names[c['id']] == case['id'])
+                self.assertEqual(sorted(map(tuple, ref['cells'])), sorted(map(tuple, case['cells'])))
+        with open(os.path.join(ROOT, 'run_network_n2.bat'), encoding='ascii') as f:
+            bat = f.read()
+        self.assertIn('n2_rhythm.json', bat)
+        self.assertIn('network_n2_events_2026_09_16', bat)
+        self.assertNotIn('--live', bat)
+
+    def test_catalog_build_replay_continue_notes_and_no_overwrite(self):
+        from casynth_lab import DemoRunner, scene_from_doc
+        from casynth_lab.catalog import Catalog
+        from demos.build_n1_demos import record_offline
+        from demos.build_n2_events import CASES, scene_for, build
+        os.makedirs(ART, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=ART) as tmp:
+            cat = Catalog(tmp, repo_root=None)
+            firsts = []
+            for case in CASES:
+                doc = scene_for(case)
+                rid, snap = record_offline(cat, doc, 0.5, [], case['title'], case['note'])
+                self.assertEqual(snap['clip_blocks'], dict(A=0, B=0))
+                cat.write_notes(rid, case['hypothesis'] + '\n\nUser feedback: test.')
+                rec = cat.load(rid)
+                self.assertTrue(rec.notes.startswith('Гипотеза - '))
+                result = cat.replay(rid, yield_cpu=False)
+                self.assertEqual(result.status, 'match', result.reason)
+                continued, state, _ = cat.continue_runner(rid)
+                control = DemoRunner(scene_from_doc(doc))
+                control.post('start', at=0)
+                for _ in range(math.ceil(0.5 * SR / BLOCK)):
+                    control.next_block()
+                gen0 = continued.gen
+                first = None
+                for _ in range(40):
+                    a, b = continued.next_block(), control.next_block()
+                    for s in ('A', 'B', 'monitor'):
+                        np.testing.assert_array_equal(a.get(s), b.get(s))
+                    if first is None:
+                        first = a.B.tobytes()
+                self.assertGreater(continued.gen, gen0)                  # the CA keeps evolving
+                firsts.append(first)
+                with self.assertRaises(SystemExit):
+                    build(tmp)
+                self.assertIn('User feedback: test.', cat.load(rid).notes)
+            self.assertEqual(len(set(firsts)), len(CASES))
+
+
 if __name__ == '__main__':
     unittest.main()

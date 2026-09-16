@@ -853,7 +853,8 @@ class BenchApp:
         """Engine display numbers (pm_network: six link depths W as bars,
         the target as a tick, frozen / gate state; gutter_field: the held
         control vector u per node as bars, the field's own u as a tick, the
-        frequency ratio, links / resets)."""
+        frequency ratio, links / resets; ca_event_network: the last event
+        packet per node as bars, the response level as a tick, rho)."""
         import pygame
         if not disp:
             return
@@ -872,6 +873,26 @@ class BenchApp:
                 tx = bar_x + int(bar_w * min(uf, 1.0))
                 pygame.draw.line(screen, C_TXT, (tx, ry - 2), (tx, ry + 10), 1)
                 screen.blit(small.render(f"x{disp['ratio'][k]:.3f}", True, C_TXT),
+                            (bar_x + bar_w + 8, ry - 3))
+            return
+        if 'events' in disp:
+            # N2 ca_event_network: the last packet a_i per node (bar), the response
+            # level max |l_i| of the last block (tick, x4), rho and its ramp
+            rho, tgt = float(disp.get('rho', 0.0)), float(disp.get('rho_target', 0.0))
+            arrow = f" -> {tgt:.2f}" if int(disp.get('ramp_left', 0)) > 0 else ""
+            screen.blit(small.render(f"Nodes: events a | response |l|   rho {rho:.2f}{arrow}",
+                                     True, C_DIM), (x, y))
+            bar_x, bar_w = x + 44, 150
+            for k in range(len(disp['events'])):
+                ry = y + 18 + k * DISPLAY_ROW_H
+                a, lv = float(disp['events'][k]), float(disp['level'][k])
+                screen.blit(small.render(f"{k}", True, C_DIM), (x, ry - 2))
+                pygame.draw.rect(screen, C_EDGE, (bar_x, ry, bar_w, 8), border_radius=3)
+                pygame.draw.rect(screen, C_ACCENT, (bar_x, ry, int(bar_w * min(a, 1.0)), 8),
+                                 border_radius=3)
+                tx = bar_x + int(bar_w * min(lv * 4.0, 1.0))
+                pygame.draw.line(screen, C_TXT, (tx, ry - 2), (tx, ry + 10), 1)
+                screen.blit(small.render(f"a {a:.2f}  |l| {lv:.3f}", True, C_TXT),
                             (bar_x + bar_w + 8, ry - 3))
             return
         if 'W' not in disp:
