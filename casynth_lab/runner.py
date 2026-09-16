@@ -41,7 +41,8 @@ XFADE_MS = 20.0                    # A/B switch crossfade (output mixer only)
 XFADE_SAMPLES = int(round(XFADE_MS / 1000.0 * SR))   # 882
 COMMANDS = ('start', 'stop', 'pause', 'set_cell', 'reset', 'vol',
             'select', 'set_param', 'set_engine', 'copy_side', 'factory',
-            'clear', 'set_cells')      # 2026-09-16: Clear button, pattern drop
+            'clear', 'set_cells',      # 2026-09-16: Clear button, pattern drop
+            'copy_spectrum')           # 2026-09-17: the shared spectrum settings only
 RUNNER_STATE_VERSION = 1           # export_state() / from_state() format
 
 # re-exported for callers that only import the runner
@@ -179,12 +180,17 @@ class DemoRunner:
         self.paused = True             # a stopped scene stands on pause
         self.step_samples = SR / sc.rate_hz
         for s in self.sides.values():
-            s.restart(self.grid, self.exc, self._gain())
+            s.restart(self.grid, self.exc, self._side_gain(s.name))
         self._xfade_from = None
         self._xfade_pos = 0
 
     def _gain(self):
         return MASTER_GAIN * self.vol * self.scene.level
+
+    def _side_gain(self, name):
+        """The pre-clip gain of one side: the bench gain times the scene's
+        optional per-side calibration (1.0 when absent)."""
+        return self._gain() * self.scene.side_gain.get(name, 1.0)
 
     def _field_changed(self):
         for s in self.sides.values():
@@ -208,10 +214,19 @@ class DemoRunner:
             side = args.get('side')
             if side not in SIDES:
                 raise ValueError(f"unknown side {side!r} (expected A or B)")
-        if kind == 'copy_side':
+        if kind in ('copy_side', 'copy_spectrum'):
             src, dst = args.get('src'), args.get('dst')
             if src not in SIDES or dst not in SIDES or src == dst:
-                raise ValueError(f"copy_side: need two different sides, got {src!r}->{dst!r}")
+                raise ValueError(f"{kind}: need two different sides, got {src!r}->{dst!r}")
+        if kind == 'copy_spectrum':
+            # the engines the sides WILL have when applied (queued set_engine counts)
+            eids = {n: self.sides[n].engine_id for n in (args['src'], args['dst'])}
+            for _seq, _at, k, a in self._pending:
+                if k == 'set_engine' and a['side'] in eids:
+                    eids[a['side']] = a['engine_id']
+            if not registry.spectrum_keys(eids[args['src']], eids[args['dst']]):
+                raise ValueError(f"copy_spectrum: {registry.label(eids[args['src']])} and "
+                                 f"{registry.label(eids[args['dst']])} share no spectrum settings")
         if kind == 'set_engine':
             if args.get('engine_id') not in registry.REGISTRY:
                 raise ValueError(f"unknown engine {args.get('engine_id')!r} "
@@ -324,6 +339,18 @@ class DemoRunner:
         elif kind == 'copy_side':
             src = self.sides[args['src']]
             self._set_side(self.sides[args['dst']], src.engine_id, src.params)
+        elif kind == 'copy_spectrum':
+            # only the spectrum settings both engines offer; engines and every
+            # other setting of the destination stay (no engine restart)
+            src, dst = self.sides[args['src']], self.sides[args['dst']]
+            keys = registry.spectrum_keys(src.engine_id, dst.engine_id)
+            if keys:
+                params = dict(dst.params)
+                for k in keys:
+                    params[k] = validate_param(dst.engine_id, k, src.params[k])
+                if params != dst.params:
+                    dst.set_params(params)
+                    self._memory[(dst.name, dst.engine_id)] = dict(dst.params)
         elif kind == 'factory':
             for name in SIDES:
                 eid, params = self.scene.factory_variants[name]
@@ -337,7 +364,7 @@ class DemoRunner:
         if eid == s.engine_id:
             s.set_params(params)
         else:
-            s.switch(eid, params, self.grid, self.exc, self._gain())
+            s.switch(eid, params, self.grid, self.exc, self._side_gain(s.name))
             if s.name == self.selected:
                 self._begin_xfade(None)
         self._memory[(s.name, eid)] = dict(s.params)
@@ -388,8 +415,8 @@ class DemoRunner:
             return Block(z, z.copy(), z.copy())
         if not self.paused and self.ca_samples >= (self.gen + 1) * self.step_samples:
             self._step()
-        gain = self._gain()
-        raw = {name: self.sides[name].render(gain, self.t_samples) for name in SIDES}
+        raw = {name: self.sides[name].render(self._side_gain(name), self.t_samples)
+               for name in SIDES}
         mon = self._mix_monitor(raw)
         self.out_samples += BLOCK
         self.t_samples += BLOCK

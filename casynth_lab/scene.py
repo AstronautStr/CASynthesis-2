@@ -61,6 +61,10 @@ class Scene:
         self.engine_id, self.engine_params = self.variants['A']
         self.f0_hz = float(d['audio']['f0_hz'])
         self.level = float(d['audio'].get('level', 1.0))
+        # optional per-side level calibration (2026-09-17): a constant factor on the
+        # side's pre-clip gain, absent = 1.0 (older scenes / records: bit-exact)
+        sg = d['audio'].get('side_gain') or {}
+        self.side_gain = {k: float(sg.get(k, 1.0)) for k in SIDES}
 
     def initial_grid(self):
         g = np.zeros((self.rows, self.cols), np.uint8)
@@ -152,6 +156,13 @@ def validate(d):
     lvl = a.get('level', 1.0)
     if not (isinstance(lvl, (int, float)) and 0.0 <= lvl <= 1.0):
         _fail(f"scene: audio.level must be within [0, 1], got {lvl!r}")
+    sg = a.get('side_gain')
+    if sg is not None:
+        if not isinstance(sg, dict) or any(k not in SIDES for k in sg):
+            _fail("scene: audio.side_gain must be an object with keys A / B")
+        for k, v in sg.items():
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not (0.0 < v <= 16.0):
+                _fail(f"scene: audio.side_gain.{k} must be a number within (0, 16], got {v!r}")
 
 
 def _validate_engine(eid, params, where):

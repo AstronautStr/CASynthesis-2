@@ -159,10 +159,15 @@ class BenchApp:
         self.copy_btns = {('B', 'A'): (px + TAB_W + 4, py, ARROW_W, TAB_H),          # <<
                           ('A', 'B'): (px + TAB_W + ARROW_W + 8, py, ARROW_W, TAB_H)}  # >>
         self.factory_btn = (px + PANEL_W - 100, py + TAB_H + 6, 100, 22)
+        # copy spectrum (2026-09-17): only the spectrum settings both sides' engines
+        # share (n spread alpha shape harm fullshape dyn); << = B to A, >> = A to B
+        sy = py + TAB_H + 44
+        self.spec_btns = {('B', 'A'): (px, sy, 118, 20),
+                          ('A', 'B'): (px + 124, sy, 118, 20)}
         # engine buttons: 3 per row, as many rows as the registry needs; the
         # parameter rows start below the LAST row (S/N demos: 7 engines)
         self.engine_btns = {}
-        ey = py + TAB_H + 48
+        ey = sy + 26
         specs = registry.specs()
         for i, e in enumerate(specs):
             col, row = i % 3, i // 3
@@ -174,7 +179,10 @@ class BenchApp:
         # peak / message line: below the longest parameter list AND below the tallest
         # engine display (gutter_field: 4 parameter rows + a header + 8 node bars)
         self.footer_y = max(self.params_y + self.param_rows_max * ROW_H + 8,
-                            self.params_y + 4 * ROW_H + 6 + 18 + 8 * DISPLAY_ROW_H + 8)
+                            self.params_y + 4 * ROW_H + 6 + 18 + 8 * DISPLAY_ROW_H + 8,
+                            # N4 Objects: 12 parameter rows + the figure rows of its display
+                            self.params_y + self.param_rows_max * ROW_H + 6 + 34 + 8 * DISPLAY_ROW_H + 8)
+        self.height = max(self.height, self.footer_y + 44 + MARGIN)
         self.slider_x = px + 82
         # pattern library (2026-09-16): the synth's Lib sidebar -- a column
         # right of the panel; an item is dragged onto the field and dropped
@@ -300,6 +308,10 @@ class BenchApp:
                 if self._inside(rect, pos):
                     self._post('copy_side', src=src, dst=dst)
                     return f'copy:{src}{dst}'
+            for (src, dst), rect in self.spec_btns.items():
+                if self._inside(rect, pos):
+                    self._post('copy_spectrum', src=src, dst=dst)
+                    return f'spectrum:{src}{dst}'
             if self._inside(self.factory_btn, pos):
                 self._post('factory')
                 return 'factory'
@@ -596,6 +608,15 @@ class BenchApp:
                     (px, TOP_H + TAB_H + 6))
         screen.blit(small.render(describe_difference(snap['sides']), True, C_TXT),
                     (px, TOP_H + TAB_H + 24))
+        ea, eb = snap['sides']['A'][0], snap['sides']['B'][0]
+        shared = bool(registry.spectrum_keys(ea, eb))
+        for (src, dst), rect in self.spec_btns.items():
+            pygame.draw.rect(screen, C_BTN, rect, border_radius=4)
+            pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=4)
+            lbl = '<< spectrum B to A' if dst == 'A' else 'spectrum A to B >>'
+            t = small.render(lbl, True, C_TXT if shared else C_DIM)
+            screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
+                            rect[1] + (rect[3] - t.get_height()) // 2))
         for e_id, rect in self.engine_btns.items():
             on = (e_id == eid)
             pygame.draw.rect(screen, C_BTN_ON if on else C_BTN, rect, border_radius=3)
@@ -898,7 +919,8 @@ class BenchApp:
                     pygame.draw.circle(screen, col, (int(ox), int(oy)), 3)
         screen.set_clip(clip)
         t = small.render(f"sounding {disp.get('n_sounding', 0)} of {disp.get('n_figures', 0)} figures"
-                         f"   tails {disp.get('n_tails', 0)}   detector {disp.get('detector_name', '?')}",
+                         f"   tails {disp.get('n_tails', 0)}   detector {disp.get('detector_name', '?')}"
+                         f"   spectrum {disp.get('spectrum_name', '?')}",
                          True, C_DIM)
         screen.blit(t, (fx + self.field_w - t.get_width(), fy - 18))
 
@@ -919,12 +941,18 @@ class BenchApp:
             import pygame as _pg
             ramp = "  (ramping)" if int(disp.get('ramp_left', 0)) > 0 else ""
             extra = ""
-            if disp.get('drops') or disp.get('evictions'):
-                extra = f"   faded {disp.get('evictions', 0)} dropped {disp.get('drops', 0)}"
+            if disp.get('drops') or disp.get('evictions') or disp.get('inplace_fades'):
+                extra = (f"   faded {disp.get('evictions', 0)} in place {disp.get('inplace_fades', 0)}"
+                         f" dropped {disp.get('drops', 0)}")
             screen.blit(small.render(f"Figures: sounding {disp['n_sounding']} of {disp['n_figures']}"
                                      f"   tails {disp['n_tails']}{extra}", True, C_DIM), (x, y))
-            screen.blit(small.render(f"R x{float(disp.get('radius_mul', 1.0)):.2f}   scale "
-                                     f"{float(disp['frequency_scale']):.0f} Hz   decay "
+            if int(disp.get('spectrum', 0)) == 1:
+                lap = disp.get('laplace', {})
+                law = (f"Laplace f0 {float(disp.get('f0', 0.0)):.0f} Hz  n {int(lap.get('n', 0))}"
+                       f"  {'full' if int(lap.get('fullshape', 1)) else '8x8'}")
+            else:
+                law = f"scale {float(disp['frequency_scale']):.0f} Hz"
+            screen.blit(small.render(f"R x{float(disp.get('radius_mul', 1.0)):.2f}   {law}   decay "
                                      f"{float(disp['decay_s']):.2f} s{ramp}   a | level", True, C_DIM),
                         (x, y + 14))
             bar_x, bar_w = x + 98, 76

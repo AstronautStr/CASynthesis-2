@@ -10,7 +10,7 @@ Param spec tuple (same as casynth_core): (arg, label, lo, hi, integer, default).
 """
 import math
 
-from casynth_core import ENGINES as _CORE_ENGINES
+from casynth_core import ENGINES as _CORE_ENGINES, ENGINE_BY_ID as _CORE_BY_ID
 from .engine_api import EngineContext, SoundEngine   # noqa: F401  (re-export for engine modules)
 from .legacy_engine import LegacySynthEngine
 
@@ -58,6 +58,18 @@ class EngineSpec:
 
 
 REGISTRY = {}
+
+# The seven spectrum settings of the old Laplace (n spread alpha shape harm
+# fullshape dyn): engines that offer them under the same names share them
+# through the bench's "copy spectrum" command (2026-09-17).
+SPECTRUM_KEYS = tuple(p[0] for p in _CORE_BY_ID['laplacian']['params'])
+
+
+def spectrum_keys(engine_a, engine_b):
+    """The spectrum settings both engines offer (in SPECTRUM_KEYS order)."""
+    a = {p[0] for p in get(engine_a).params}
+    b = {p[0] for p in get(engine_b).params}
+    return tuple(k for k in SPECTRUM_KEYS if k in a and k in b)
 
 
 def register(spec, replace=False):
