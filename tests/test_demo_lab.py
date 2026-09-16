@@ -1247,6 +1247,81 @@ def test_text_fields_share_one_model():
         eng.stop()
 
 
+def test_pattern_library_drag_drop():
+    """2026-09-16: the bench carries the synth's pattern library (patterns.py)
+    in a column right of the panel; an item pressed there drags a ghost over
+    the field and the release drops it (torus wrap) as ONE set_cells
+    command; a release off the field or Esc cancels; the wheel scrolls the
+    column; painting still works."""
+    import pygame
+    import demo_bench as db
+    from patterns import PATTERNS
+    eng = LiveEngine(DemoRunner(SCENE_AB), sink=lambda m, b: None)
+    pygame.init()
+    app = db.BenchApp(SCENE_AB, eng)
+    assert len(app.lib_items) == sum(len(p) for _c, p in PATTERNS)
+    assert app.lib_rect[0] >= app.panel_x + db.PANEL_W
+    assert app.lib_rect[0] + app.lib_rect[2] + db.MARGIN <= app.width
+    rows, cols, cell = SCENE_AB.rows, SCENE_AB.cols, db.CELL
+    fx, fy = app.field_x, app.field_y
+    block = app.lib_items[0]
+    assert block['name'] == 'Block'
+    bx, by = block['rect'][0] + 5, block['rect'][1] + 5
+    eng.start()
+    try:
+        app.key('c')
+        assert _wait(lambda: not eng.snapshot()['grid'].any())
+        assert app.press((bx, by), 1) == 'lib:Block' and app.drag_pat is not None
+        assert app.drag_pat['snap'] is None
+        app.drag((fx + 3 * cell + 2, fy + 2 * cell + 2))            # cell (2, 3)
+        assert app.drag_pat['snap'] == (2, 3)
+        assert app.release() == 'drop:Block' and app.drag_pat is None
+        assert _wait(lambda: int(eng.snapshot()['grid'].sum()) == 4)
+        g = eng.snapshot()['grid']
+        assert g[2, 3] and g[2, 4] and g[3, 3] and g[3, 4]
+        entries = [j for j in eng.runner.journal if j[2] == 'set_cells']
+        assert len(entries) == 1 and len(entries[0][3]['cells']) == 4
+        # torus wrap at the far corner
+        app.press((bx, by), 1)
+        app.drag((fx + (cols - 1) * cell + 2, fy + (rows - 1) * cell + 2))
+        assert app.release() == 'drop:Block'
+        assert _wait(lambda: int(eng.snapshot()['grid'].sum()) == 8)
+        g = eng.snapshot()['grid']
+        assert g[rows - 1, cols - 1] and g[0, 0] and g[0, cols - 1] and g[rows - 1, 0]
+        # a release off the field cancels; so does Esc
+        app.press((bx, by), 1)
+        app.drag((app.panel_x + 5, fy + 5))
+        assert app.drag_pat['snap'] is None and app.release() is None
+        app.press((bx, by), 1)
+        app.drag((fx + 2, fy + 2))
+        assert app.key('escape') == 'drag:cancel' and app.drag_pat is None
+        assert app.release() is None
+        time.sleep(0.2)
+        assert int(eng.snapshot()['grid'].sum()) == 8
+        # the column is taller than the window: the wheel scrolls, clamped
+        assert app.lib_scroll_min < 0
+        wx, wy = app.lib_rect[0] + 5, app.lib_rect[1] + 100
+        assert app.wheel((wx, wy), -1) == 'lib:scroll' and app.lib_scroll == max(app.lib_scroll_min, -24)
+        app.wheel((wx, wy), 5)
+        assert app.lib_scroll == 0
+        assert app.press((wx, app.lib_rect[1] + 5), 1) is None    # the header: no item
+        # painting is untouched
+        assert app.press((fx + 10 * cell + 2, fy + 10 * cell + 2), 1) == 'paint'
+        app.release()
+        assert _wait(lambda: eng.snapshot()['grid'][10, 10] == 1)
+        # drawing with a ghost (headless)
+        screen = pygame.Surface((app.width, app.height))
+        font = pygame.font.SysFont(db.FONT_NAMES, 17)
+        small = pygame.font.SysFont(db.FONT_NAMES, 14)
+        app.press((bx, by), 1)
+        app.drag((fx + 5 * cell + 2, fy + 5 * cell + 2))
+        app.draw(screen, font, small)
+        app.release()
+        app.draw(screen, font, small)
+    finally:
+        eng.stop()
+
+
 def _run():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

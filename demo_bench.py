@@ -7,7 +7,10 @@
 Window: shared field, demo title + listening hint, transport (Start|Stop /
 Pause CA / Restart), volume, generation, audio state; a side panel with the
 A/B tabs (select = listen + edit), the selected side's engine and its registry
-knobs, and a one-line summary of how A and B differ.  LMB paints, RMB erases.
+knobs, and a one-line summary of how A and B differ.  LMB paints, RMB erases;
+Clear (C) empties the field; the Patterns column (patterns.py, the synth's
+library) drags Life shapes onto the field.  Every text field (save Title /
+Note, Notes) is one model: caret, selection, Ctrl+A/X/C/V.
 Startup stands on pause (silent); releasing Pause CA starts automaton + sound.
 Stop (S) = reset + pause + silence; Pause CA freezes only the automaton while
 running; Restart (R) starts again immediately.  Stop/Restart keep engines,
@@ -35,6 +38,7 @@ from casynth_lab.catalog import Catalog, CatalogError, bench_scene     # noqa: E
 from casynth_lab import provenance as prov                             # noqa: E402
 from casynth_lab.textedit import TextEdit                              # noqa: E402
 from casynth_lab.versions import VersionError                          # noqa: E402
+from patterns import PATTERNS                                          # noqa: E402
 from casynth_lab import verify as verify_mod                           # noqa: E402
 from casynth_lab.verify import (Verifier, VerifyError, TRACK_EXACT, TRACK_DIFFERS,   # noqa: E402
                                 TRACK_FAILED, TRACK_UNCHECKED, TRACK_RESULTS,
@@ -65,6 +69,15 @@ C_OK = (120, 210, 140)
 C_OVERLAY = (235, 120, 175)     # S/N demos: reading path / link masks over the field
 LAB_BTN_W = 104
 ROW_LIST_H = 50
+# pattern library (2026-09-16): a column right of the side panel, items are
+# dragged onto the field (the synth's Lib sidebar)
+LIB_W = 176
+LIB_ITEM_H = 26
+LIB_HDR_H = 18
+LIB_PREV_W, LIB_PREV_H = 30, 22
+C_GHOST = (111, 208, 224, 110)   # dragged pattern over the field (alpha)
+C_SEL = (58, 96, 138)            # text selection
+FALLBACK_CHAR_W = 7              # text metrics before a font is bound (tests)
 
 
 def _is_toggle(spec):
@@ -158,6 +171,26 @@ class BenchApp:
         self.footer_y = max(self.params_y + self.param_rows_max * ROW_H + 8,
                             self.params_y + 4 * ROW_H + 6 + 18 + 8 * DISPLAY_ROW_H + 8)
         self.slider_x = px + 82
+        # pattern library (2026-09-16): the synth's Lib sidebar -- a column
+        # right of the panel; an item is dragged onto the field and dropped
+        # (torus wrap) as ONE set_cells; Esc / a release off the field cancels
+        self.lib_x = self.panel_x + PANEL_W + MARGIN
+        self.width = max(self.width, self.lib_x + LIB_W + MARGIN)
+        self.lib_rect = (self.lib_x, TOP_H, LIB_W, self.height - TOP_H - MARGIN)
+        self.lib_items = []               # {'rect' (at scroll 0), 'cells', 'name'}
+        self.lib_heads = []               # (category, y at scroll 0)
+        y = TOP_H + 28
+        for cat, pats in PATTERNS:
+            self.lib_heads.append((cat, y))
+            y += LIB_HDR_H + 2
+            for name, cells in pats:
+                self.lib_items.append(dict(rect=(self.lib_x + 4, y, LIB_W - 8, LIB_ITEM_H),
+                                           cells=[tuple(c) for c in cells], name=name))
+                y += LIB_ITEM_H + 2
+        self.lib_scroll = 0
+        self.lib_scroll_min = min(0, (self.lib_rect[1] + self.lib_rect[3] - 4) - y)
+        self.drag_pat = None              # {'item', 'cells', 'name', 'snap'} while dragging
+        self._ghost = None                # alpha surface of one ghost cell (made in draw)
 
     # -- helpers -------------------------------------------------------------
     @staticmethod
@@ -237,6 +270,13 @@ class BenchApp:
                     else:
                         self.open_catalog()
                     return key
+        if button == 1 and self._inside(self.lib_rect, pos) and pos[1] >= self.lib_rect[1] + 28:
+            for it in self.lib_items:
+                x, y, w, h = it['rect']
+                if self._inside((x, y + self.lib_scroll, w, h), pos):
+                    self.drag_pat = dict(item=it, cells=it['cells'], name=it['name'], snap=None)
+                    return f"lib:{it['name']}"
+            return None
         if button == 1:
             for key, (rect, _label) in self.buttons.items():
                 if self._inside(rect, pos):
@@ -295,6 +335,8 @@ class BenchApp:
         if self.drag_text is not None:
             edit, rect = self.drag_text
             self._caret_from_pos(edit, rect, pos, shift=True)
+        elif self.drag_pat is not None:
+            self.drag_pat['snap'] = self.cell_at(pos)
         elif self.drag_vol:
             self._set_vol(pos[0])
         elif self.drag_param is not None:
@@ -334,6 +376,9 @@ class BenchApp:
                 self.set_version(v)
                 return f'version:{v}'
             return None
+        if name == 'escape' and self.drag_pat is not None:
+            self.cancel_drag()
+            return 'drag:cancel'
         if name == 'r':
             self._post('reset')
             return 'reset'
@@ -353,10 +398,18 @@ class BenchApp:
         return None
 
     def release(self):
+        """Mouse button up: ends painting / slider / text drags; a dragged
+        pattern is dropped where it last snapped (off the field = cancelled)."""
         self.paint_value = None
         self.drag_vol = False
         self.drag_param = None
         self.drag_text = None
+        if self.drag_pat is not None:
+            d, self.drag_pat = self.drag_pat, None
+            if d['snap'] is not None:
+                self.stamp(d['cells'], d['snap'])
+                return f"drop:{d['name']}"
+        return None
 
     def _paint(self, cell):
         self._post('set_cell', r=cell[0], c=cell[1], v=self.paint_value)
@@ -381,6 +434,67 @@ class BenchApp:
         if v != params[self.drag_param]:
             self._post('set_param', side=side, name=self.drag_param,
                        value=validate_param(eid, self.drag_param, v))
+
+    # -- pattern library -------------------------------------------------------
+    def stamp(self, cells, at):
+        """Set a pattern's live cells (offsets from its top-left corner) at
+        cell `at` = (row, col) -- the field is a torus.  One command."""
+        r0, c0 = at
+        rows, cols = self.scene.rows, self.scene.cols
+        return self._post('set_cells', cells=[[(r0 + dr) % rows, (c0 + dc) % cols, 1]
+                                              for dr, dc in cells])
+
+    def cancel_drag(self):
+        self.drag_pat = None
+
+    def _draw_library(self, screen, font, small):
+        import pygame
+        lx, ly, lw, lh = self.lib_rect
+        pygame.draw.rect(screen, C_PANEL, self.lib_rect, border_radius=6)
+        pygame.draw.rect(screen, C_EDGE, self.lib_rect, 1, border_radius=6)
+        t = font.render("Patterns", True, C_TXT)
+        screen.blit(t, (lx + (lw - t.get_width()) // 2, ly + 4))
+        pygame.draw.line(screen, C_EDGE, (lx + 2, ly + 26), (lx + lw - 2, ly + 26))
+        top, bottom = ly + 27, ly + lh
+        clip = screen.get_clip()
+        screen.set_clip(pygame.Rect(lx + 1, top, lw - 2, lh - 28))
+        for cat, y in self.lib_heads:
+            y += self.lib_scroll
+            if top - LIB_HDR_H <= y <= bottom:
+                screen.blit(small.render(cat.upper(), True, C_DIM), (lx + 8, y + 1))
+        hot = self.drag_pat['item'] if self.drag_pat is not None else None
+        for it in self.lib_items:
+            x, y, w, h = it['rect']
+            y += self.lib_scroll
+            if y + h < top or y > bottom:
+                continue
+            pygame.draw.rect(screen, C_BTN_ON if it is hot else C_BTN, (x, y, w, h),
+                             border_radius=4)
+            self._draw_preview(screen, it['cells'], x + 3, y + (h - LIB_PREV_H) // 2)
+            screen.blit(small.render(it['name'], True, C_TXT), (x + LIB_PREV_W + 8, y + 5))
+        screen.set_clip(clip)
+        if self.lib_scroll_min < 0:
+            vis = lh - 28
+            content = vis - self.lib_scroll_min
+            thumb_h = max(18, vis * vis // content)
+            thumb_y = top + int(-self.lib_scroll / -self.lib_scroll_min * (vis - thumb_h))
+            pygame.draw.rect(screen, C_DIM, (lx + lw - 5, thumb_y, 3, thumb_h), border_radius=2)
+
+    @staticmethod
+    def _draw_preview(screen, cells, x, y, pw=LIB_PREV_W, ph=LIB_PREV_H):
+        """A pattern thumbnail (the synth's pattern_preview_surf, drawn direct)."""
+        import pygame
+        pygame.draw.rect(screen, C_BG, (x, y, pw, ph), border_radius=2)
+        if not cells:
+            return
+        r_min, c_min = min(r for r, _c in cells), min(c for _r, c in cells)
+        rh = max(r for r, _c in cells) - r_min + 1
+        cw = max(c for _r, c in cells) - c_min + 1
+        cs = max(1, min(pw // cw, ph // rh))
+        ox, oy = x + (pw - cs * cw) // 2, y + (ph - cs * rh) // 2
+        for r, c in cells:
+            pygame.draw.rect(screen, C_ACCENT, (ox + (c - c_min) * cs, oy + (r - r_min) * cs,
+                                                max(1, cs - 1), max(1, cs - 1)))
 
     # -- drawing -------------------------------------------------------------
     def draw(self, screen, font, small):
@@ -430,6 +544,18 @@ class BenchApp:
             for c in range(self.scene.cols):
                 rect = (fx + c * CELL, fy + r * CELL, CELL - 1, CELL - 1)
                 pygame.draw.rect(screen, alive_col if grid[r, c] else C_GRID, rect)
+        if self.drag_pat is not None and self.drag_pat['snap'] is not None:
+            # the dragged pattern's ghost where it would drop (torus wrap)
+            if self._ghost is None:
+                self._ghost = pygame.Surface((CELL - 1, CELL - 1), pygame.SRCALPHA)
+                self._ghost.fill(C_GHOST)
+            r0, c0 = self.drag_pat['snap']
+            for dr, dc in self.drag_pat['cells']:
+                rr, cc = (r0 + dr) % self.scene.rows, (c0 + dc) % self.scene.cols
+                screen.blit(self._ghost, (fx + cc * CELL, fy + rr * CELL))
+            t = small.render(self.drag_pat['name'], True, C_ACCENT)
+            screen.blit(t, (min(fx + c0 * CELL + 14, fx + self.field_w - t.get_width()),
+                            max(fy + r0 * CELL - 18, fy)))
         # side panel
         side = snap['selected']
         eid, params = snap['sides'][side]
@@ -504,6 +630,7 @@ class BenchApp:
                         (px, self.footer_y + 20))
         self._draw_display(screen, small, snap.get('display', {}).get(side),
                            px, self.params_y + len(registry.get(eid).params) * ROW_H + 6)
+        self._draw_library(screen, font, small)
         # S4: lab buttons + status; overlays
         if self.catalog is not None:
             for key, rect in self.lab_buttons.items():
@@ -858,8 +985,13 @@ class BenchApp:
         """(TextEdit, rect) of the focused text field in this mode, else (None, None)."""
         if self.mode == 'save' and self.save_form is not None:
             field = self.save_form['field']
-            return self.save_edits[field], self._save_form_rects()[field]
+            edit = self.save_edits[field]
+            if edit.text != self.save_form[field]:        # written from outside (scripts)
+                edit.set_text(self.save_form[field])
+            return edit, self._save_form_rects()[field]
         if self.mode == 'notes' and self.notes_form is not None:
+            if self.notes_edit.text != self.notes_form['text']:
+                self.notes_edit.set_text(self.notes_form['text'])
             return self.notes_edit, self._notes_rects()['text']
         return None, None
 
@@ -921,13 +1053,17 @@ class BenchApp:
             self.drag_text = (edit, rect)
 
     def wheel(self, pos, dy):
-        """Mouse wheel (dy > 0 = up): scrolls the Notes text; the caret stays."""
+        """Mouse wheel (dy > 0 = up): scrolls the Notes text (the caret
+        stays) or the pattern library."""
         if self.mode == 'notes' and self.notes_form is not None:
             r = self._notes_rects()['text']
             if self._inside(r, pos):
                 self.notes_edit.scroll = max(0, self.notes_edit.scroll - int(dy) * 3)
                 self.notes_edit.follow = False
                 return 'notes:scroll'
+        if self.mode in ('live', 'save', 'notes') and self._inside(self.lib_rect, pos):
+            self.lib_scroll = max(self.lib_scroll_min, min(0, self.lib_scroll + int(dy) * 24))
+            return 'lib:scroll'
         return None
 
     def _clip_get(self):
@@ -2016,7 +2152,7 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
                 if ev.type == pygame.QUIT:
                     alive = False
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE \
-                        and app.mode == 'live':
+                        and app.mode == 'live' and app.drag_pat is None:
                     alive = False
                 elif ev.type == pygame.KEYDOWN:
                     app.key(pygame.key.name(ev.key), ctrl=bool(ev.mod & pygame.KMOD_CTRL),
