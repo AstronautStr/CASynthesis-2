@@ -368,6 +368,42 @@ fixtures' edit schedule, invariance with depth 0 / Freeze CA, block timing
 p95 / p99 offline and on the device): `python demos/gutter_field_n1_report.py`
 -> `demos/results/network_n1/report.{json,md}` (WAVs in `artifacts/_n1/`).
 
+## N2 -- field events excite a delay network (2026-09-16)
+
+REQ `memory/req-network-events-n2-2026-09-16.md`: one live field, two sides
+that read it through the SAME periodic weights (`casynth_lab/periodic_readout.py`:
+eight overlapping raised-cosine weights K_i, a partition of unity, continuous
+on the torus -- no region borders).
+
+- **A `gutter_field_periodic`** ("Gutter K", `casynth_lab/gutter_field_periodic.py`):
+  the N1 Gutter model unchanged (source, routes, states, controls, snapshot)
+  with the weighted count n_i = sum(K_i G) instead of the 2 x 4 regions and a
+  fixed output trim of -16.5 dB after the x20.
+- **B `ca_event_network`** ("Events", `casynth_lab/event_network.py`): a NEW model
+  (not a Gutter port).  At every block boundary the cells that changed since
+  the previous render, weighted by K_i and saturated (a = e / (e + 2)), strike
+  a fast / slow pulse pair per node (0.25 / 2 ms, strength 0.75) that feeds
+  eight delay lines D = 149..1361 samples with an orthogonal feedback matrix
+  (0.25 - delta), a 6 kHz loss filter and tanh; rho ("Response" 0.60..0.95,
+  20 ms ramp) scales the feedback.  Output from the loss filters with cos / sin
+  panning, x96, then the bench gain.  No direct path: without events the
+  output is exactly zero; after events the network decays.  Painting, CA steps
+  and the initial field (once, at init / reset) are events; parameters and
+  restore are not.  Only SR 44100 / block 352 / stereo.  Snapshot = delays and
+  positions, filters, pulse states, previous / pending field, ramp, gain ramp,
+  versions.  Panel: the last packet a_i per node (bars), the response level
+  (tick), rho; overlay: node centres + half-weight ring.
+
+Entry: **`run_network_n2.bat`** opens the bench on the CATALOG screen of
+`lab_catalog/network_n2_events_2026_09_16/` (build once with
+`python demos/build_n2_events.py`; refuses a catalog that holds records).
+Three records, 32 x 32 torus, B3/S23, 12 s from a fresh start, evolution on,
+the REQ's hypotheses in Notes: N2.1 pulsar 6 gen/s (`n2_rhythm`), N2.2 glider
+16 gen/s (`n2_travel`), N2.3 R-pentomino 6 gen/s (`n2_growth`).  Gates:
+`tests/test_n2_events.py` (1j; the B kernel equals an independent scalar
+reference bit-exactly).  Measurements: `python demos/n2_events_report.py` ->
+`demos/results/network_n2/report.{json,md}`.
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B
