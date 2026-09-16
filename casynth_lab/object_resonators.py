@@ -1,0 +1,832 @@
+"""N4 -- every connected figure of the field is a resonator bank tuned by its own
+Laplacian and struck by the cell changes inside its own circular detector (engine
+id `ca_object_resonators`, REQ memory/req-object-resonators-n4-2026-09-16.md).
+
+    connected figure -> the spectrum of its Laplacian -> its bank of decaying resonators
+    cell changes inside its circle ---------------------> the pulse that strikes the bank
+    centre of mass -------------------------------------> detector position and panning
+
+Figures (casynth_lab.figures): 8-connected components across the torus seam, the
+periodic centre (cy, cx), the radius R = max torus distance centre -> cell, and the
+detector mask K: `detector` = Disk -> every cell within R of the centre (boundary
+included, equal weight, nothing outside; a single cell has R = 0 and covers only
+itself); Own -> exactly the figure's cells.  Circles are not normalised against
+each other: one change may strike several banks.
+
+Spectrum: f_j = frequency_scale * sqrt(lambda_j) for the first N_BANK (24) positive
+eigenvalues of L = D - A of the figure's full unweighted 8-connectivity graph
+(multiplicities kept, zero mode dropped, no normalisation of the lowest mode, no
+crop, no decimation).  N cells -> at most N - 1 modes; a single cell has none.
+
+Block boundary (before the samples of the block), only when the pending field G
+differs from the last rendered field G_prev (an unchanged field, a parameter
+change, a Restore add nothing):
+    components of G are matched to the tracked figures (figures.match: overlap,
+    then centre displacement <= 1.5 cells; split / merge -> old figures to tails,
+    new identities)
+    births = G & ~G_prev ;  deaths = G_prev & ~G
+    continuing figure : e = sum(births * K_cur) + sum(deaths * K_prev)
+    new figure        : e = sum(births * K_cur)
+    a = e / (e + 2)  -> added to BOTH pulse states of the figure's slot
+    (K_prev = the detector of the figure's previous geometry in the CURRENT mode).
+    A fresh init compares the initial field with zeros once (one starting packet);
+    a figure that left the field gets no packet any more and rings out as a tail.
+    A continuing figure keeps its id, colour, pulse and resonator states; its
+    frequencies are updated (mode j -> mode j, ascending frequency), new modes start
+    from zero, modes that vanished ring on at their old frequency undriven, and the
+    weights 1 / n_modes of the driven modes ramp over 20 ms (no level step from the
+    count change alone).  The panning target follows the centre with a 20 ms ramp.
+
+Sample path (float64), per sample k, for every slot s in use (active figures,
+tails, fading tails):
+    p_s   = 0.75 ((1 - q_f) z_f - (1 - q_s) z_s) / (q_s - q_f)   the N2 pulse
+    z_f  *= q_f ;  z_s *= q_s                                       tau 0.25 / 2 ms
+    for the modes j < n_live of the slot:
+        z_j' = r e^{i theta_j} z_j  (+ p_s if j < n_driven)         theta_j = 2 pi f_j / SR
+        b_s += w_j Re z_j'                                           w_j = ramped weight
+    L += panL_s b_s ;  R += panR_s b_s                             p = cx / (cols - 1),
+                                                                   L / R = cos / sin(pi p / 2)
+    hp[k] = h (hp[k-1] + mix[k] - mix[k-1])  per channel, h = exp(-2 pi 20 / SR)
+    out   = hp * OUT_SCALE * gain[k]           gain = bench gain, 20 ms linear ramp
+    r = 10 ** (-3 / (SR decay_s)), a manual decay change ramps r over 20 ms.
+No sum over the number of figures, no AGC.  From zero state without events the
+output is exactly 0.
+
+Slots: N_ACTIVE (24) banks for sounding figures, N_TAILS (96) for tails, N_FADING
+(24) for tails being faded out.  Continuing figures keep their slot; new figures
+take free active slots largest area first (ties: first cell); without a free slot
+a figure is tracked but silent ("sounding X of Y" in the display) and gets a slot
+as soon as one is free (silent start, its next events strike it).  A tail is freed
+at a block boundary when every mode is below TAIL_FLOOR; when a new tail is needed
+and all tail slots are busy the quietest tail fades out over 20 ms; when even the
+fading slots are busy the quietest fading slot is dropped at once (counted, shown).
+Undriven modes below TAIL_FLOOR are zeroed at block boundaries (deterministic).
+
+Controls: `detector` (Own / Disk, default Disk; changes the masks of the NEXT
+events, no packet), `frequency_scale` (55..880 Hz, default 220; retunes every
+slot at once, states kept), `decay_s` (0.20..1.50 s, default 0.80; r ramp 20 ms).
+Only SR 44100 / block 352 / stereo.  Own model_version / STATE_VERSION; the
+snapshot holds every slot array, the tracker (ids, slots, cells, centres, radii),
+the id counter, both fields, the ramps, the DC filters and the gain.
+"""
+import math
+
+import numpy as np
+
+from .engine_api import SoundEngine
+from .registry import EngineSpec, register
+from . import event_network as en
+from . import figures as fg
+
+try:
+    import numba as _numba
+    _jit = _numba.njit(cache=True, nogil=True)
+    HAVE_NUMBA = True
+except ImportError:                    # pragma: no cover
+    def _jit(f):
+        return f
+    HAVE_NUMBA = False
+
+ENGINE_ID = 'ca_object_resonators'
+LABEL = 'Objects'
+PARAMS = [('detector', 'Detector', 0, 1, True, 1),
+          ('frequency_scale', 'Freq scale', 55.0, 880.0, False, 220.0),
+          ('decay_s', 'Decay', 0.20, 1.50, False, 0.80)]
+CHOICES = {'detector': ('Own', 'Disk')}
+DET_OWN, DET_DISK = 0, 1
+MODEL_VERSION = 'ca_object_resonators_n4_v1'
+STATE_VERSION = 1
+SR_REQUIRED = en.SR_REQUIRED
+BLOCK_REQUIRED = en.BLOCK_REQUIRED
+N_BANK = 24
+N_ACTIVE = 24
+N_TAILS = 96
+N_FADING = 24
+N_SLOTS = N_ACTIVE + N_TAILS + N_FADING
+HP_HZ = 20.0
+RAMP_MS = 20.0                         # decay r, gain, mode weights, panning
+OUT_SCALE = 0.5
+TAIL_FLOOR = 1e-7                      # |z| below this: a mode / a tail is silent
+N_PALETTE = 12                         # colour index = (id - 1) % N_PALETTE (display only)
+OVERLAY_TEXT = "Objects: a colour per figure (cells, circle, centre); changes inside its circle strike it"
+
+ROLE_FREE, ROLE_ACTIVE, ROLE_TAIL, ROLE_FADING = 0, 1, 2, 3
+I_K, I_R_LEFT, I_G_LEFT = range(3)
+R_CUR, R_TGT, R_INC = range(3)
+P_LCUR, P_LINC, P_LTGT, P_RCUR, P_RINC, P_RTGT = range(6)
+H_PREV, H_MIX = range(2)
+
+
+def decay_r(t60_s, sr=SR_REQUIRED):
+    return 10.0 ** (-3.0 / (float(sr) * float(t60_s)))
+
+
+def pan_of(cx, cols):
+    """(L, R) = cos / sin(pi p / 2), p = cx / (cols - 1) clipped to [0, 1]."""
+    p = 0.0 if cols <= 1 else min(max(float(cx) / (cols - 1), 0.0), 1.0)
+    return math.cos(math.pi * p / 2.0), math.sin(math.pi * p / 2.0)
+
+
+def trig_of(freqs, sr):
+    c = np.empty(len(freqs))
+    s = np.empty(len(freqs))
+    for j, f in enumerate(freqs):
+        th = 2.0 * math.pi * float(f) / sr
+        c[j] = math.cos(th)
+        s[j] = math.sin(th)
+    return c, s
+
+
+@_jit
+def _render(n, out, role, ndrive, nlive, zre, zim, cth, sth, wcur, winc, wtgt, wleft,
+            zf, zs, pan, pleft, rr, gg, ints, cst, hp_h, hp, out_scale, level):
+    """`n` samples into out (n, 2) = the formulas of the module docstring INCLUDING
+    OUT_SCALE and the ramped gain.  level[s] = max |b_s| over the block (display)."""
+    S = role.shape[0]
+    qf = cst[en.C_QF]; qs = cst[en.C_QS]; strength = cst[en.C_STRENGTH]
+    for s in range(S):
+        level[s] = 0.0
+    for t in range(n):
+        k = ints[I_K]
+        left = ints[I_R_LEFT]
+        if left > 0:
+            left -= 1
+            if left == 0:
+                rr[R_CUR] = rr[R_TGT]
+            else:
+                rr[R_CUR] = rr[R_CUR] + rr[R_INC]
+            ints[I_R_LEFT] = left
+        left = ints[I_G_LEFT]
+        if left > 0:
+            left -= 1
+            if left == 0:
+                gg[R_CUR] = gg[R_TGT]
+            else:
+                gg[R_CUR] = gg[R_CUR] + gg[R_INC]
+            ints[I_G_LEFT] = left
+        r = rr[R_CUR]
+        g = gg[R_CUR]
+        L = 0.0
+        R = 0.0
+        for s in range(S):
+            if role[s] == ROLE_FREE:
+                continue
+            nl = nlive[s]
+            wl = wleft[s]
+            if wl > 0:
+                wl -= 1
+                if wl == 0:
+                    for j in range(nl):
+                        wcur[s, j] = wtgt[s, j]
+                else:
+                    for j in range(nl):
+                        wcur[s, j] = wcur[s, j] + winc[s, j]
+                wleft[s] = wl
+            pl = pleft[s]
+            if pl > 0:
+                pl -= 1
+                if pl == 0:
+                    pan[s, P_LCUR] = pan[s, P_LTGT]
+                    pan[s, P_RCUR] = pan[s, P_RTGT]
+                else:
+                    pan[s, P_LCUR] = pan[s, P_LCUR] + pan[s, P_LINC]
+                    pan[s, P_RCUR] = pan[s, P_RCUR] + pan[s, P_RINC]
+                pleft[s] = pl
+            p = strength * ((1.0 - qf) * zf[s] - (1.0 - qs) * zs[s]) / (qs - qf)
+            zf[s] = zf[s] * qf
+            zs[s] = zs[s] * qs
+            nd = ndrive[s]
+            acc = 0.0
+            for j in range(nl):
+                re = zre[s, j]
+                im = zim[s, j]
+                c = cth[s, j]
+                sn = sth[s, j]
+                if j < nd:
+                    nre = r * (c * re - sn * im) + p
+                else:
+                    nre = r * (c * re - sn * im)
+                nim = r * (sn * re + c * im)
+                zre[s, j] = nre
+                zim[s, j] = nim
+                acc += wcur[s, j] * nre
+            b = acc
+            a = b if b >= 0.0 else -b
+            if a > level[s]:
+                level[s] = a
+            L += pan[s, P_LCUR] * b
+            R += pan[s, P_RCUR] * b
+        yL = hp_h * ((hp[0, H_PREV] + L) - hp[0, H_MIX])
+        hp[0, H_PREV] = yL
+        hp[0, H_MIX] = L
+        yR = hp_h * ((hp[1, H_PREV] + R) - hp[1, H_MIX])
+        hp[1, H_PREV] = yR
+        hp[1, H_MIX] = R
+        out[t, 0] = yL * out_scale * g
+        out[t, 1] = yR * out_scale * g
+        ints[I_K] = k + 1
+
+
+class Figure:
+    """One tracked figure (a plain record; the snapshot stores its fields)."""
+    __slots__ = ('id', 'slot', 'cells', 'centre', 'radius')
+
+    def __init__(self, fid, slot, cells, centre, radius):
+        self.id = int(fid)
+        self.slot = int(slot)
+        self.cells = np.ascontiguousarray(cells, dtype=np.int64)
+        self.centre = (float(centre[0]), float(centre[1]))
+        self.radius = float(radius)
+
+
+class ObjectResonatorsEngine(SoundEngine):
+    STATE_VERSION = STATE_VERSION
+
+    def __init__(self, ctx, params):
+        super().__init__(ctx, params)
+        if int(ctx.sr) != SR_REQUIRED or int(ctx.block) != BLOCK_REQUIRED or ctx.channels != 2:
+            raise ValueError(f"engine {ENGINE_ID}: only sr {SR_REQUIRED} / block {BLOCK_REQUIRED} / "
+                             f"stereo are supported (got {ctx.sr} / {ctx.block} / {ctx.channels})")
+        self.engine_id = ENGINE_ID
+        self.model_version = MODEL_VERSION
+        self.sr = float(ctx.sr)
+        n = int(ctx.block)
+        self._out = np.zeros((n, 2))
+        self.hp_h = math.exp(-2.0 * math.pi * HP_HZ / self.sr)
+        self.ramp_n = int(round(RAMP_MS / 1000.0 * self.sr))
+        self.consts = en.consts(self.sr)
+        self.cache = fg.SpectrumCache(N_BANK)
+        self._grid = None
+        self._zero()
+        self._kernel(0, np.zeros((0, 2)))          # compile / load the cached kernel
+
+    # -- model state ----------------------------------------------------------------
+    def _zero(self):
+        S, M = N_SLOTS, N_BANK
+        self.role = np.zeros(S, np.int64)
+        self.slot_id = np.zeros(S, np.int64)
+        self.ndrive = np.zeros(S, np.int64)
+        self.nlive = np.zeros(S, np.int64)
+        self.zre = np.zeros((S, M))
+        self.zim = np.zeros((S, M))
+        self.sqrtlam = np.zeros((S, M))
+        self.ffreq = np.zeros((S, M))
+        self.cth = np.ones((S, M))
+        self.sth = np.zeros((S, M))
+        self.wcur = np.zeros((S, M))
+        self.winc = np.zeros((S, M))
+        self.wtgt = np.zeros((S, M))
+        self.wleft = np.zeros(S, np.int64)
+        self.zf = np.zeros(S)
+        self.zs = np.zeros(S)
+        self.pan = np.zeros((S, 6))
+        self.pleft = np.zeros(S, np.int64)
+        r = decay_r(self.params['decay_s'], self.sr)
+        self.rr = np.array([r, r, 0.0])
+        self.gg = np.zeros(3)
+        self.ints = np.zeros(3, np.int64)
+        self.hp = np.zeros((2, 2))
+        self.level = np.zeros(S)
+        self.last_e = np.zeros(S)
+        self.last_a = np.zeros(S)
+        self.counters = np.zeros(4, np.int64)      # evictions (faded), hard drops, unvoiced blocks, changes
+        self.figures = {}                          # id -> Figure
+        self.next_id = 1
+        self.G_prev = None
+
+    def _kernel(self, n, out):
+        _render(n, out, self.role, self.ndrive, self.nlive, self.zre, self.zim, self.cth, self.sth,
+                self.wcur, self.winc, self.wtgt, self.wleft, self.zf, self.zs, self.pan, self.pleft,
+                self.rr, self.gg, self.ints, self.consts, self.hp_h, self.hp, OUT_SCALE, self.level)
+
+    # -- geometry helpers -------------------------------------------------------------
+    def _mask(self, fig):
+        rows, cols = self._grid.shape
+        if int(self.params['detector']) == DET_OWN:
+            return fg.own_mask(fig.cells, rows, cols)
+        return fg.disk_mask(fig.centre, fig.radius, rows, cols)
+
+    def _scale(self):
+        return float(self.params['frequency_scale'])
+
+    # -- slots ------------------------------------------------------------------------
+    def _free_slot(self, lo, hi):
+        for s in range(lo, hi):
+            if self.role[s] == ROLE_FREE:
+                return s
+        return -1
+
+    def _clear_slot(self, s):
+        self.role[s] = ROLE_FREE
+        self.slot_id[s] = 0
+        self.ndrive[s] = 0
+        self.nlive[s] = 0
+        self.zre[s] = 0.0
+        self.zim[s] = 0.0
+        self.sqrtlam[s] = 0.0
+        self.ffreq[s] = 0.0
+        self.cth[s] = 1.0
+        self.sth[s] = 0.0
+        self.wcur[s] = 0.0
+        self.winc[s] = 0.0
+        self.wtgt[s] = 0.0
+        self.wleft[s] = 0
+        self.zf[s] = 0.0
+        self.zs[s] = 0.0
+        self.pan[s] = 0.0
+        self.pleft[s] = 0
+        self.level[s] = 0.0
+        self.last_e[s] = 0.0
+        self.last_a[s] = 0.0
+
+    def _move_slot(self, src, dst):
+        for name in ('role', 'slot_id', 'ndrive', 'nlive', 'zre', 'zim', 'sqrtlam', 'ffreq', 'cth',
+                     'sth', 'wcur', 'winc', 'wtgt', 'wleft', 'zf', 'zs', 'pan', 'pleft', 'level',
+                     'last_e', 'last_a'):
+            a = getattr(self, name)
+            a[dst] = a[src]
+        self._clear_slot(src)
+
+    def _energy(self, s):
+        nl = int(self.nlive[s])
+        if nl == 0:
+            return 0.0
+        return float(np.max(np.hypot(self.zre[s, :nl], self.zim[s, :nl])))
+
+    def _release_quiet(self):
+        """Block boundary: silent tails freed, finished fades freed, quiet undriven
+        modes zeroed, n_live recomputed."""
+        for s in range(N_SLOTS):
+            role = self.role[s]
+            if role == ROLE_FREE:
+                continue
+            nd = int(self.ndrive[s])
+            nl = int(self.nlive[s])
+            if nl > nd:
+                mag = np.hypot(self.zre[s, nd:nl], self.zim[s, nd:nl])
+                quiet = mag < TAIL_FLOOR
+                if quiet.any():
+                    idx = np.nonzero(quiet)[0] + nd
+                    self.zre[s, idx] = 0.0
+                    self.zim[s, idx] = 0.0
+                    self.wcur[s, idx] = 0.0
+                    self.winc[s, idx] = 0.0
+                    self.wtgt[s, idx] = 0.0
+                    alive = np.nonzero((self.zre[s, :nl] != 0.0) | (self.zim[s, :nl] != 0.0))[0]
+                    nl = max(nd, int(alive.max()) + 1 if alive.size else 0)
+                    self.nlive[s] = nl
+            if role == ROLE_TAIL and nl == 0:
+                self._clear_slot(s)
+            elif role == ROLE_FADING and self.wleft[s] == 0:
+                self._clear_slot(s)
+
+    def _to_tail(self, s):
+        """Active slot s -> a tail slot (the figure left / lost its identity)."""
+        self.ndrive[s] = 0
+        self.slot_id[s] = 0
+        self.zf[s] = 0.0
+        self.zs[s] = 0.0
+        self.last_e[s] = 0.0
+        self.last_a[s] = 0.0
+        if self.nlive[s] == 0:
+            self._clear_slot(s)
+            return
+        dst = self._free_slot(N_ACTIVE, N_ACTIVE + N_TAILS)
+        if dst < 0:
+            # all tail slots busy: the quietest tail fades out (20 ms) in a fading slot
+            tails = [t for t in range(N_ACTIVE, N_ACTIVE + N_TAILS)]
+            q = min(tails, key=lambda t: (self._energy(t), t))
+            fdst = self._free_slot(N_ACTIVE + N_TAILS, N_SLOTS)
+            if fdst < 0:
+                fades = [t for t in range(N_ACTIVE + N_TAILS, N_SLOTS)]
+                qf = min(fades, key=lambda t: (self._energy(t), t))
+                self._clear_slot(qf)
+                self.counters[1] += 1
+                fdst = qf
+            self._move_slot(q, fdst)
+            self.role[fdst] = ROLE_FADING
+            self.wtgt[fdst, :] = 0.0
+            self.winc[fdst, :] = (self.wtgt[fdst] - self.wcur[fdst]) / self.ramp_n
+            self.wleft[fdst] = self.ramp_n
+            self.counters[0] += 1
+            dst = q
+        self._move_slot(s, dst)
+        self.role[dst] = ROLE_TAIL
+
+    # -- tuning -----------------------------------------------------------------------
+    def _tune_slot(self, s, sq, ramp):
+        """Mode j -> mode j: new sqrt(lambda) for the driven modes, weights 1 / n
+        (ramped when the slot already sounds), undriven ringing modes untouched."""
+        n = int(len(sq))
+        scale = self._scale()
+        self.ndrive[s] = n
+        self.sqrtlam[s, :n] = sq
+        self.ffreq[s, :n] = scale * self.sqrtlam[s, :n]
+        c, sn = trig_of(self.ffreq[s, :n], self.sr)
+        self.cth[s, :n] = c
+        self.sth[s, :n] = sn
+        self.nlive[s] = max(int(self.nlive[s]), n)
+        w = np.zeros(N_BANK)
+        if n > 0:
+            w[:n] = 1.0 / n
+        w[n:] = self.wcur[s, n:]                  # ringing modes keep their weight
+        if ramp and self.ramp_n > 0:
+            self.wtgt[s] = w
+            self.winc[s] = (w - self.wcur[s]) / self.ramp_n
+            self.wleft[s] = self.ramp_n
+        else:
+            self.wcur[s] = w
+            self.wtgt[s] = w
+            self.winc[s] = 0.0
+            self.wleft[s] = 0
+
+    def _rescale_all(self):
+        """frequency_scale changed: every slot in use follows (states kept)."""
+        scale = self._scale()
+        for s in range(N_SLOTS):
+            nl = int(self.nlive[s])
+            if self.role[s] == ROLE_FREE or nl == 0:
+                continue
+            self.ffreq[s, :nl] = scale * self.sqrtlam[s, :nl]
+            c, sn = trig_of(self.ffreq[s, :nl], self.sr)
+            self.cth[s, :nl] = c
+            self.sth[s, :nl] = sn
+
+    def _set_pan(self, s, cx, ramp):
+        cols = self._grid.shape[1]
+        L, R = pan_of(cx, cols)
+        if ramp and self.ramp_n > 0:
+            self.pan[s, P_LTGT] = L
+            self.pan[s, P_RTGT] = R
+            self.pan[s, P_LINC] = (L - self.pan[s, P_LCUR]) / self.ramp_n
+            self.pan[s, P_RINC] = (R - self.pan[s, P_RCUR]) / self.ramp_n
+            self.pleft[s] = self.ramp_n
+        else:
+            self.pan[s] = (L, 0.0, L, R, 0.0, R)
+            self.pleft[s] = 0
+
+    def _strike(self, s, e):
+        a = e / (e + en.EVENT_SAT)
+        self.last_e[s] = e
+        self.last_a[s] = a
+        self.zf[s] += a
+        self.zs[s] += a
+
+    # -- the block boundary -------------------------------------------------------------
+    def _track(self, G_prev, G):
+        rows, cols = G.shape
+        births = (G != 0) & (G_prev == 0)
+        deaths = (G_prev != 0) & (G == 0)
+        comps = fg.components(G)
+        old_ids = sorted(self.figures)
+        old = [self.figures[i] for i in old_ids]
+        continued, tails, new = fg.match([f.cells for f in old], [f.centre for f in old],
+                                         comps, rows, cols)
+        figures = {}
+        # figures that lost their identity: their banks become tails
+        for p in tails:
+            f = old[p]
+            if f.slot >= 0:
+                self._to_tail(f.slot)
+        # continuing figures: geometry, packet, retune
+        for c in sorted(continued):
+            f = old[continued[c]]
+            cells = comps[c]
+            K_prev = self._mask(f)
+            centre = fg.centre_of(cells, rows, cols, f.centre)
+            radius = fg.radius_of(cells, centre, rows, cols)
+            nf = Figure(f.id, f.slot, cells, centre, radius)
+            K_cur = self._mask(nf)
+            e = float(np.count_nonzero(births & K_cur) + np.count_nonzero(deaths & K_prev))
+            if nf.slot >= 0:
+                self._tune_slot(nf.slot, self.cache.get(cells, rows, cols), ramp=True)
+                self._set_pan(nf.slot, centre[1], ramp=True)
+                if e > 0.0:
+                    self._strike(nf.slot, e)
+                else:
+                    self.last_e[nf.slot] = 0.0
+                    self.last_a[nf.slot] = 0.0
+            figures[nf.id] = nf
+        # new figures: identities in a deterministic order, slots largest first
+        new_figs = []
+        for c in new:
+            cells = comps[c]
+            centre = fg.centre_of(cells, rows, cols, None)
+            radius = fg.radius_of(cells, centre, rows, cols)
+            new_figs.append(Figure(0, -1, cells, centre, radius))
+        new_figs.sort(key=lambda f: (int(f.cells[0, 0]), int(f.cells[0, 1])))
+        for f in new_figs:
+            f.id = self.next_id
+            self.next_id += 1
+            figures[f.id] = f
+        self.figures = figures
+        self._allocate(rows, cols)
+        for f in new_figs:
+            if f.slot >= 0:
+                e = float(np.count_nonzero(births & self._mask(f)))
+                if e > 0.0:
+                    self._strike(f.slot, e)
+        self.counters[3] += 1
+
+    def _allocate(self, rows, cols):
+        """Free active slots to tracked figures without one: largest area first
+        (ties: first cell); figures of one cell never sound."""
+        waiting = [f for f in self.figures.values() if f.slot < 0 and len(f.cells) >= 2]
+        waiting.sort(key=lambda f: (-len(f.cells), int(f.cells[0, 0]), int(f.cells[0, 1])))
+        for f in waiting:
+            s = self._free_slot(0, N_ACTIVE)
+            if s < 0:
+                break
+            self.role[s] = ROLE_ACTIVE
+            self.slot_id[s] = f.id
+            f.slot = s
+            self._tune_slot(s, self.cache.get(f.cells, rows, cols), ramp=False)
+            self._set_pan(s, f.centre[1], ramp=False)
+
+    def _boundary(self):
+        """Everything of the block boundary: releases, then the field change."""
+        self._release_quiet()
+        if self.G_prev is None or self.G_prev.shape != self._grid.shape:
+            self.G_prev = np.zeros_like(self._grid)
+        if not np.array_equal(self.G_prev, self._grid):
+            self._track(self.G_prev, self._grid)
+            self.G_prev = self._grid.copy()
+        elif self.figures:
+            self._allocate(*self._grid.shape)       # a slot may have been freed
+        if any(f.slot < 0 and len(f.cells) >= 2 for f in self.figures.values()):
+            self.counters[2] += 1
+
+    # -- SoundEngine ----------------------------------------------------------------
+    def init(self, grid, exc, gain=0.0):
+        self._zero()
+        self._grid = np.array(grid, np.uint8, copy=True)
+        g = float(gain)
+        self.gg[:] = (g, g, 0.0)
+
+    def update_field(self, grid, exc):
+        self._grid = np.array(grid, np.uint8, copy=True)
+
+    def set_params(self, params):
+        old = dict(self.params)
+        super().set_params(params)
+        if self._grid is None:
+            return
+        if float(self.params['frequency_scale']) != float(old['frequency_scale']):
+            self._rescale_all()
+        if float(self.params['decay_s']) != float(old['decay_s']):
+            tgt = decay_r(self.params['decay_s'], self.sr)
+            self.rr[R_TGT] = tgt
+            if self.ramp_n > 0:
+                self.rr[R_INC] = (tgt - self.rr[R_CUR]) / self.ramp_n
+                self.ints[I_R_LEFT] = self.ramp_n
+            else:
+                self.rr[R_CUR] = tgt
+                self.rr[R_INC] = 0.0
+                self.ints[I_R_LEFT] = 0
+
+    def _set_gain(self, gain):
+        g = float(gain)
+        if g != self.gg[R_TGT]:
+            self.gg[R_TGT] = g
+            if self.ramp_n > 0:
+                self.gg[R_INC] = (g - self.gg[R_CUR]) / self.ramp_n
+                self.ints[I_G_LEFT] = self.ramp_n
+            else:
+                self.gg[R_CUR] = g
+                self.gg[R_INC] = 0.0
+                self.ints[I_G_LEFT] = 0
+
+    def render(self, gain, t_samples):
+        y, peak, n_clip = self.render_float(gain)
+        pcm = (np.clip(y, -1.0, 1.0) * 32767).astype(np.int16)
+        return np.ascontiguousarray(pcm), peak, n_clip
+
+    def render_float(self, gain):
+        """One block (block, 2) after OUT_SCALE and the ramped bench gain, before the
+        int16 clip, + pre-clip peak / clipped sample count."""
+        self._boundary()
+        self._set_gain(gain)
+        out = self._out
+        self._kernel(out.shape[0], out)
+        a = np.abs(out)
+        peak = float(a.max()) if a.size else 0.0
+        return out.copy(), peak, int(np.count_nonzero(a > 1.0))
+
+    def raw_block(self, events=True):
+        """One block of the formulas (verification helper; the gain ramp is left
+        as it is -- set gain through render_float / test hooks)."""
+        if events:
+            self._boundary()
+        out = np.zeros_like(self._out)
+        self._kernel(out.shape[0], out)
+        return out
+
+    def inject(self, slot, a):
+        """Test hook: add a packet value to the pulse states of a slot (no field)."""
+        self.zf[slot] += float(a)
+        self.zs[slot] += float(a)
+
+    def reset(self, gain=0.0):
+        self.init(self._grid, None, gain)
+
+    def display(self):
+        rows, cols = (self._grid.shape if self._grid is not None else (0, 0))
+        det = int(self.params['detector'])
+        figs = []
+        for fid in sorted(self.figures):
+            f = self.figures[fid]
+            s = f.slot
+            nd = int(self.ndrive[s]) if s >= 0 else 0
+            figs.append(dict(id=fid, color=(fid - 1) % N_PALETTE, slot=s, n=int(len(f.cells)),
+                             cells=f.cells.tolist(), centre=[f.centre[0], f.centre[1]],
+                             radius=f.radius, modes=nd,
+                             f_low=(float(self.ffreq[s, 0]) if s >= 0 and nd > 0 else 0.0),
+                             e=(float(self.last_e[s]) if s >= 0 else 0.0),
+                             a=(float(self.last_a[s]) if s >= 0 else 0.0),
+                             level=(float(self.level[s]) if s >= 0 else 0.0)))
+        n_tail = int(np.count_nonzero(self.role == ROLE_TAIL))
+        n_fade = int(np.count_nonzero(self.role == ROLE_FADING))
+        return dict(figures=figs, n_figures=len(figs),
+                    n_sounding=sum(1 for f in figs if f['slot'] >= 0),
+                    n_single=sum(1 for f in figs if f['n'] < 2),
+                    n_tails=n_tail, n_fading=n_fade, evictions=int(self.counters[0]),
+                    drops=int(self.counters[1]), unvoiced_blocks=int(self.counters[2]),
+                    changes=int(self.counters[3]), detector=det,
+                    detector_name=CHOICES['detector'][det], rows=rows, cols=cols,
+                    frequency_scale=self._scale(), decay_s=float(self.params['decay_s']),
+                    r=float(self.rr[R_CUR]), r_target=float(self.rr[R_TGT]),
+                    ramp_left=int(self.ints[I_R_LEFT]), gain=float(self.gg[R_CUR]),
+                    model=self.model_version)
+
+    # -- snapshot ---------------------------------------------------------------------
+    _ARRAYS = ('role', 'slot_id', 'ndrive', 'nlive', 'zre', 'zim', 'sqrtlam', 'ffreq', 'wcur',
+               'winc', 'wtgt', 'wleft', 'zf', 'zs', 'pan', 'pleft', 'rr', 'gg', 'ints', 'hp',
+               'level', 'last_e', 'last_a', 'counters')
+
+    def _fresh_arrays(self):
+        S, M = N_SLOTS, N_BANK
+        return dict(role=np.zeros(S, np.int64), slot_id=np.zeros(S, np.int64),
+                    ndrive=np.zeros(S, np.int64), nlive=np.zeros(S, np.int64),
+                    zre=np.zeros((S, M)), zim=np.zeros((S, M)), sqrtlam=np.zeros((S, M)),
+                    ffreq=np.zeros((S, M)), wcur=np.zeros((S, M)), winc=np.zeros((S, M)),
+                    wtgt=np.zeros((S, M)), wleft=np.zeros(S, np.int64), zf=np.zeros(S),
+                    zs=np.zeros(S), pan=np.zeros((S, 6)), pleft=np.zeros(S, np.int64),
+                    rr=np.zeros(3), gg=np.zeros(3), ints=np.zeros(3, np.int64), hp=np.zeros((2, 2)),
+                    level=np.zeros(S), last_e=np.zeros(S), last_a=np.zeros(S),
+                    counters=np.zeros(4, np.int64))
+
+    def export_state(self):
+        if self._grid is None:
+            raise ValueError(f"engine {ENGINE_ID}: no field yet (init first)")
+        ids = sorted(self.figures)
+        figs = [self.figures[i] for i in ids]
+        offsets = np.zeros(len(figs) + 1, np.int64)
+        for k, f in enumerate(figs):
+            offsets[k + 1] = offsets[k] + len(f.cells)
+        cells = (np.concatenate([f.cells for f in figs], axis=0) if figs
+                 else np.zeros((0, 2), np.int64))
+        st = dict(version=self.STATE_VERSION, engine_id=self.engine_id,
+                  model_version=self.model_version, params=dict(self.params),
+                  sr=int(self.sr), block=int(self._out.shape[0]), out_scale=OUT_SCALE,
+                  slots=dict(active=N_ACTIVE, tails=N_TAILS, fading=N_FADING, bank=N_BANK),
+                  next_id=int(self.next_id),
+                  fig_ids=np.array(ids, np.int64),
+                  fig_slots=np.array([f.slot for f in figs], np.int64),
+                  fig_centres=np.array([f.centre for f in figs], np.float64).reshape(-1, 2),
+                  fig_radii=np.array([f.radius for f in figs], np.float64),
+                  fig_cells=np.ascontiguousarray(cells, dtype=np.int64),
+                  fig_offsets=offsets,
+                  grid_pending=self._grid.copy(),
+                  grid_prev=(np.zeros_like(self._grid) if self.G_prev is None
+                             else self.G_prev.copy()))
+        for name in self._ARRAYS:
+            st[name] = np.array(getattr(self, name), copy=True)
+        return st
+
+    def restore_state(self, grid, exc, state):
+        if not isinstance(state, dict) or state.get('version') != self.STATE_VERSION:
+            raise ValueError(f"engine {ENGINE_ID}: state version "
+                             f"{state.get('version') if isinstance(state, dict) else state!r}"
+                             f" != {self.STATE_VERSION}")
+        if state.get('engine_id') != self.engine_id:
+            raise ValueError(f"engine state is for {state.get('engine_id')!r}, not {self.engine_id!r}")
+        if state.get('model_version') != self.model_version:
+            raise ValueError(f"engine {ENGINE_ID}: model version {state.get('model_version')!r}"
+                             f" != {self.model_version!r}")
+        if int(state.get('sr', -1)) != int(self.sr) or int(state.get('block', -1)) != self._out.shape[0]:
+            raise ValueError(f"engine {ENGINE_ID}: state sr / block do not match the context")
+        params = state.get('params')
+        if not isinstance(params, dict) or sorted(params) != sorted(p[0] for p in PARAMS):
+            raise ValueError(f"engine {ENGINE_ID}: state params do not match the registry")
+        if float(state.get('out_scale', OUT_SCALE)) != OUT_SCALE:
+            raise ValueError(f"engine {ENGINE_ID}: out_scale of the state is not {OUT_SCALE}")
+        if state.get('slots') != dict(active=N_ACTIVE, tails=N_TAILS, fading=N_FADING, bank=N_BANK):
+            raise ValueError(f"engine {ENGINE_ID}: slot layout of the state differs")
+        fresh = self._fresh_arrays()
+        arrays = {}
+        for name, proto in fresh.items():
+            a = state.get(name)
+            if not isinstance(a, np.ndarray) or a.shape != proto.shape:
+                raise ValueError(f"engine {ENGINE_ID}: state array {name!r} missing or "
+                                 f"shape {getattr(a, 'shape', None)} != {proto.shape}")
+            if not np.all(np.isfinite(a)):
+                raise ValueError(f"engine {ENGINE_ID}: state array {name!r} not finite")
+            arrays[name] = np.array(a, proto.dtype, copy=True)
+        if (arrays['ints'] < 0).any() or (arrays['wleft'] < 0).any() or (arrays['pleft'] < 0).any():
+            raise ValueError(f"engine {ENGINE_ID}: negative counters in the state")
+        if not np.all(np.isin(arrays['role'], (ROLE_FREE, ROLE_ACTIVE, ROLE_TAIL, ROLE_FADING))):
+            raise ValueError(f"engine {ENGINE_ID}: unknown slot role in the state")
+        if ((arrays['ndrive'] < 0).any() or (arrays['ndrive'] > N_BANK).any()
+                or (arrays['nlive'] < arrays['ndrive']).any() or (arrays['nlive'] > N_BANK).any()):
+            raise ValueError(f"engine {ENGINE_ID}: mode counts of the state out of range")
+        g = np.asarray(grid, np.uint8)
+        gp = state.get('grid_pending')
+        gv = state.get('grid_prev')
+        for name, arr in (('grid_pending', gp), ('grid_prev', gv)):
+            if not isinstance(arr, np.ndarray) or arr.shape != g.shape:
+                raise ValueError(f"engine {ENGINE_ID}: {name} missing or shape "
+                                 f"{getattr(arr, 'shape', None)} != {g.shape}")
+        if not np.array_equal(np.asarray(gp, np.uint8), g):
+            raise ValueError(f"engine {ENGINE_ID}: the pending field of the state differs "
+                             f"from the bench field")
+        rows, cols = g.shape
+        # the tracker
+        ids = state.get('fig_ids')
+        slots = state.get('fig_slots')
+        centres = state.get('fig_centres')
+        radii = state.get('fig_radii')
+        cells = state.get('fig_cells')
+        offsets = state.get('fig_offsets')
+        for name, arr in (('fig_ids', ids), ('fig_slots', slots), ('fig_centres', centres),
+                          ('fig_radii', radii), ('fig_cells', cells), ('fig_offsets', offsets)):
+            if not isinstance(arr, np.ndarray):
+                raise ValueError(f"engine {ENGINE_ID}: {name} missing from the state")
+        F = len(ids)
+        if (slots.shape != (F,) or centres.shape != (F, 2) or radii.shape != (F,)
+                or offsets.shape != (F + 1,) or cells.ndim != 2 or cells.shape[1] != 2
+                or offsets[0] != 0 or offsets[-1] != len(cells) or (np.diff(offsets) < 1).any()):
+            raise ValueError(f"engine {ENGINE_ID}: tracker arrays of the state are inconsistent")
+        if F and (len(np.unique(ids)) != F or (ids < 1).any() or ids.max() >= int(state.get('next_id', 0))):
+            raise ValueError(f"engine {ENGINE_ID}: figure ids of the state are inconsistent")
+        Gp = np.asarray(gv, np.uint8)
+        comps = fg.components(Gp)
+        comp_keys = {c.tobytes(): k for k, c in enumerate(comps)}
+        figures = {}
+        seen = set()
+        for k in range(F):
+            cc = np.ascontiguousarray(cells[offsets[k]:offsets[k + 1]], dtype=np.int64)
+            key = cc.tobytes()
+            if key not in comp_keys or key in seen:
+                raise ValueError(f"engine {ENGINE_ID}: figure {int(ids[k])} of the state is not a "
+                                 f"component of its previous field")
+            seen.add(key)
+            s = int(slots[k])
+            if s >= 0:
+                if not (0 <= s < N_ACTIVE) or arrays['role'][s] != ROLE_ACTIVE or arrays['slot_id'][s] != ids[k]:
+                    raise ValueError(f"engine {ENGINE_ID}: slot of figure {int(ids[k])} is inconsistent")
+                sq = fg.spectrum(cc, rows, cols, N_BANK)
+                nd = int(arrays['ndrive'][s])
+                if nd != len(sq) or not np.allclose(arrays['sqrtlam'][s, :nd], sq, rtol=1e-9, atol=1e-12):
+                    raise ValueError(f"engine {ENGINE_ID}: the spectrum of figure {int(ids[k])} does "
+                                     f"not follow from its cells")
+            figures[int(ids[k])] = Figure(int(ids[k]), s, cc, (float(centres[k, 0]), float(centres[k, 1])),
+                                          float(radii[k]))
+        if len(seen) != len(comps):
+            raise ValueError(f"engine {ENGINE_ID}: the previous field has components the state "
+                             f"does not track")
+        active_ids = set(int(v) for v in arrays['slot_id'][arrays['role'] == ROLE_ACTIVE])
+        if active_ids != set(f.id for f in figures.values() if f.slot >= 0):
+            raise ValueError(f"engine {ENGINE_ID}: active slots and figures of the state disagree")
+        scale = float(params['frequency_scale'])
+        for s in range(N_SLOTS):
+            nl = int(arrays['nlive'][s])
+            if arrays['role'][s] != ROLE_FREE and nl:
+                if not np.array_equal(arrays['ffreq'][s, :nl], scale * arrays['sqrtlam'][s, :nl]):
+                    raise ValueError(f"engine {ENGINE_ID}: frequencies of slot {s} do not follow "
+                                     f"from its spectrum and the scale")
+        self.params = dict(params)
+        self._zero()
+        for name, a in arrays.items():
+            setattr(self, name, a)
+        self.cth = np.ones((N_SLOTS, N_BANK))
+        self.sth = np.zeros((N_SLOTS, N_BANK))
+        for s in range(N_SLOTS):
+            nl = int(self.nlive[s])
+            if self.role[s] != ROLE_FREE and nl:
+                c, sn = trig_of(self.ffreq[s, :nl], self.sr)
+                self.cth[s, :nl] = c
+                self.sth[s, :nl] = sn
+        self.figures = figures
+        self.next_id = int(state.get('next_id', 1))
+        self._grid = np.array(g, np.uint8, copy=True)
+        self.G_prev = np.array(Gp, np.uint8, copy=True)
+
+
+def overlay(params, rows, cols):
+    """Static part of the overlay: the caption only (figures come from display())."""
+    det = CHOICES['detector'][int(params.get('detector', DET_DISK))]
+    return dict(text=f"{OVERLAY_TEXT} [{det}]")
+
+
+register(EngineSpec(ENGINE_ID, LABEL, PARAMS, lambda ctx, params: ObjectResonatorsEngine(ctx, params),
+                    choices=CHOICES, overlay=overlay))

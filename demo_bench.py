@@ -67,6 +67,11 @@ C_ERR = (230, 120, 90)
 C_WARN = (230, 180, 90)
 C_OK = (120, 210, 140)
 C_OVERLAY = (235, 120, 175)     # S/N demos: reading path / link masks over the field
+# N4 (2026-09-16): one stable colour per tracked figure (cells, circle, centre);
+# index = display()['figures'][k]['color'] of the engine (id-based, never reused live)
+C_FIGURES = ((235, 120, 175), (120, 200, 255), (255, 200, 90), (140, 230, 140),
+             (255, 140, 100), (190, 150, 255), (90, 220, 210), (255, 240, 140),
+             (240, 150, 210), (150, 190, 120), (200, 170, 130), (130, 160, 240))
 LAB_BTN_W = 104
 ROW_LIST_H = 50
 # pattern library (2026-09-16): a column right of the side panel, items are
@@ -559,6 +564,9 @@ class BenchApp:
         # side panel
         side = snap['selected']
         eid, params = snap['sides'][side]
+        disp_side = snap.get('display', {}).get(side)
+        if disp_side and 'figures' in disp_side:
+            self._draw_figures(screen, small, disp_side, snap['paused'])
         self._draw_overlay(screen, small, eid, params)
         for s, rect in self.tabs.items():
             on = (s == side)
@@ -849,6 +857,51 @@ class BenchApp:
             screen.blit(small.render(data['text'][:90], True, col),
                         (self.field_x, self.field_y + self.field_h + 2))
 
+    def _draw_figures(self, screen, small, disp, paused):
+        """N4 ca_object_resonators: the tracked figures of the LISTENED side from the
+        engine's display (the same geometry the audio uses): the live cells of each
+        figure in its colour, its detector circle (continued across the torus seam;
+        Own mode: the cells are the mask -- outlined -- and the circle is a thin
+        dotted reference) and its centre.  Never an analysis of its own."""
+        import pygame
+        fx, fy = self.field_x, self.field_y
+        rows, cols = self.scene.rows, self.scene.cols
+        own = int(disp.get('detector', 1)) == 0
+        clip = screen.get_clip()
+        screen.set_clip(pygame.Rect(fx, fy, self.field_w, self.field_h))
+        for f in disp['figures']:
+            col = C_FIGURES[int(f['color']) % len(C_FIGURES)]
+            fill = col if not paused else tuple((a + b) // 2 for a, b in zip(col, C_ALIVE_PAUSED))
+            for r, c in f['cells']:
+                rect = (fx + c * CELL, fy + r * CELL, CELL - 1, CELL - 1)
+                pygame.draw.rect(screen, fill, rect)
+                if own:
+                    pygame.draw.rect(screen, C_BG, rect, 1)
+            cy, cx = float(f['centre'][0]), float(f['centre'][1])
+            rad = float(f['radius']) * CELL
+            px, py = self._cell_px(cx, cy)
+            for dy in (-rows * CELL, 0, rows * CELL):
+                for dx in (-cols * CELL, 0, cols * CELL):
+                    ox, oy = px + dx, py + dy
+                    if (ox + rad < fx or ox - rad > fx + self.field_w
+                            or oy + rad < fy or oy - rad > fy + self.field_h):
+                        continue
+                    if rad >= 1.0:
+                        if own:
+                            n = max(12, int(rad / 3))
+                            for k in range(n):
+                                a = 2.0 * math.pi * k / n
+                                screen.set_at((int(ox + rad * math.cos(a)), int(oy + rad * math.sin(a))), col)
+                        else:
+                            pygame.draw.circle(screen, col, (int(ox), int(oy)), int(round(rad)), 1)
+                    pygame.draw.circle(screen, C_BG, (int(ox), int(oy)), 4)
+                    pygame.draw.circle(screen, col, (int(ox), int(oy)), 3)
+        screen.set_clip(clip)
+        t = small.render(f"sounding {disp.get('n_sounding', 0)} of {disp.get('n_figures', 0)} figures"
+                         f"   tails {disp.get('n_tails', 0)}   detector {disp.get('detector_name', '?')}",
+                         True, C_DIM)
+        screen.blit(t, (fx + self.field_w - t.get_width(), fy - 18))
+
     def _draw_display(self, screen, small, disp, x, y):
         """Engine display numbers (pm_network: six link depths W as bars,
         the target as a tick, frozen / gate state; gutter_field: the held
@@ -859,6 +912,34 @@ class BenchApp:
         frequency multiplier, tuning mode and decay)."""
         import pygame
         if not disp:
+            return
+        if 'figures' in disp:
+            # N4 ca_object_resonators: one row per sounding figure (colour, id, cells,
+            # modes, lowest frequency), the last packet a (bar), the bank level (tick, /5)
+            import pygame as _pg
+            ramp = "  (ramping)" if int(disp.get('ramp_left', 0)) > 0 else ""
+            extra = ""
+            if disp.get('drops') or disp.get('evictions'):
+                extra = f"   faded {disp.get('evictions', 0)} dropped {disp.get('drops', 0)}"
+            screen.blit(small.render(f"Figures: sounding {disp['n_sounding']} of {disp['n_figures']}"
+                                     f"   tails {disp['n_tails']}{extra}", True, C_DIM), (x, y))
+            screen.blit(small.render(f"scale {float(disp['frequency_scale']):.0f} Hz   decay "
+                                     f"{float(disp['decay_s']):.2f} s{ramp}   a | level", True, C_DIM),
+                        (x, y + 14))
+            bar_x, bar_w = x + 98, 76
+            shown = [f for f in disp['figures'] if f['slot'] >= 0][:8]
+            for k, f in enumerate(shown):
+                ry = y + 34 + k * DISPLAY_ROW_H
+                col = C_FIGURES[int(f['color']) % len(C_FIGURES)]
+                _pg.draw.rect(screen, col, (x, ry, 8, 8))
+                screen.blit(small.render(f"#{f['id']} {f['n']}c {f['modes']}m", True, C_DIM), (x + 12, ry - 2))
+                a, lv = float(f['a']), float(f['level'])
+                _pg.draw.rect(screen, C_EDGE, (bar_x, ry, bar_w, 8), border_radius=3)
+                _pg.draw.rect(screen, C_ACCENT, (bar_x, ry, int(bar_w * min(a, 1.0)), 8), border_radius=3)
+                tx = bar_x + int(bar_w * min(lv / 5.0, 1.0))
+                _pg.draw.line(screen, C_TXT, (tx, ry - 2), (tx, ry + 10), 1)
+                screen.blit(small.render(f"{float(f['f_low']):.0f} Hz  a {a:.2f}", True, C_TXT),
+                            (bar_x + bar_w + 6, ry - 3))
             return
         if 'u' in disp:
             state = "frozen" if disp.get('frozen') else "live"

@@ -1,0 +1,118 @@
+{
+ "format": 2,
+ "id": "n4_neighbor",
+ "title": "N4.2 - Фигура слышит соседа: неподвижная фигура + blinker, 6 поколений/с",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   8,
+   8
+  ],
+  [
+   8,
+   9
+  ],
+  [
+   9,
+   8
+  ],
+  [
+   9,
+   10
+  ],
+  [
+   9,
+   14
+  ],
+  [
+   9,
+   15
+  ],
+  [
+   9,
+   16
+  ],
+  [
+   10,
+   9
+  ],
+  [
+   10,
+   11
+  ],
+  [
+   11,
+   10
+  ],
+  [
+   11,
+   12
+  ],
+  [
+   12,
+   11
+  ],
+  [
+   12,
+   13
+  ],
+  [
+   13,
+   12
+  ],
+  [
+   13,
+   14
+  ],
+  [
+   14,
+   13
+  ],
+  [
+   14,
+   15
+  ],
+  [
+   15,
+   14
+  ],
+  [
+   15,
+   16
+  ],
+  [
+   16,
+   15
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 6.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0
+ },
+ "variants": {
+  "A": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 0,
+    "frequency_scale": 220.0,
+    "decay_s": 0.8
+   }
+  },
+  "B": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 1,
+    "frequency_scale": 220.0,
+    "decay_s": 0.8
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: А — N4 Objects, детектор Own / Б — N4 Objects, детектор Disk. Notes: hypothesis and your listening result. Draw, pause and run the CA on either side."
+}

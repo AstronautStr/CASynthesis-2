@@ -154,3 +154,5 @@ from . import gutter_field_periodic    # noqa: E402,F401
 from . import event_network            # noqa: E402,F401
 # N3 (2026-09-16): the field tunes the resonances, its events strike them.
 from . import tuned_events             # noqa: E402,F401
+# N4 (2026-09-16): every figure a resonator bank of its own Laplacian, struck inside its circle.
+from . import object_resonators        # noqa: E402,F401

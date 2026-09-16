@@ -18,6 +18,7 @@ Gates (any FAIL -> exit 1):
   1i. network N1       python tests/test_gutter_field_n1.py       (live kernel == model, bench)
   1j. network N2       python tests/test_n2_events.py             (periodic readout, event network)
   1k. network N3       python tests/test_n3_tuned_events.py       (tuned banks struck by events)
+  1l. objects N4       python tests/test_n4_object_resonators.py (figure banks, circular detectors)
   2. golden master     python tests/golden/golden_master.py       (audio, byte-exact)
   3. ui frame + smoke  CASYNTH_DUMPFRAME render of gol_synth.py   (pixel-exact vs
                        tests/golden/ui_frame.png; doubles as the import/init smoke)
@@ -133,6 +134,11 @@ def main():
 
     results.append(("network N3 (tuned events)",
                     _run("N3 tuned-events tests", [py, os.path.join("tests", "test_n3_tuned_events.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"}, timeout=600)))
+
+    results.append(("objects N4 (figure resonators)",
+                    _run("N4 object-resonator tests", [py, os.path.join("tests", "test_n4_object_resonators.py")],
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"}, timeout=600)))
 

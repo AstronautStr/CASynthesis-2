@@ -525,7 +525,7 @@ class BenchTests(unittest.TestCase):
         pygame.init()
         app = db.BenchApp(scene, eng)
         self.assertEqual(app.engine_rows, 5)
-        self.assertEqual(len(app.engine_btns), 14)
+        self.assertEqual(len(app.engine_btns), 15)          # N4 added ca_object_resonators
         self.assertIn(te.ENGINE_ID, app.engine_btns)
         self.assertGreater(app.height - app.footer_y, 40)
         data = app._overlay_runs(te.ENGINE_ID, dict(field_tuning=1, decay_s=0.8))

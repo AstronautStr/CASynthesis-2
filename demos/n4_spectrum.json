@@ -1,0 +1,57 @@
+{
+ "format": 2,
+ "id": "n4_spectrum",
+ "title": "N4.1 - Спектр самой фигуры: glider, 6 поколений/с",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   28,
+   29
+  ],
+  [
+   29,
+   30
+  ],
+  [
+   30,
+   28
+  ],
+  [
+   30,
+   29
+  ],
+  [
+   30,
+   30
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 6.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0
+ },
+ "variants": {
+  "A": {
+   "engine_id": "ca_tuned_events",
+   "engine_params": {
+    "field_tuning": 1,
+    "decay_s": 0.8
+   }
+  },
+  "B": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 1,
+    "frequency_scale": 220.0,
+    "decay_s": 0.8
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: А — N3 Tuned (удары + настройка от поля) / Б — N4 Objects, детектор Disk. Notes: hypothesis and your listening result. Draw, pause and run the CA on either side."
+}
