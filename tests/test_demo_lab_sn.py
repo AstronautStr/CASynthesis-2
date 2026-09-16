@@ -639,14 +639,14 @@ def test_registry_ui_hints_and_scene_validation():
         if os.path.isfile(path):
             with open(path, encoding='utf-8') as f:
                 assert json.load(f) == D.scene_for(rec), path
-    # Registry layout: 11 engines -> 4 rows, including the two new CA channels.
+    # Registry layout: 12 engines -> 4 rows (N1 channels + the N2 periodic Gutter).
     import demo_bench as db
     from casynth_lab.audio_out import LiveEngine
     scene = scene_from_doc(_doc('F1', D.scan(path=2), D.network()))
     runner = DemoRunner(scene)
     eng = LiveEngine(runner, sink=lambda m, b: None)
     app = db.BenchApp(scene, eng)
-    assert app.engine_rows == 4 and len(app.engine_btns) == 11
+    assert app.engine_rows == 4 and len(app.engine_btns) == 12
     ys = sorted({r[1] for r in app.engine_btns.values()})
     assert len(ys) == 4 and app.params_y > ys[-1] + db.ENG_H
     assert app.footer_y >= app.params_y + 7 * db.ROW_H
