@@ -42,8 +42,9 @@ exactly one previous figure and one component continues that figure; every other
 piece (split, merge, chains) sends all its previous figures to tails and gives
 every component a new identity -- the rule of the first model.  Previous figures
 and components with NO overlap are then paired by the torus distance of their
-centres when it is <= MOVE_MAX (1.5 cells), nearest first (ties: lower previous
-index, then lower component index).  Everything left is a tail / a new figure.
+centres (the component's centre without a tie-break history) when it is <= MOVE_MAX
+(1.5 cells), nearest first (ties: lower previous index, then lower component index).
+Everything left is a tail / a new figure.
 """
 import numpy as np
 from scipy import ndimage
@@ -305,9 +306,10 @@ def match(prev_cells, prev_centres, comps, rows, cols):
     free_c = [c for c in range(C) if not rel[:, c].any()]
     if free_p and free_c:
         cand = []
+        centres = {c: centre_of(comps[c], rows, cols, None) for c in free_c}
         for p in free_p:
             for c in free_c:
-                cy, cx = centre_of(comps[c], rows, cols, prev_centres[p])
+                cy, cx = centres[c]
                 dy = torus_delta(cy, prev_centres[p][0], rows)
                 dx = torus_delta(cx, prev_centres[p][1], cols)
                 dist = float(np.hypot(dy, dx))

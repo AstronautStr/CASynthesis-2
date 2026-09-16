@@ -108,7 +108,7 @@ RAMP_MS = 20.0                         # decay r, gain, mode weights, panning
 OUT_SCALE = 0.5
 TAIL_FLOOR = 1e-7                      # |z| below this: a mode / a tail is silent
 N_PALETTE = 12                         # colour index = (id - 1) % N_PALETTE (display only)
-OVERLAY_TEXT = "Objects: a colour per figure (cells, circle, centre); changes inside its circle strike it"
+OVERLAY_TEXT = "Objects: a colour per figure (cells, circle, centre); changes inside strike it"
 
 ROLE_FREE, ROLE_ACTIVE, ROLE_TAIL, ROLE_FADING = 0, 1, 2, 3
 I_K, I_R_LEFT, I_G_LEFT = range(3)
@@ -528,6 +528,9 @@ class ObjectResonatorsEngine(SoundEngine):
                     self._strike(f.slot, e)
         self.counters[3] += 1
 
+    def _waiting(self):
+        return any(f.slot < 0 and len(f.cells) >= 2 for f in self.figures.values())
+
     def _allocate(self, rows, cols):
         """Free active slots to tracked figures without one: largest area first
         (ties: first cell); figures of one cell never sound."""
@@ -551,9 +554,9 @@ class ObjectResonatorsEngine(SoundEngine):
         if not np.array_equal(self.G_prev, self._grid):
             self._track(self.G_prev, self._grid)
             self.G_prev = self._grid.copy()
-        elif self.figures:
+        elif self.figures and self._waiting():
             self._allocate(*self._grid.shape)       # a slot may have been freed
-        if any(f.slot < 0 and len(f.cells) >= 2 for f in self.figures.values()):
+        if self._waiting():
             self.counters[2] += 1
 
     # -- SoundEngine ----------------------------------------------------------------
