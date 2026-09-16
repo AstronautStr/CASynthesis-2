@@ -166,18 +166,27 @@ def own_mask(cells, rows, cols):
 
 
 # -- spectrum ------------------------------------------------------------------------
-def canonical_cells(cells, rows, cols):
-    """The component translated to a canonical place: the circular offsets of its
-    cells from its first cell, shifted to start at (0, 0), sorted.  The same shape
-    at any position (across the seam too) gives the SAME array, so the Laplacian
-    built from it -- and eigvalsh of it -- is identical bit for bit."""
+def canonical_placement(cells, rows, cols):
+    """(canonical cells, order): the component translated to a canonical place --
+    the circular offsets of its cells from its first cell, shifted to start at
+    (0, 0), sorted -- and the permutation of the INPUT rows that produced it
+    (canonical[k] is the image of cells[order[k]]).  The same shape at any position
+    (across the seam too) gives the SAME array, so the Laplacian built from it --
+    and eigvalsh of it -- is identical bit for bit; `order` lets a caller carry
+    per-cell values (the events field) into the node order of that graph."""
     cells = np.asarray(cells, np.int64)
     dr = np.mod(cells[:, 0] - cells[0, 0] + rows // 2, rows) - rows // 2
     dc = np.mod(cells[:, 1] - cells[0, 1] + cols // 2, cols) - cols // 2
     dr = dr - dr.min()
     dc = dc - dc.min()
     rel = np.stack([dr, dc], axis=1)
-    return np.ascontiguousarray(rel[np.lexsort((rel[:, 1], rel[:, 0]))], dtype=np.int64)
+    order = np.lexsort((rel[:, 1], rel[:, 0]))
+    return np.ascontiguousarray(rel[order], dtype=np.int64), order
+
+
+def canonical_cells(cells, rows, cols):
+    """The canonical placement of a component (canonical_placement()[0])."""
+    return canonical_placement(cells, rows, cols)[0]
 
 
 def shape_key(cells, rows, cols):

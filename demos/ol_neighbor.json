@@ -1,7 +1,7 @@
 {
  "format": 2,
- "id": "n4_neighbor",
- "title": "N4.2 - Фигура слышит соседа: неподвижная фигура + blinker, 6 поколений/с",
+ "id": "ol_neighbor",
+ "title": "L3 - Сосед и радиус: Laplace / Objects (17 клеток + blinker, 6 поколений/с)",
  "grid": {
   "rows": 32,
   "cols": 32
@@ -25,15 +25,15 @@
   ],
   [
    9,
-   14
+   17
   ],
   [
    9,
-   15
+   18
   ],
   [
    9,
-   16
+   19
   ],
   [
    10,
@@ -93,17 +93,16 @@
  "rate_hz": 6.0,
  "audio": {
   "f0_hz": 110.0,
-  "level": 1.0
+  "level": 1.0,
+  "side_gain": {
+   "A": 1.0,
+   "B": 1.25
+  }
  },
  "variants": {
   "A": {
-   "engine_id": "ca_object_resonators",
+   "engine_id": "laplacian",
    "engine_params": {
-    "detector": 0,
-    "radius_mul": 1.0,
-    "spectrum": 0,
-    "frequency_scale": 220.0,
-    "decay_s": 0.8,
     "n": 12,
     "spread": 0.0,
     "alpha": 1.0,
@@ -117,8 +116,8 @@
    "engine_id": "ca_object_resonators",
    "engine_params": {
     "detector": 1,
-    "radius_mul": 1.0,
-    "spectrum": 0,
+    "radius_mul": 1.5,
+    "spectrum": 1,
     "frequency_scale": 220.0,
     "decay_s": 0.8,
     "n": 12,
@@ -132,5 +131,5 @@
   }
  },
  "initial_side": "A",
- "listen": "1 / 2: А — N4 Objects, детектор Own / Б — N4 Objects, детектор Disk. Notes: hypothesis and your listening result. Draw, pause and run the CA on either side."
+ "listen": "1 / 2: А — существующий Laplace (n 12, spread 0, alpha 1, shape 0, harm 0, full 1, dyn 0) / Б — Objects / Laplace, те же семь настроек, Disk, Radius x 1.5, Decay 0.8. Notes: hypothesis and your listening result. The seven spectrum settings are shared: \"spectrum A to B\" copies them."
 }

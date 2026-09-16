@@ -48,8 +48,16 @@
    "engine_params": {
     "detector": 1,
     "radius_mul": 1.0,
+    "spectrum": 0,
     "frequency_scale": 220.0,
-    "decay_s": 0.8
+    "decay_s": 0.8,
+    "n": 12,
+    "spread": 0.0,
+    "alpha": 1.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
    }
   }
  },

@@ -136,7 +136,10 @@ def scalar_n4(slots, blocks, sr=SR, ramp_n=882, hp_hz=20.0, out_scale=orz.OUT_SC
     `blocks`: list of per-block actions {'inject': {slot: a}, 'decay': T60,
     'gain': g, 'tune': {slot: (freqs, n)}, 'pan': {slot: p}} applied at the block
     boundary before its samples (the same order as the engine: tune / pan / decay /
-    inject, then gain).  Returns (n, 2)."""
+    inject, then gain).  v2 tune rules: a shrink moves the vanished driven modes into
+    a tail slot of their own (states, frequencies, weights, panning copied, undriven,
+    appended after the existing slots), every other undriven mode left in the slot
+    ramps to weight 0; new modes start from zero.  Returns (n, 2)."""
     qf = math.exp(-1.0 / (sr * 0.00025))
     qs = math.exp(-1.0 / (sr * 0.002))
     strength = 0.75
@@ -167,11 +170,25 @@ def scalar_n4(slots, blocks, sr=SR, ramp_n=882, hp_hz=20.0, out_scale=orz.OUT_SC
     for blk in blocks:
         for si, (freqs, n) in blk.get('tune', {}).items():
             st = S[si]
+            n_old = st['nd']
+            if n < n_old:
+                tail = dict(re=[0.0] * M, im=[0.0] * M, c=[1.0] * M, s=[0.0] * M, w=[0.0] * M,
+                            winc=[0.0] * M, wtgt=[0.0] * M, wleft=st['wleft'], nd=0, zf=0.0, zs=0.0,
+                            pleft=st['pleft'], L=st['L'], Linc=st['Linc'], Ltgt=st['Ltgt'],
+                            R=st['R'], Rinc=st['Rinc'], Rtgt=st['Rtgt'])
+                for k, j in enumerate(range(n, n_old)):
+                    for key in ('re', 'im', 'c', 's', 'w', 'winc', 'wtgt'):
+                        tail[key][k] = st[key][j]
+                    st['re'][j] = st['im'][j] = 0.0
+                    st['w'][j] = st['winc'][j] = st['wtgt'][j] = 0.0
+                S.append(tail)
             for j, f in enumerate(freqs):
                 st['c'][j] = math.cos(2.0 * math.pi * f / sr)
                 st['s'][j] = math.sin(2.0 * math.pi * f / sr)
+                if j >= n_old:
+                    st['re'][j] = st['im'][j] = 0.0
             st['nd'] = n
-            w = [1.0 / n if j < n else st['w'][j] for j in range(len(st['w']))]
+            w = [1.0 / n if j < n else 0.0 for j in range(len(st['w']))]
             st['wtgt'] = w
             st['winc'] = [(w[j] - st['w'][j]) / ramp_n for j in range(len(w))]
             st['wleft'] = ramp_n
@@ -623,7 +640,8 @@ class ScalarReferenceTests(unittest.TestCase):
         got = []
         for blk in blocks:
             for si, (freqs, n) in blk.get('tune', {}).items():
-                e._tune_slot(si, np.asarray(freqs) / 220.0, ramp=True)
+                e._tune_slot(si, np.asarray(freqs), np.full(n, 1.0 / n), np.asarray(freqs) / 220.0,
+                             orz.SPEC_FIGURE, ramp=True)
             for si, p in blk.get('pan', {}).items():
                 e._set_pan(si, p * 31.0, ramp=True)
             if 'decay' in blk:
@@ -637,8 +655,13 @@ class ScalarReferenceTests(unittest.TestCase):
         self.assertGreater(float(np.abs(ref).max()), 1e-4)
         self.assertLessEqual(float(np.abs(got - ref).max()), TOL)
         self.assertEqual(int(e.ndrive[0]), 6)
-        self.assertEqual(int(e.nlive[1]), 5)
-        self.assertEqual(int(e.ndrive[1]), 2)
+        # v2: the vanished DRIVEN mode of slot 1 (3 -> 2) rings on in a tail slot of its
+        # own; the two ringing extras (never driven) faded in place and were zeroed
+        self.assertEqual((int(e.nlive[1]), int(e.ndrive[1])), (2, 2))
+        tails = [s for s in range(orz.N_ACTIVE, orz.N_ACTIVE + orz.N_TAILS) if e.role[s] == orz.ROLE_TAIL]
+        self.assertEqual(len(tails), 1)
+        self.assertEqual(int(e.nlive[tails[0]]), 1)
+        self.assertEqual(float(e.ffreq[tails[0], 0]), 190.2)
 
     def test_decay_values_gain_ramp_and_r_ramp_bookkeeping(self):
         self.assertAlmostEqual(orz.decay_r(0.8), 10 ** (-3 / (SR * 0.8)), places=15)
@@ -892,13 +915,14 @@ class LevelsTimingAndContractTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 registry.create(orz.ENGINE_ID, ctx, registry.defaults(orz.ENGINE_ID))
         spec = registry.get(orz.ENGINE_ID)
-        self.assertEqual(spec.defaults(), dict(detector=1, radius_mul=1.0, frequency_scale=220.0, decay_s=0.8))
+        self.assertEqual(spec.defaults(), dict(detector=1, radius_mul=1.0, spectrum=1, frequency_scale=220.0,
+                                               decay_s=0.8, **orz.laplace_settings({})))
         self.assertEqual(registry.value_text(orz.ENGINE_ID, 'detector', 0), 'Own')
         self.assertEqual(registry.value_text(orz.ENGINE_ID, 'detector', 1), 'Disk')
         with self.assertRaises(ValueError):
             registry.validate_param(orz.ENGINE_ID, 'frequency_scale', 1000.0)
         ov = spec.overlay(dict(detector=0), 32, 32)
-        self.assertIn('[Own]', ov['text'])
+        self.assertIn('[Own, Figure]', ov['text'])
         self.assertNotIn('circles', ov)
         e = engine(neighbor_cells())
         run(e, 1)
@@ -1008,10 +1032,14 @@ class CatalogTests(unittest.TestCase):
             self.assertTrue(case['hypothesis'].startswith('Гипотеза - '))
         a, b = CASES[0]['A'], CASES[0]['B']
         self.assertEqual(a, (te.ENGINE_ID, dict(field_tuning=1, decay_s=0.8)))
-        self.assertEqual(b, (orz.ENGINE_ID, dict(detector=1, radius_mul=1.0, frequency_scale=220.0, decay_s=0.8)))
+        lap = orz.laplace_settings({})                       # the two N4 scenes keep the Figure law
+        self.assertEqual(b, (orz.ENGINE_ID, dict(detector=1, radius_mul=1.0, spectrum=0, frequency_scale=220.0,
+                                                 decay_s=0.8, **lap)))
         a, b = CASES[1]['A'], CASES[1]['B']
-        self.assertEqual(a, (orz.ENGINE_ID, dict(detector=0, radius_mul=1.0, frequency_scale=220.0, decay_s=0.8)))
-        self.assertEqual(b, (orz.ENGINE_ID, dict(detector=1, radius_mul=1.0, frequency_scale=220.0, decay_s=0.8)))
+        self.assertEqual(a, (orz.ENGINE_ID, dict(detector=0, radius_mul=1.0, spectrum=0, frequency_scale=220.0,
+                                                 decay_s=0.8, **lap)))
+        self.assertEqual(b, (orz.ENGINE_ID, dict(detector=1, radius_mul=1.0, spectrum=0, frequency_scale=220.0,
+                                                 decay_s=0.8, **lap)))
         # the N4.2 figures evolve as independently placed figures and never merge
         g = grid(neighbor_cells())
         recv = grid(receiver_cells())

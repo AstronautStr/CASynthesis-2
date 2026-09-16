@@ -31,7 +31,8 @@ os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 
 from casynth_lab import scene_from_doc                                   # noqa: E402
 from casynth_lab.catalog import Catalog                                  # noqa: E402
-from casynth_lab.object_resonators import ENGINE_ID, DET_OWN, DET_DISK   # noqa: E402
+from casynth_lab.object_resonators import (ENGINE_ID, DET_OWN, DET_DISK,   # noqa: E402
+                                           SPEC_FIGURE, laplace_settings)
 from casynth_lab.tuned_events import ENGINE_ID as N3_ENGINE_ID           # noqa: E402
 from demos.build_n1_demos import record_offline                          # noqa: E402
 
@@ -43,8 +44,13 @@ SECONDS = 12.0
 DECAY_S = 0.8
 SCALE_HZ = 220.0
 RADIUS_MUL = 1.0
-N4_OWN = dict(detector=DET_OWN, radius_mul=RADIUS_MUL, frequency_scale=SCALE_HZ, decay_s=DECAY_S)
-N4_DISK = dict(detector=DET_DISK, radius_mul=RADIUS_MUL, frequency_scale=SCALE_HZ, decay_s=DECAY_S)
+# both N4 experiments keep the Figure spectrum law (the Laplace settings are inactive
+# there and stay at their defaults; the Objects / Laplace comparison is
+# demos/build_objects_laplace.py)
+N4_OWN = dict(detector=DET_OWN, radius_mul=RADIUS_MUL, spectrum=SPEC_FIGURE, frequency_scale=SCALE_HZ,
+              decay_s=DECAY_S, **laplace_settings({}))
+N4_DISK = dict(detector=DET_DISK, radius_mul=RADIUS_MUL, spectrum=SPEC_FIGURE, frequency_scale=SCALE_HZ,
+               decay_s=DECAY_S, **laplace_settings({}))
 N3_FIELD = dict(field_tuning=1, decay_s=DECAY_S)
 
 
