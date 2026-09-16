@@ -504,6 +504,70 @@ glider identity / phases, tails, continuation, late edits, stress probes at gain
 0.04, the analysis cost by figure size, timing, catalog check; the summary keeps
 scenes and stress apart and lists the limitations).
 
+## Objects / Laplace -- the old Laplace against Objects with its settings (2026-09-17)
+
+REQ `memory/req-objects-laplace-comparison-2026-09-17.md`.  The Objects engine
+(`ca_object_resonators`, now `model_version ca_object_resonators_n4_v2`,
+`STATE_VERSION 2`) gets a **Spectrum** switch, Figure / Laplace (registry default
+Laplace; a parameter set or snapshot without the key means Figure), and the seven
+settings of the old Laplace with the metadata of the core registry entry itself
+(`n` / part, `spread`, `alpha`, `shape`, `harm`, `fullshape` / full, `dyn`; same
+ranges, defaults and names).  Figure = the N4 spectral path as before
+(`frequency_scale * sqrt(lambda)`, weights 1 / n).  Laplace = the mathematics of
+`casynth_core.map_laplacian` on the figure's OWN component: `casynth_core.laplacian_modes`
+(the spectral part of map_laplacian factored out on 2026-09-17; map_laplacian calls it
+and stays bit-for-bit) on the full torus graph of the component for `full` = 1 (no crop,
+no decimation -- the old node ceiling is not carried over), or map_laplacian on the 8 x 8
+extract window for `full` = 0; the lowest selected mode is `ctx.f0` of the scene; mode
+selection, guard, harmonic pull and the weight law are the old ones; `dyn` samples the
+bench `exc` (the standard events_field) at the figure's cells in the graph's node order
+(a weight, never a strike).  The bank is `sum(w_j Re z_j)` with `w_j = LAPLACE_GAIN (0.7)
+* amplitude_j` (a constant calibration measured on the three scenes, no division by the
+mode / figure count); `Freq scale` is inactive in this mode, the seven are inactive in
+Figure, `dyn` is inactive while `shape` = 0 (a property of the formula).  A change of
+the spectrum law, of the seven or a new `exc` on the same field (only when dyn acts)
+retunes every sounding figure at once (states kept, weights ramp 20 ms) and never
+strikes.  On one compact component away from the seam the frequencies and the weights /
+LAPLACE_GAIN equal map_laplacian on the object's bounding box for the same seven
+settings, f0 and excitation (gate: bit-exact over the 73 states of the three scenes).
+
+**Tail rules of v2 (the three P2 of the Researcher review 2026-09-16):** modes that
+vanish from a continuing figure leave its bank into a tail slot of their own (states,
+frequencies, weights, panning copied; undriven), so a returning mode starts from zero
+and an old tail never gets a new pulse; when every tail AND fading slot is busy nothing
+is cut any more: a leaving figure fades out in place in its active slot over 20 ms
+(counted "in place"; the slot is busy for those 20 ms), vanished modes fade in place
+inside their bank; the only hard cut left (counted "dropped") is such in-place fading
+modes when the figure grows back within those 20 ms with every pool still busy.  The N4
+report now names the tails probe's peak and clip in its summary.
+
+Bench: the panel holds the 12 settings + the figure rows (the window grows to fit);
+**`copy_spectrum`** command / buttons "<< spectrum B to A" / "spectrum A to B >>" copy
+only the spectrum settings both engines offer (`registry.spectrum_keys`; the pair
+Laplace / Objects shares all seven, harmonic engines share `n`, nothing shared ->
+rejected with a message), engines, Detector, Radius x and Decay stay; the full side copy
+`<<` / `>>` is unchanged.  Scene `audio.side_gain` `{A, B}` (optional, default 1.0 =
+bit-exact for older scenes / records): one constant factor on the side's pre-clip gain,
+part of the record / snapshot, applied by Replay / Continue.
+
+Entry: **`run_objects_laplace.bat`** opens the bench on the CATALOG screen of
+`lab_catalog/objects_laplace_2026_09_17/` (build once with
+`python demos/build_objects_laplace.py`; refuses a catalog that holds records).  All
+three records: one field, 32 x 32 torus, B3/S23, 6 gen/s, 12 s, f0 110 Hz, cells = the
+preflight `memory/research/object-resonators-laplace-preflight-2026-09-17.json`; A =
+`laplacian` with the REQ table (n 12, spread 0, alpha 1, shape 0, harm 0, full 1, dyn 0),
+B = Objects / Laplace with the same seven, Disk, Decay 0.8: L1 `ol_glider` (glider inside
+the field, Radius x 1), L2 `ol_galaxy` (Kok's galaxy at (11, 11), Radius x 1), L3
+`ol_neighbor` (the N4.2 receiver + a blinker three columns right, Radius x 1.5).  Side
+gains B 1.08 / 0.74 / 1.25 bring the integral RMS of A and B within 0.03 dB.  The N4
+catalog, its two scenes (Figure law) and Notes stay; its records were made by the v1
+engine and open in their own version.  Gates: `tests/test_objects_laplace.py` (1m).
+Measurements: `python demos/objects_laplace_report.py` ->
+`demos/results/objects_laplace/report.{json,md}` (spectral equality, the seven settings on
+the galaxy, levels / continuation / timing of the scenes, no packet from settings or
+Restore, L3 events at x1 / x1.5 and the live lever, L2 voices and the mode-return rule,
+stress probes and the cost of the Laplace law by size, catalog check).
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B

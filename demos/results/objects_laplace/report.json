@@ -1,0 +1,1008 @@
+{
+ "generated": "2026-09-17 01:33:25",
+ "commit": "289fb6d",
+ "spectral": [
+  {
+   "id": "ol_glider",
+   "states": 73,
+   "setting_sets": 3,
+   "components_compared": 219,
+   "modes_compared": 876,
+   "worst_abs_diff": 0.0,
+   "equal_within_1e10": true
+  },
+  {
+   "id": "ol_galaxy",
+   "states": 73,
+   "setting_sets": 3,
+   "components_compared": 1065,
+   "modes_compared": 4784,
+   "worst_abs_diff": 0.0,
+   "equal_within_1e10": true
+  },
+  {
+   "id": "ol_neighbor",
+   "states": 73,
+   "setting_sets": 3,
+   "components_compared": 438,
+   "modes_compared": 2774,
+   "worst_abs_diff": 0.0,
+   "equal_within_1e10": true
+  }
+ ],
+ "settings": {
+  "n": {
+   "value": 4,
+   "changed_generations": [
+    0,
+    1,
+    2,
+    4,
+    5,
+    6
+   ],
+   "preflight_generations": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ]
+  },
+  "spread": {
+   "value": 1.0,
+   "changed_generations": [
+    2,
+    4,
+    5
+   ],
+   "preflight_generations": [
+    2,
+    4,
+    5
+   ]
+  },
+  "alpha": {
+   "value": 2.0,
+   "changed_generations": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "preflight_generations": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ]
+  },
+  "shape": {
+   "value": 1.0,
+   "changed_generations": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "preflight_generations": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ]
+  },
+  "harm": {
+   "value": 1.0,
+   "changed_generations": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "preflight_generations": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ]
+  },
+  "fullshape": {
+   "value": 0,
+   "changed_generations": [
+    2,
+    4,
+    5
+   ],
+   "preflight_generations": [
+    2,
+    4,
+    5
+   ]
+  },
+  "dyn": {
+   "value": 1.0,
+   "changed_generations": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "preflight_generations": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ]
+  }
+ },
+ "scenes": [
+  {
+   "id": "ol_glider",
+   "side_gain": {
+    "A": 1.0,
+    "B": 1.08
+   },
+   "engines": {
+    "A": "laplacian",
+    "B": "ca_object_resonators"
+   },
+   "block_ms": {
+    "p50": 1.1935000075027347,
+    "p99": 2.6202479901257907,
+    "max": 5.251499998848885,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -35.49998130399351,
+    "peak": 0.04704992457189574,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "B": {
+    "rms_db": -35.52085076680371,
+    "peak": 0.08584974543299884,
+    "clip_blocks": 0,
+    "finite": true,
+    "spectrum": "Laplace",
+    "f0": 110.0,
+    "figures": 1,
+    "tails": 0,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0
+   },
+   "a_minus_b_db": 0.020869462810203743,
+   "within_1db": true,
+   "a_minus_b_db_at_unit_side_gain": 0.6898167770183079,
+   "continue": {
+    "exact": true,
+    "field_changed": true,
+    "from_seconds": 6.0,
+    "blocks": 200
+   }
+  },
+  {
+   "id": "ol_galaxy",
+   "side_gain": {
+    "A": 1.0,
+    "B": 0.74
+   },
+   "engines": {
+    "A": "laplacian",
+    "B": "ca_object_resonators"
+   },
+   "block_ms": {
+    "p50": 1.784599997336045,
+    "p99": 6.2099780223798025,
+    "max": 9.422000002814457,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -26.383837184897565,
+    "peak": 0.2262906588722,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "B": {
+    "rms_db": -26.39024004378934,
+    "peak": 0.29948069653383624,
+    "clip_blocks": 0,
+    "finite": true,
+    "spectrum": "Laplace",
+    "f0": 110.0,
+    "figures": 8,
+    "tails": 37,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0
+   },
+   "a_minus_b_db": 0.006402858891775054,
+   "within_1db": true,
+   "a_minus_b_db_at_unit_side_gain": -2.6094632929189316,
+   "continue": {
+    "exact": true,
+    "field_changed": true,
+    "from_seconds": 6.0,
+    "blocks": 200
+   }
+  },
+  {
+   "id": "ol_neighbor",
+   "side_gain": {
+    "A": 1.0,
+    "B": 1.25
+   },
+   "engines": {
+    "A": "laplacian",
+    "B": "ca_object_resonators"
+   },
+   "block_ms": {
+    "p50": 1.3102999946568161,
+    "p99": 3.0568239901913334,
+    "max": 3.6942000151611865,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -30.257815909828437,
+    "peak": 0.08195205617265347,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "B": {
+    "rms_db": -30.228360483710045,
+    "peak": 0.18147658580225692,
+    "clip_blocks": 0,
+    "finite": true,
+    "spectrum": "Laplace",
+    "f0": 110.0,
+    "figures": 2,
+    "tails": 0,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0
+   },
+   "a_minus_b_db": -0.02945542611839258,
+   "within_1db": true,
+   "a_minus_b_db_at_unit_side_gain": 1.909594562424104,
+   "continue": {
+    "exact": true,
+    "field_changed": true,
+    "from_seconds": 6.0,
+    "blocks": 200
+   }
+  }
+ ],
+ "packets": {
+  "settings": [
+   {
+    "setting": "n",
+    "value": 5,
+    "pulse_moved": false,
+    "frequencies_changed": true,
+    "weight_ramp_samples": 882,
+    "finite": true
+   },
+   {
+    "setting": "spread",
+    "value": 0.8,
+    "pulse_moved": false,
+    "frequencies_changed": true,
+    "weight_ramp_samples": 882,
+    "finite": true
+   },
+   {
+    "setting": "alpha",
+    "value": 1.7,
+    "pulse_moved": false,
+    "frequencies_changed": false,
+    "weight_ramp_samples": 882,
+    "finite": true
+   },
+   {
+    "setting": "shape",
+    "value": 0.6,
+    "pulse_moved": false,
+    "frequencies_changed": true,
+    "weight_ramp_samples": 882,
+    "finite": true
+   },
+   {
+    "setting": "harm",
+    "value": 0.9,
+    "pulse_moved": false,
+    "frequencies_changed": true,
+    "weight_ramp_samples": 882,
+    "finite": true
+   },
+   {
+    "setting": "fullshape",
+    "value": 0,
+    "pulse_moved": false,
+    "frequencies_changed": true,
+    "weight_ramp_samples": 882,
+    "finite": true
+   },
+   {
+    "setting": "dyn",
+    "value": 0.5,
+    "pulse_moved": false,
+    "frequencies_changed": false,
+    "weight_ramp_samples": 882,
+    "finite": true
+   },
+   {
+    "setting": "spectrum",
+    "value": 0,
+    "pulse_moved": false,
+    "frequencies_changed": true,
+    "weight_ramp_samples": 882,
+    "finite": true
+   },
+   {
+    "setting": "spectrum",
+    "value": 1,
+    "pulse_moved": false,
+    "frequencies_changed": true,
+    "weight_ramp_samples": 882,
+    "finite": true
+   },
+   {
+    "setting": "detector",
+    "value": 0,
+    "pulse_moved": false,
+    "frequencies_changed": false,
+    "weight_ramp_samples": 530,
+    "finite": true
+   },
+   {
+    "setting": "radius_mul",
+    "value": 1.0,
+    "pulse_moved": false,
+    "frequencies_changed": false,
+    "weight_ramp_samples": 178,
+    "finite": true
+   },
+   {
+    "setting": "decay_s",
+    "value": 1.2,
+    "pulse_moved": false,
+    "frequencies_changed": false,
+    "weight_ramp_samples": 0,
+    "finite": true
+   }
+  ],
+  "restore_exact": true
+ },
+ "l3": {
+  "radius_1.0": {
+   "generations": 71,
+   "receiver_e": [
+    0.0
+   ],
+   "blinker_e": [
+    4.0
+   ],
+   "receiver_centre": [
+    11.764705882352942,
+    11.764705882352942
+   ],
+   "receiver_R": 5.329619525881508,
+   "receiver_R_eff": 5.329619525881508,
+   "ids": [
+    1,
+    2
+   ],
+   "receiver_modes": 12,
+   "receiver_f_low": 110.00000000000001,
+   "blinker_modes": 2,
+   "blinker_f_low": 110.0
+  },
+  "radius_1.5": {
+   "generations": 71,
+   "receiver_e": [
+    4.0
+   ],
+   "blinker_e": [
+    4.0
+   ],
+   "receiver_centre": [
+    11.764705882352942,
+    11.764705882352942
+   ],
+   "receiver_R": 5.329619525881508,
+   "receiver_R_eff": 7.994429288822262,
+   "ids": [
+    1,
+    2
+   ],
+   "receiver_modes": 12,
+   "receiver_f_low": 110.00000000000001,
+   "blinker_modes": 2,
+   "blinker_f_low": 110.0
+  },
+  "lever_1p5_to_1": {
+   "no_packet_from_the_knob": true,
+   "receiver_e_next": 0.0,
+   "blinker_e_next": 4.0
+  }
+ },
+ "l2": {
+  "generations": 72,
+  "ids_seen": 315,
+  "max_figures": 12,
+  "max_sounding": 8,
+  "max_tails": 51,
+  "evictions": 0,
+  "inplace_fades": 0,
+  "drops": 0,
+  "unvoiced_blocks": 0,
+  "peak_pre_gain_scale": 0.4047036439646436,
+  "mode_return": {
+   "Figure": {
+    "modes": [
+     4,
+     2,
+     4
+    ],
+    "returning_modes_max_abs_state": 0.0,
+    "tail_slots": 1,
+    "tail_undriven": true,
+    "tail_pulse": 0.0,
+    "id_kept": true
+   },
+   "Laplace": {
+    "modes": [
+     4,
+     2,
+     4
+    ],
+    "returning_modes_max_abs_state": 0.0,
+    "tail_slots": 1,
+    "tail_undriven": true,
+    "tail_pulse": 0.0,
+    "id_kept": true
+   }
+  },
+  "per_generation": {
+   "0": {
+    "figures": 4,
+    "sounding": 4,
+    "tails": 0,
+    "sizes": [
+     12,
+     12,
+     12,
+     12
+    ]
+   },
+   "1": {
+    "figures": 4,
+    "sounding": 4,
+    "tails": 4,
+    "sizes": [
+     10,
+     10,
+     10,
+     10
+    ]
+   },
+   "2": {
+    "figures": 1,
+    "sounding": 1,
+    "tails": 8,
+    "sizes": [
+     64
+    ]
+   },
+   "3": {
+    "figures": 12,
+    "sounding": 8,
+    "tails": 9,
+    "sizes": [
+     1,
+     1,
+     1,
+     1,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ]
+   },
+   "4": {
+    "figures": 1,
+    "sounding": 1,
+    "tails": 17,
+    "sizes": [
+     36
+    ]
+   },
+   "5": {
+    "figures": 5,
+    "sounding": 5,
+    "tails": 18,
+    "sizes": [
+     2,
+     2,
+     2,
+     2,
+     36
+    ]
+   },
+   "6": {
+    "figures": 4,
+    "sounding": 4,
+    "tails": 23,
+    "sizes": [
+     7,
+     7,
+     7,
+     7
+    ]
+   },
+   "7": {
+    "figures": 8,
+    "sounding": 8,
+    "tails": 23,
+    "sizes": [
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ]
+   },
+   "8": {
+    "figures": 4,
+    "sounding": 4,
+    "tails": 31,
+    "sizes": [
+     12,
+     12,
+     12,
+     12
+    ]
+   }
+  }
+ },
+ "timing": {
+  "ol_glider": {
+   "p50": 1.1650999949779361,
+   "p95": 2.0245000079739834,
+   "p99": 2.3166359961032867,
+   "max": 3.9376000058837235,
+   "budget": 7.98185941043084,
+   "ok": true
+  },
+  "ol_galaxy": {
+   "p50": 1.7768999969121069,
+   "p95": 3.783560002921147,
+   "p99": 5.935923996148631,
+   "max": 7.459199987351894,
+   "budget": 7.98185941043084,
+   "ok": true
+  },
+  "ol_neighbor": {
+   "p50": 1.3189000019337982,
+   "p95": 2.1883199922740357,
+   "p99": 3.0633960000704974,
+   "max": 3.861700010020286,
+   "budget": 7.98185941043084,
+   "ok": true
+  },
+  "numba": true
+ },
+ "stress": [
+  {
+   "mode": "dense_random_evolving",
+   "settings": {
+    "n": 12,
+    "spread": 0.0,
+    "alpha": 1.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   },
+   "gain": 0.04,
+   "block_ms_p99": 21.22591597901192,
+   "block_ms_max": 23.54699998977594,
+   "A": {
+    "pre_clip_peak": 0.6127958464335709,
+    "clip_blocks": 0,
+    "finite": true,
+    "rms_db": -17.547259854036568
+   },
+   "B": {
+    "pre_clip_peak": 1.1864629391686805,
+    "clip_blocks": 4,
+    "finite": true,
+    "rms_db": -15.804343866763574,
+    "n_figures": 19,
+    "n_sounding": 15,
+    "n_tails": 95,
+    "evictions": 363,
+    "inplace_fades": 0,
+    "drops": 0,
+    "unvoiced_blocks": 84
+   }
+  },
+  {
+   "mode": "dense_random_evolving",
+   "settings": {
+    "n": 20,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 1.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 1.0
+   },
+   "gain": 0.04,
+   "block_ms_p99": 28.65812000469305,
+   "block_ms_max": 37.80709998682141,
+   "A": {
+    "pre_clip_peak": 0.5987776360062808,
+    "clip_blocks": 0,
+    "finite": true,
+    "rms_db": -16.203810364208568
+   },
+   "B": {
+    "pre_clip_peak": 2.0760872185494317,
+    "clip_blocks": 26,
+    "finite": true,
+    "rms_db": -16.37376114353088,
+    "n_figures": 18,
+    "n_sounding": 13,
+    "n_tails": 96,
+    "evictions": 429,
+    "inplace_fades": 0,
+    "drops": 0,
+    "unvoiced_blocks": 168
+   }
+  },
+  {
+   "mode": "random_every_block",
+   "settings": {
+    "n": 12,
+    "spread": 0.0,
+    "alpha": 1.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   },
+   "gain": 0.04,
+   "block_ms_p99": 54.22119900060352,
+   "block_ms_max": 74.61780001176521,
+   "A": {
+    "pre_clip_peak": 0.5043568207791927,
+    "clip_blocks": 0,
+    "finite": true,
+    "rms_db": -22.6254011167836
+   },
+   "B": {
+    "pre_clip_peak": 1.4966054150421035,
+    "clip_blocks": 25,
+    "finite": true,
+    "rms_db": -13.48256495742704,
+    "n_figures": 3,
+    "n_sounding": 1,
+    "n_tails": 96,
+    "evictions": 2136,
+    "inplace_fades": 117,
+    "drops": 0,
+    "unvoiced_blocks": 15
+   }
+  },
+  {
+   "mode": "random_every_block",
+   "settings": {
+    "n": 20,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 1.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 1.0
+   },
+   "gain": 0.04,
+   "block_ms_p99": 154.09743500698823,
+   "block_ms_max": 177.71170000196435,
+   "A": {
+    "pre_clip_peak": 0.5011337642178484,
+    "clip_blocks": 0,
+    "finite": true,
+    "rms_db": -21.82854497891986
+   },
+   "B": {
+    "pre_clip_peak": 2.096458615761163,
+    "clip_blocks": 32,
+    "finite": true,
+    "rms_db": -14.668104020378712,
+    "n_figures": 6,
+    "n_sounding": 1,
+    "n_tails": 96,
+    "evictions": 2098,
+    "inplace_fades": 131,
+    "drops": 0,
+    "unvoiced_blocks": 17
+   }
+  },
+  {
+   "mode": "full_toggle_every_block",
+   "settings": {
+    "n": 12,
+    "spread": 0.0,
+    "alpha": 1.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   },
+   "gain": 0.04,
+   "block_ms_p99": 136.4609279757133,
+   "block_ms_max": 145.21799999056384,
+   "A": {
+    "pre_clip_peak": 0.22788336533301543,
+    "clip_blocks": 0,
+    "finite": true,
+    "rms_db": -38.052043219720694
+   },
+   "B": {
+    "pre_clip_peak": 0.7283909045935308,
+    "clip_blocks": 0,
+    "finite": true,
+    "rms_db": -24.842586552943153,
+    "n_figures": 0,
+    "n_sounding": 0,
+    "n_tails": 96,
+    "evictions": 349,
+    "inplace_fades": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "mode": "full_toggle_every_block",
+   "settings": {
+    "n": 20,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 1.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 1.0
+   },
+   "gain": 0.04,
+   "block_ms_p99": 319.47059999394696,
+   "block_ms_max": 397.22539999638684,
+   "A": {
+    "pre_clip_peak": 0.9305012333500992,
+    "clip_blocks": 0,
+    "finite": true,
+    "rms_db": -23.830780859708803
+   },
+   "B": {
+    "pre_clip_peak": 2.973573745955865,
+    "clip_blocks": 206,
+    "finite": true,
+    "rms_db": -12.610458919937631,
+    "n_figures": 0,
+    "n_sounding": 0,
+    "n_tails": 96,
+    "evictions": 349,
+    "inplace_fades": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "mode": "knobs_moving",
+   "settings": {
+    "n": 12,
+    "spread": 0.0,
+    "alpha": 1.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   },
+   "gain": 0.04,
+   "block_ms_p99": 19.76063999172766,
+   "block_ms_max": 23.579300002893433,
+   "A": {
+    "pre_clip_peak": 0.3053259545373517,
+    "clip_blocks": 0,
+    "finite": true,
+    "rms_db": -26.48498406698846
+   },
+   "B": {
+    "pre_clip_peak": 0.47107266874161846,
+    "clip_blocks": 0,
+    "finite": true,
+    "rms_db": -27.931779725879057,
+    "n_figures": 12,
+    "n_sounding": 8,
+    "n_tails": 5,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  },
+  {
+   "mode": "knobs_moving",
+   "settings": {
+    "n": 20,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 1.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 1.0
+   },
+   "gain": 0.04,
+   "block_ms_p99": 19.893034994311165,
+   "block_ms_max": 30.229700001655146,
+   "A": {
+    "pre_clip_peak": 1.0993762315933417,
+    "clip_blocks": 2,
+    "finite": true,
+    "rms_db": -20.868718917473146
+   },
+   "B": {
+    "pre_clip_peak": 0.5977689680730099,
+    "clip_blocks": 0,
+    "finite": true,
+    "rms_db": -25.626400690317297,
+    "n_figures": 12,
+    "n_sounding": 8,
+    "n_tails": 5,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0,
+    "unvoiced_blocks": 0
+   }
+  }
+ ],
+ "analysis_cost": [
+  {
+   "cells": 64,
+   "shape": 0.0,
+   "ms": 0.3559000033419579,
+   "over_budget": false
+  },
+  {
+   "cells": 64,
+   "shape": 1.0,
+   "ms": 1.1907999869436026,
+   "over_budget": false
+  },
+  {
+   "cells": 256,
+   "shape": 0.0,
+   "ms": 6.1209000123199075,
+   "over_budget": false
+  },
+  {
+   "cells": 256,
+   "shape": 1.0,
+   "ms": 18.972899997606874,
+   "over_budget": true
+  },
+  {
+   "cells": 576,
+   "shape": 0.0,
+   "ms": 39.37210000003688,
+   "over_budget": true
+  },
+  {
+   "cells": 576,
+   "shape": 1.0,
+   "ms": 108.11629999079742,
+   "over_budget": true
+  },
+  {
+   "cells": 1024,
+   "shape": 0.0,
+   "ms": 119.49230000027455,
+   "over_budget": true
+  },
+  {
+   "cells": 1024,
+   "shape": 1.0,
+   "ms": 224.35060000861995,
+   "over_budget": true
+  }
+ ],
+ "catalog_root": "C:\\Users\\Astro\\Documents\\Projects\\CASynth-2\\lab_catalog\\objects_laplace_2026_09_17",
+ "catalog": [
+  {
+   "rid": "20260917-012137-af7136",
+   "title": "L1 - Одна фигура: Laplace / Objects (glider, 6 поколений/с)",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - При одинаковой настройке спек"
+  },
+  {
+   "rid": "20260917-012134-38c688",
+   "title": "L2 - Сборка и распад: Laplace / Objects (Kok's galaxy, 6 поколений/с)",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - На одной и той же распадающей"
+  },
+  {
+   "rid": "20260917-012131-c47bd9",
+   "title": "L3 - Сосед и радиус: Laplace / Objects (17 клеток + blinker, 6 поколений/с)",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - В А обе фигуры звучат через о"
+  }
+ ],
+ "problems": {
+  "scenes": [],
+  "stress": []
+ },
+ "summary": {
+  "scenes": "spectral data of A and B equal on every component of the 73 states (3 setting sets), all seven settings act (spread / full in generations 2, 4, 5), no packet from any setting or Restore, L3 receiver 0 / 4 per generation at x1 / x1.5 and the live lever stops it, L2 voices without drops and the 4 -> 2 -> 4 rule holds, A - B within 1 dB after the scene side gain, no clipping, continuation exact, p99 within the budget, records replay exactly",
+  "stress": "finite in all 8 probes; clipping at gain 0.04 in 6, over budget in 8, in-place fades in 2, hard drops in 0; worst pre-clip peak 2.974",
+  "limitations": [
+   "the n setting changes the galaxy's data in generations [0, 1, 2, 4, 5, 6] only: in generations 3 and 7 every component has 4 cells (3 modes), n = 4 and n = 12 select the same three (the preflight counted the zero-padded array of the old synth)",
+   "on a figure across the seam the old Laplace (bbox of the unwrapped labels) and Objects (torus component) may segment differently; none of the 73 states of the three scenes touches the seam",
+   "the old Laplace's node ceiling (256, lattice decimation) is not carried into the Objects graph: a component above ~300 cells costs more than the block budget on the render thread (see the cost table)",
+   "the level match is one constant factor per scene on side B (ol_glider 1.08, ol_galaxy 0.74, ol_neighbor 1.25), chosen for <= 1 dB of integral RMS, not equal loudness; the old Laplace algorithm is untouched",
+   "the two N4 experiments keep the Figure law; their records were made by the v1 engine and open in their own version",
+   "stress clipping at gain 0.04 (vol 1) in 6 of 8 probes: dense_random_evolving A 0 / B 4 blocks (peaks 0.61 / 1.19); dense_random_evolving A 0 / B 26 blocks (peaks 0.60 / 2.08); random_every_block A 0 / B 25 blocks (peaks 0.50 / 1.50); random_every_block A 0 / B 32 blocks (peaks 0.50 / 2.10); full_toggle_every_block A 0 / B 206 blocks (peaks 0.93 / 2.97); knobs_moving A 2 / B 0 blocks (peaks 1.10 / 0.60)",
+   "8 of 8 stress probes exceed the block budget at p99 (worst 319.5 ms): the figure analysis of dense fields on the render thread -- offline exact, live underruns possible",
+   "in-place fades under whole-field replacement every block: random_every_block: 117; random_every_block: 131",
+   "worst stress pre-clip peak 2.974 at gain 0.04 -- measured for these finite probes, not guaranteed for any playing",
+   "no listening in this report: hearing the difference is the user's verdict"
+  ]
+ }
+}

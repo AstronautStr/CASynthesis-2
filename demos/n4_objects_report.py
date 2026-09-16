@@ -285,7 +285,8 @@ def limits():
                     st['finite'] = bool(np.all(np.isfinite(y[s])))
                     d = runner.snapshot()['display'][s]
                     st.update(n_figures=d['n_figures'], n_sounding=d['n_sounding'], n_tails=d['n_tails'],
-                              evictions=d['evictions'], drops=d['drops'], unvoiced_blocks=d['unvoiced_blocks'])
+                              evictions=d['evictions'], drops=d['drops'], inplace_fades=d['inplace_fades'],
+                              unvoiced_blocks=d['unvoiced_blocks'])
                     row[s] = st
                 results.append(row)
     return results
@@ -306,22 +307,27 @@ def tails_probe():
     e.render_float(0.04)
     d0 = e.display()
     peak = 0.0
+    clip = 0
     for k in range(8):
         e.update_field(np.zeros_like(g), None)
-        y, pk, _ = e.render_float(0.04)
+        y, pk, nc = e.render_float(0.04)
         peak = max(peak, pk)
+        clip += int(nc > 0)
         e.update_field(g, None)
-        y, pk, _ = e.render_float(0.04)
+        y, pk, nc = e.render_float(0.04)
         peak = max(peak, pk)
+        clip += int(nc > 0)
     d1 = e.display()
     e.update_field(np.zeros_like(g), None)
     for _ in range(int(3.0 * SR / BLOCK)):
-        y, pk, _ = e.render_float(0.04)
+        y, pk, nc = e.render_float(0.04)
         peak = max(peak, pk)
+        clip += int(nc > 0)
     d2 = e.display()
     return dict(figures=d0['n_figures'], sounding=d0['n_sounding'], after_cycles=dict(
-        tails=d1['n_tails'], fading=d1['n_fading'], evictions=d1['evictions'], drops=d1['drops']),
-        after_3s_silence=dict(tails=d2['n_tails'], fading=d2['n_fading']), peak=peak,
+        tails=d1['n_tails'], fading=d1['n_fading'], evictions=d1['evictions'], drops=d1['drops'],
+        inplace_fades=d1['inplace_fades']),
+        after_3s_silence=dict(tails=d2['n_tails'], fading=d2['n_fading']), peak=peak, clip_blocks=clip,
         finite=bool(np.isfinite(peak)))
 
 
@@ -406,18 +412,19 @@ def write_markdown(rep, path):
         L.append('  - ' + ', '.join(f'{v:.2f}' for v in sp) + ' Hz')
     L += ['', '## Stress probes (gain 0.04, 6 s, both sides on the same field)', '',
           '| detector | scale | decay | mode | A pre-clip peak | B pre-clip peak | clip blocks A/B | '
-          'figures / sounding / tails B | faded / dropped B | p99 ms |', '|---|---|---|---|---|---|---|---|---|---|']
+          'figures / sounding / tails B | faded / in place / dropped B | p99 ms |', '|---|---|---|---|---|---|---|---|---|---|']
     for row in rep['limits']:
         b = row['B']
         L.append(f"| {row['detector']} | {row['frequency_scale']:.0f} | {row['decay_s']} | {row['mode']} | "
                  f"{row['A']['pre_clip_peak']:.3f} | {b['pre_clip_peak']:.3f} | {row['A']['clip_blocks']}/{b['clip_blocks']} | "
-                 f"{b['n_figures']}/{b['n_sounding']}/{b['n_tails']} | {b['evictions']}/{b['drops']} | "
+                 f"{b['n_figures']}/{b['n_sounding']}/{b['n_tails']} | {b['evictions']}/{b['inplace_fades']}/{b['drops']} | "
                  f"{row['block_ms_p99']:.2f} |")
     t = rep['tails']
     L += ['', f"Tails probe: {t['figures']} blinkers -> sounding {t['sounding']}; after 8 clear / re-add cycles (16 blocks) "
           f"tails {t['after_cycles']['tails']}, fading {t['after_cycles']['fading']}, faded {t['after_cycles']['evictions']}, "
-          f"dropped {t['after_cycles']['drops']}; after 3 s of silence tails {t['after_3s_silence']['tails']}; "
-          f"peak {t['peak']:.3f}, finite {t['finite']}.", '',
+          f"in place {t['after_cycles']['inplace_fades']}, dropped {t['after_cycles']['drops']}; after 3 s of silence "
+          f"tails {t['after_3s_silence']['tails']}; **pre-clip peak {t['peak']:.3f}, clipped blocks {t['clip_blocks']}**, "
+          f"finite {t['finite']}.", '',
           '## Analysis cost by figure size (eigvalsh of one component, this machine)', '',
           '| cells | ms | over the block budget |', '|---|---|---|']
     for row in rep['analysis_cost']:
@@ -521,14 +528,23 @@ def main(argv=None):
                                f"{row[side]['drops']} dropped (shown in the panel)")
     worst = max(rep['limits'], key=lambda r_: max(r_['A']['pre_clip_peak'], r_['B']['pre_clip_peak']))
     worst_peak = max(worst['A']['pre_clip_peak'], worst['B']['pre_clip_peak'])
+    # the separate tails probe is part of the overall maximum (review 2026-09-16, P2)
+    tails_peak = float(rep['tails']['peak'])
+    worst_all = max(worst_peak, tails_peak)
     if clipped:
         limitations.append(f"stress clipping at gain 0.04 (vol 1) in {len(clipped)} of {len(rep['limits'])} probes, "
                            f"none in the scenes (peaks <= 0.09): " + '; '.join(clipped) + ". No AGC and no division "
                            f"by the figure count by the REQ; the only common lever is the N4 output x{orz.OUT_SCALE:g}")
     if dropped:
-        limitations.append("hard drops (the fading pool of 24 full: the quietest fading tail zeroed at once, counted "
-                           "and shown as 'dropped') only under whole-field replacement every block: "
+        limitations.append("hard drops (v2: only in-place fading modes cut when their figure grows back within "
+                           "20 ms while every tail and fading slot is busy; counted and shown as 'dropped'): "
                            + '; '.join(dropped))
+    inplace = [f"{r_['mode']} det {r_['detector']} scale {r_['frequency_scale']:.0f}: {r_['B']['inplace_fades']}"
+               for r_ in rep['limits'] if r_['B']['inplace_fades']]
+    if inplace:
+        limitations.append("in-place fades (v2: every tail and fading slot busy -> the leaving bank fades out in "
+                           "its own slot over 20 ms, no cut; the slot stays busy for those 20 ms): "
+                           + '; '.join(inplace))
     slow = [r_ for r_ in rep['limits'] if r_['block_ms_p99'] >= BUDGET_MS]
     if slow:
         limitations.append(f"{len(slow)} of {len(rep['limits'])} stress probes exceed the block budget at p99 "
@@ -537,15 +553,20 @@ def main(argv=None):
                            f"fields on the render thread -- offline exact, live underruns possible")
     if not rep['tails']['finite']:
         stress_problems.append("tails probe: non-finite")
-    if rep['tails']['after_cycles']['drops']:
-        limitations.append(f"tails probe ({rep['tails']['figures']} blinkers cleared / re-added 8 times within "
-                           f"{16} blocks): {rep['tails']['after_cycles']['drops']} hard drops, "
-                           f"{rep['tails']['after_cycles']['evictions']} faded, all freed after 3 s of silence")
+    limitations.append(f"tails probe ({rep['tails']['figures']} blinkers cleared / re-added 8 times within 16 blocks, "
+                       f"gain 0.04): pre-clip peak {tails_peak:.3f}, {rep['tails']['clip_blocks']} clipped blocks, "
+                       f"{rep['tails']['after_cycles']['evictions']} faded, {rep['tails']['after_cycles']['inplace_fades']} "
+                       f"in place, {rep['tails']['after_cycles']['drops']} hard drops, all freed after 3 s of silence")
     for k, v in rep['timing'].items():
         if isinstance(v, dict) and not v['ok']:
             scene_problems.append(f"timing {k}: p99 {v['p99']:.2f} ms over budget")
     for c_ in rep.get('catalog', []):
-        if c_.get('status') != 'match':
+        if c_.get('status') == 'unavailable':
+            # the records were made by the v1 engine (model ca_object_resonators_n4_v1); the
+            # bench opens them in their own version ("Continue in version"), not here
+            limitations.append(f"catalog {c_.get('rid')}: made by the v1 engine, opens in its own version "
+                               f"({c_.get('reason')})")
+        elif c_.get('status') != 'match':
             scene_problems.append(f"catalog {c_.get('rid')}: {c_.get('status')} {c_.get('reason')}")
     n41 = rep['scenes'][0]
     limitations += [
@@ -555,9 +576,9 @@ def main(argv=None):
         "figure analysis (eigvalsh of L) runs on the render thread at every field change: "
         + ', '.join(f"{r_['cells']} cells {r_['spectrum_ms']:.0f} ms" for r_ in rep['analysis_cost'])
         + " -- a component above ~300 cells exceeds the block budget by itself (the two scenes: <= 17 cells)",
-        f"worst stress pre-clip peak {worst_peak:.3f} at gain 0.04 ({worst['mode']}, detector {worst['detector']}, "
-        f"scale {worst['frequency_scale']:.0f}, decay {worst['decay_s']} s): measured for these finite probes, not "
-        f"guaranteed for any playing",
+        f"worst stress pre-clip peak over EVERY probe {worst_all:.3f} at gain 0.04 (table maximum {worst_peak:.3f}: "
+        f"{worst['mode']}, detector {worst['detector']}, scale {worst['frequency_scale']:.0f}, decay {worst['decay_s']} s; "
+        f"tails probe {tails_peak:.3f}): measured for these finite probes, not guaranteed for any playing",
         "split / merge retire identities (first model): the Tumbler and the R-pentomino change colours often",
         "tails are measured on the float output (int16 quantises below -90 dBFS to zero)",
         "no listening in this report: hearing the difference is the user's verdict",
@@ -568,8 +589,10 @@ def main(argv=None):
                 'sound, receiver Own 0 / Disk 4 per generation and 0 outside the circle, glider one identity with '
                 'two alternating spectra, continuation exact, all records replay exactly'
                 if not scene_problems else '; '.join(scene_problems)),
-        stress=(f"finite in all {len(rep['limits'])} probes; clipping at gain 0.04 in {len(clipped)} probes and hard "
-                f"drops in {len(dropped)} (listed under limitations); worst pre-clip peak {worst_peak:.3f}"
+        stress=(f"finite in all {len(rep['limits'])} probes + the tails probe; clipping at gain 0.04 in {len(clipped)} "
+                f"probes and hard drops in {len(dropped)} (listed under limitations); worst pre-clip peak over every "
+                f"probe {worst_all:.3f} (table {worst_peak:.3f}, tails probe {tails_peak:.3f} with "
+                f"{rep['tails']['clip_blocks']} clipped blocks)"
                 if not stress_problems else '; '.join(stress_problems)),
         limitations=limitations)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
