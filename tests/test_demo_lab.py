@@ -1091,6 +1091,162 @@ def test_clear_and_set_cells_commands():
         eng.stop()
 
 
+def test_text_fields_share_one_model():
+    """2026-09-16: every text input (save Title / Note, listening Notes) is
+    the same TextEdit model: a click puts the caret, arrows / Home / End move
+    it, Shift and a mouse drag select, Ctrl+A/X/C/V, Delete, the S4 word rule
+    for Ctrl+Backspace, wrapping by width; the wheel scrolls Notes."""
+    import types
+    import pygame
+    import demo_bench as db
+    from casynth_lab.textedit import TextEdit
+    px = lambda s: 7 * len(s)                          # noqa: E731 -- fallback metrics
+    # -- the model alone
+    e = TextEdit("заметка  два три ")
+    e.backspace(ctrl=True)
+    assert e.text == "заметка  два "
+    e.backspace(ctrl=True)
+    assert e.text == "заметка  "
+    e.backspace(ctrl=True)
+    e.backspace(ctrl=True)
+    assert e.text == ""
+    e = TextEdit("hello world")
+    e.set_cursor(5)
+    e.move('left', shift=True, ctrl=True)
+    assert e.selection == (0, 5) and e.selected_text() == 'hello'
+    e.insert('HI')
+    assert e.text == 'HI world' and e.cursor == 2 and e.selection is None
+    e.delete()
+    assert e.text == 'HIworld'
+    e.move('end')
+    e.move('left', shift=True)
+    e.move('left', shift=True)
+    assert e.selected_text() == 'ld'
+    e.move('left')
+    assert e.cursor == 5 and e.selection is None            # collapses to the left edge
+    e.insert('\n')
+    assert e.text == 'HIwor ld'                              # single-line: newline -> space
+    e = TextEdit("aaaa bbbb cccc\n\nlong", multiline=True)
+    spans = e.layout(px, 70)                                 # 10 characters per line
+    assert [e.text[s:t] for s, t in spans] == ['aaaa bbbb ', 'cccc', '', 'long']
+    e.set_cursor(len(e.text))
+    e.move_lines(-1, False, spans, px)
+    assert e.cursor == 15                                    # the empty line
+    e.move_lines(-1, False, spans, px)
+    assert e.cursor == 14                                    # end of 'cccc'
+    e.move_lines(-1, False, spans, px)
+    assert e.cursor == 4                                     # same column on line 0
+    e.move_lines(-1, False, spans, px)
+    assert e.cursor == 0
+    e.set_cursor(3)
+    e.move('end', spans=spans)
+    assert e.cursor == 9                                     # before the soft break's space
+    assert e.index_at(spans, px, 31, 0) == 4 and e.index_at(spans, px, 32, 0) == 5
+    e.select_all()
+    assert e.cut() == e.__class__("aaaa bbbb cccc\n\nlong").text and e.text == ''
+    # -- the bench: the save form fields
+    eng = LiveEngine(DemoRunner(SCENE_AB), sink=lambda m, b: None)
+    pygame.init()
+    app = db.BenchApp(SCENE_AB, eng)
+    eng.start()
+    try:
+        app._open_save_form(types.SimpleNamespace(seconds=1.0, window_seconds=8.0))
+        assert app.mode == 'save' and app.save_form['field'] == 'title'
+        r = app._save_form_rects()
+        app.key('a', ctrl=True)
+        app.text_input("hello world")                         # replaces the default title
+        assert app.save_form['title'] == "hello world"
+        assert app.key('home') == 'save:caret'
+        app.text_input('X')
+        assert app.save_form['title'] == "Xhello world"
+        tx = r['title'][0] + 6 + 7 * 6                        # between 'o' and ' '
+        assert app.press((tx, r['title'][1] + 5), 1) == 'save:title'
+        assert app.save_edits['title'].cursor == 6
+        assert app.key('backspace', ctrl=True) == 'save:edit' and app.save_form['title'] == " world"
+        app.press((r['title'][0] + 6, r['title'][1] + 5), 1)  # drag-select ' wor'
+        app.drag((r['title'][0] + 6 + 7 * 4, r['title'][1] + 5))
+        app.release()
+        assert app.save_edits['title'].selected_text() == " wor"
+        app.text_input('W')
+        assert app.save_form['title'] == "Wld"
+        app.key('home')
+        app.key('end', shift=True)
+        assert app.save_edits['title'].selected_text() == 'Wld'
+        app.key('c', ctrl=True)
+        assert app.clipboard == 'Wld'
+        app.key('end')
+        app.key('v', ctrl=True)
+        assert app.save_form['title'] == 'WldWld'
+        app.key('home')
+        app.key('delete')
+        assert app.save_form['title'] == 'ldWld'
+        app.key('delete', ctrl=True)
+        assert app.save_form['title'] == ''
+        assert app.key('tab') == 'save:field'                # the note keeps its own caret
+        app.text_input('note')
+        app.key('left')
+        app.key('left')
+        app.text_input('-')
+        assert app.save_form['note'] == 'no-te' and app.save_form['title'] == ''
+        assert app.key('r') is None and app.key('c') is None  # hotkeys inert while typing
+        assert app.key('escape') == 'save:cancel'
+        # -- the Notes window: the same keys, multiline
+        log = []
+        app.catalog = types.SimpleNamespace(
+            load=lambda rid: types.SimpleNamespace(id=rid, title='T', notes='line one\nline two\n'),
+            write_notes=lambda rid, text: log.append(text))
+        app.session_record = 'rec'
+        assert app.open_notes() and app.mode == 'notes'
+        assert app.notes_edit.text == 'line one\nline two'
+        r = app._notes_rects()['text']
+        assert app.key('up') == 'notes:caret' and app.notes_edit.cursor == 8
+        app.key('home')
+        app.key('end', shift=True)
+        assert app.notes_edit.selected_text() == 'line one'
+        app.text_input('first')
+        assert app.notes_form['text'] == 'first\nline two' and log[-1] == 'first\nline two'
+        assert app.press((r[0] + 6 + 7 * 4, r[1] + 4 + app.line_h + 3), 1) == 'notes:caret'
+        assert app.notes_edit.cursor == 10                    # 'line| two'
+        assert app.key('return') == 'notes:edit' and app.notes_form['text'] == 'first\nline\n two'
+        assert app.key('backspace', ctrl=True) == 'notes:edit'
+        assert app.notes_form['text'] == 'first\n two' and app.notes_edit.cursor == 6
+        assert app.wheel((r[0] + 5, r[1] + 5), -1) == 'notes:scroll' and app.notes_edit.cursor == 6
+        app.key('a', ctrl=True)
+        app.key('x', ctrl=True)
+        assert app.notes_form['text'] == '' and log[-1] == '' and app.clipboard == 'first\n two'
+        app.key('v', ctrl=True)
+        assert app.notes_form['text'] == 'first\n two'
+        app.key('a', ctrl=True)
+        app.text_input('w' * 100)                             # wraps by width: 64 per line
+        spans = app.notes_edit.layout(app.measure, r[2] - 12)
+        assert [s for s, _t in spans] == [0, 64]
+        app.key('home')
+        assert app.notes_edit.cursor == 64
+        app.key('up')
+        assert app.notes_edit.cursor == 0
+        app.key('down')
+        assert app.notes_edit.cursor == 64
+        app.key('down')
+        assert app.notes_edit.cursor == 100
+        # drawing (headless): Notes, then the save form; the font's metrics take over
+        screen = pygame.Surface((app.width, app.height))
+        font = pygame.font.SysFont(db.FONT_NAMES, 17)
+        small = pygame.font.SysFont(db.FONT_NAMES, 14)
+        app.draw(screen, font, small)
+        assert app.measure('ww') == small.size('ww')[0]
+        assert app.key('escape') == 'notes:close'
+        app._open_save_form(types.SimpleNamespace(seconds=1.0, window_seconds=8.0))
+        app.key('a', ctrl=True)
+        app.text_input('x' * 200)                             # single-line: view follows the caret
+        app.draw(screen, font, small)
+        assert app.save_edits['title'].scroll > 0
+        app.key('home')
+        app.draw(screen, font, small)
+        assert app.save_edits['title'].scroll == 0
+    finally:
+        eng.stop()
+
+
 def _run():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

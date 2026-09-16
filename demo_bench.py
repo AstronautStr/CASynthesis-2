@@ -33,6 +33,7 @@ from casynth_lab import (load_scene, SceneError, DemoRunner, SIDES, registry,
                          describe_difference, validate_param)           # noqa: E402
 from casynth_lab.catalog import Catalog, CatalogError, bench_scene     # noqa: E402
 from casynth_lab import provenance as prov                             # noqa: E402
+from casynth_lab.textedit import TextEdit                              # noqa: E402
 from casynth_lab.versions import VersionError                          # noqa: E402
 from casynth_lab import verify as verify_mod                           # noqa: E402
 from casynth_lab.verify import (Verifier, VerifyError, TRACK_EXACT, TRACK_DIFFERS,   # noqa: E402
@@ -121,6 +122,17 @@ class BenchApp:
         # the record continued / opened, or the last one saved here
         self.session_record = None
         self.notes_form = None            # {'rid', 'title', 'text', 'from'} while editing
+        # text fields (2026-09-16): ONE model for every input (casynth_lab.textedit):
+        # caret, click / arrows / Shift selection, Ctrl+A/X/C/V, word rules
+        self.save_edits = None            # {'title': TextEdit, 'note': TextEdit} with the form
+        self.notes_edit = None            # TextEdit of the Notes window
+        self.drag_text = None             # (edit, rect) while the mouse selects text
+        self.measure = lambda s: FALLBACK_CHAR_W * len(s)   # text width (font-bound in draw)
+        self.line_h = 16
+        self._font_bound = None
+        self.clipboard = ''               # the bench's own clipboard (no system one hooked)
+        self.clip_get = None              # callables hooked by main (pygame.scrap)
+        self.clip_put = None
         # side panel
         px, py = self.panel_x, TOP_H
         # row: [A] [<<] [>>] [B]
@@ -197,14 +209,15 @@ class BenchApp:
             return False
 
     # -- input ---------------------------------------------------------------
-    def press(self, pos, button, now=None):
+    def press(self, pos, button, now=None, shift=False):
         """Mouse button down. button: 1 = left, 3 = right.  Returns what was hit.
         `now` (seconds, monotonic) only serves double-click detection in the
-        catalog; tests may pass it explicitly."""
+        catalog; tests may pass it explicitly.  `shift`: Shift is held (a
+        click in a text field extends the selection)."""
         if self.mode == 'save':
-            return self._press_save_form(pos, button)
+            return self._press_save_form(pos, button, shift)
         if self.mode == 'notes':
-            return self._press_notes(pos, button, now)
+            return self._press_notes(pos, button, now, shift)
         if self.mode == 'catalog':
             return self._press_catalog(pos, button, now)
         if self.mode == 'report':
@@ -279,7 +292,10 @@ class BenchApp:
         return None
 
     def drag(self, pos):
-        if self.drag_vol:
+        if self.drag_text is not None:
+            edit, rect = self.drag_text
+            self._caret_from_pos(edit, rect, pos, shift=True)
+        elif self.drag_vol:
             self._set_vol(pos[0])
         elif self.drag_param is not None:
             self._set_param_from_x(pos[0])
@@ -288,10 +304,18 @@ class BenchApp:
             if cell is not None:
                 self._paint(cell)
 
-    def key(self, name, ctrl=False):
+    def key(self, name, ctrl=False, shift=False):
         """Keyboard hotkey by key name ('r' = Restart).  Returns the command or None.
-        `ctrl`: a Control modifier is held (text editing: Ctrl+Backspace)."""
+        `ctrl` / `shift`: modifiers held (text editing: Ctrl+Backspace, Ctrl+A/X/C/V,
+        Shift+arrows select)."""
         name = name.lower()
+        if self.mode in ('save', 'notes'):
+            # every text field: the same editing keys before the form's own
+            edit, rect = self._active_edit()
+            if edit is not None:
+                got = self._edit_key(edit, rect, name, ctrl, shift)
+                if got is not None:
+                    return f"{self.mode}:{got}"
         if self.mode == 'save':
             return self._key_save_form(name, ctrl)
         if self.mode == 'notes':
@@ -332,6 +356,7 @@ class BenchApp:
         self.paint_value = None
         self.drag_vol = False
         self.drag_param = None
+        self.drag_text = None
 
     def _paint(self, cell):
         self._post('set_cell', r=cell[0], c=cell[1], v=self.paint_value)
@@ -361,6 +386,7 @@ class BenchApp:
     def draw(self, screen, font, small):
         import pygame
         self.tick()
+        self._bind_font(small)
         if self.mode == 'catalog':
             screen.fill(C_BG)
             self._draw_catalog(screen, font, small)
@@ -524,6 +550,7 @@ class BenchApp:
         if text.endswith('\n'):
             text = text[:-1]                  # the file's final newline is added on write
         self.notes_form = dict(rid=rid, title=rec.title, text=text, from_mode=self.mode)
+        self.notes_edit = TextEdit(text, multiline=True)
         self.mode = 'notes'
         self.status = ""
         return True
@@ -551,11 +578,8 @@ class BenchApp:
             self.close_notes()
             return 'notes:close'
         if name in ('return', 'enter', 'kp_enter'):
-            self._notes_edit(f['text'] + '\n')
-            return 'notes:edit'
-        if name == 'backspace':
-            cur = f['text']
-            self._notes_edit(self._erase_word(cur) if ctrl else cur[:-1])
+            self.notes_edit.insert('\n')
+            self._after_edit()
             return 'notes:edit'
         return None
 
@@ -565,11 +589,14 @@ class BenchApp:
         return dict(box=(x, y, w, h), close=(x + w - 110, y + 8, 100, 24),
                     text=(x + 12, y + 40, w - 24, h - 78))
 
-    def _press_notes(self, pos, button, now=None):
+    def _press_notes(self, pos, button, now=None, shift=False):
         r = self._notes_rects()
         if self._inside(r['close'], pos) and button == 1:
             self.close_notes()
             return 'notes:close'
+        if self._inside(r['text'], pos) and button == 1:
+            self._caret_from_pos(self.notes_edit, r['text'], pos, shift, start_drag=True)
+            return 'notes:caret'
         if self._inside(r['box'], pos):
             return None
         # outside the window: the live controls keep working while writing
@@ -591,17 +618,9 @@ class BenchApp:
         pygame.draw.rect(screen, C_EDGE, cr, 1, border_radius=4)
         t = small.render('Close (Esc)', True, C_TXT)
         screen.blit(t, (cr[0] + (cr[2] - t.get_width()) // 2, cr[1] + (cr[3] - t.get_height()) // 2))
-        tx, ty, tw, th = r['text']
-        pygame.draw.rect(screen, C_BG, (tx, ty, tw, th), border_radius=3)
-        lines = []
-        for para in (f['text'] + '|').split('\n'):
-            lines.extend(_wrap(para, small, tw - 12) or [''])
-        line_h = small.get_height() + 2
-        n = max(1, (th - 8) // line_h)
-        for i, line in enumerate(lines[-n:]):
-            screen.blit(small.render(line, True, C_TXT), (tx + 6, ty + 4 + i * line_h))
-        screen.blit(small.render("Saved as you type.  Enter = new line.  Clicks outside still work "
-                                 "(A/B, Pause, painting).", True, C_DIM),
+        self._draw_edit(screen, small, r['text'], self.notes_edit, True)
+        screen.blit(small.render("Saved as you type.  Enter = new line.  Ctrl+A/X/C/V.  "
+                                 "Clicks outside still work.", True, C_DIM),
                     (bx + 12, by + r['box'][3] - 26))
 
     # =====================================================================
@@ -760,9 +779,7 @@ class BenchApp:
                 if kind == 'none' or cut is None:
                     self.status = "Nothing to save yet: release Pause CA first"
                 else:
-                    self.save_form = dict(cut=cut, field='title', note='',
-                                          title=Catalog.default_title(self.scene.title))
-                    self.mode = 'save'
+                    self._open_save_form(cut)
         child = getattr(self, 'child', None)
         if child is not None and not child.alive:
             child.wait(1.0)
@@ -830,20 +847,162 @@ class BenchApp:
         self.mode = 'live'
         self.status = "Save cancelled"
 
-    def text_input(self, text):
-        if self.mode == 'notes' and self.notes_form is not None:
-            self._notes_edit(self.notes_form['text'] + text)
-            return
-        f = self.save_form
-        if f is not None:
-            f[f['field']] += text
+    def _open_save_form(self, cut):
+        title = Catalog.default_title(self.scene.title)
+        self.save_form = dict(cut=cut, field='title', note='', title=title)
+        self.save_edits = {'title': TextEdit(title), 'note': TextEdit('')}
+        self.mode = 'save'
 
-    @staticmethod
-    def _erase_word(text):
-        """Ctrl+Backspace: drop trailing spaces, then the last word."""
-        t = text.rstrip(' ')
-        i = t.rfind(' ')
-        return t[:i + 1] if i >= 0 else ''
+    # -- text fields: one behaviour for every input --------------------------------
+    def _active_edit(self):
+        """(TextEdit, rect) of the focused text field in this mode, else (None, None)."""
+        if self.mode == 'save' and self.save_form is not None:
+            field = self.save_form['field']
+            return self.save_edits[field], self._save_form_rects()[field]
+        if self.mode == 'notes' and self.notes_form is not None:
+            return self.notes_edit, self._notes_rects()['text']
+        return None, None
+
+    def _after_edit(self):
+        """The model changed: mirror it into the form (Notes: into the file)."""
+        if self.mode == 'save' and self.save_form is not None:
+            for k, e in self.save_edits.items():
+                self.save_form[k] = e.text
+        elif self.mode == 'notes' and self.notes_form is not None:
+            self._notes_edit(self.notes_edit.text)
+
+    def text_input(self, text):
+        edit, _rect = self._active_edit()
+        if edit is not None:
+            edit.insert(text)
+            self._after_edit()
+
+    def _edit_key(self, edit, rect, name, ctrl=False, shift=False):
+        """Editing keys shared by every text field: caret, selection, clipboard.
+        Returns 'edit' (text changed), 'caret' (caret / selection moved) or
+        None (not an editing key -- the form decides)."""
+        spans = edit.layout(self.measure, rect[2] - 12)
+        before = edit.text
+        if name == 'backspace':
+            edit.backspace(ctrl)
+        elif name == 'delete':
+            edit.delete(ctrl)
+        elif name in ('left', 'right'):
+            edit.move(name, shift, ctrl)
+        elif name in ('home', 'end'):
+            edit.move(name, shift, ctrl, spans)
+        elif name in ('up', 'down'):
+            edit.move_lines(-1 if name == 'up' else 1, shift, spans, self.measure)
+        elif ctrl and name == 'a':
+            edit.select_all()
+        elif ctrl and name == 'c':
+            self._clip_put(edit.copy())
+        elif ctrl and name == 'x':
+            self._clip_put(edit.cut())
+        elif ctrl and name == 'v':
+            edit.insert(self._clip_get())
+        else:
+            return None
+        if edit.text != before:
+            self._after_edit()
+            return 'edit'
+        return 'caret'
+
+    def _caret_from_pos(self, edit, rect, pos, shift=False, start_drag=False):
+        """Put the caret under the mouse (Shift / drag: extend the selection)."""
+        spans = edit.layout(self.measure, rect[2] - 12)
+        if edit.multiline:
+            k = edit.scroll + (pos[1] - rect[1] - 4) // self.line_h
+            x = pos[0] - rect[0] - 6
+        else:
+            k, x = 0, pos[0] - rect[0] - 6 + edit.scroll
+        edit.set_cursor(edit.index_at(spans, self.measure, x, k), shift)
+        if start_drag:
+            self.drag_text = (edit, rect)
+
+    def wheel(self, pos, dy):
+        """Mouse wheel (dy > 0 = up): scrolls the Notes text; the caret stays."""
+        if self.mode == 'notes' and self.notes_form is not None:
+            r = self._notes_rects()['text']
+            if self._inside(r, pos):
+                self.notes_edit.scroll = max(0, self.notes_edit.scroll - int(dy) * 3)
+                self.notes_edit.follow = False
+                return 'notes:scroll'
+        return None
+
+    def _clip_get(self):
+        if self.clip_get is not None:
+            try:
+                s = self.clip_get()
+                if s:
+                    return s
+            except Exception:                  # noqa: BLE001 -- no system clipboard
+                pass
+        return self.clipboard
+
+    def _clip_put(self, s):
+        if not s:
+            return
+        self.clipboard = s
+        if self.clip_put is not None:
+            try:
+                self.clip_put(s)
+            except Exception:                  # noqa: BLE001
+                pass
+
+    def _bind_font(self, small):
+        """Text metrics of the font the fields are drawn with (click -> caret)."""
+        if self._font_bound is not small:
+            self._font_bound = small
+            self.measure = lambda s: small.size(s)[0]
+            self.line_h = small.get_height() + 2
+
+    def _draw_edit(self, screen, small, rect, edit, focused):
+        """A text field: selection, text, caret; the view follows the caret
+        after an edit (multiline: by lines, single-line: by pixels)."""
+        import pygame
+        x, y, w, h = rect
+        pygame.draw.rect(screen, C_BG, rect, border_radius=3)
+        pygame.draw.rect(screen, C_ACCENT if focused else C_EDGE, rect, 1, border_radius=3)
+        measure, text = self.measure, edit.text
+        spans = edit.layout(measure, w - 12)
+        line_h = self.line_h
+        k, cx = edit.caret_pos(spans, measure)
+        if edit.multiline:
+            n = max(1, (h - 8) // line_h)
+            if edit.follow:
+                if k < edit.scroll:
+                    edit.scroll = k
+                elif k >= edit.scroll + n:
+                    edit.scroll = k - n + 1
+            edit.scroll = max(0, min(edit.scroll, max(0, len(spans) - n)))
+            first, ox = edit.scroll, 0
+        else:
+            n, first, avail = 1, 0, w - 12
+            if edit.follow:
+                if cx - edit.scroll > avail:
+                    edit.scroll = cx - avail
+                if cx < edit.scroll:
+                    edit.scroll = cx
+            ox = edit.scroll
+        edit.follow = False
+        sel = edit.selection
+        clip = screen.get_clip()
+        screen.set_clip(pygame.Rect(x + 1, y + 1, w - 2, h - 2))
+        for row, (s, e) in enumerate(spans[first:first + n]):
+            ly = y + 4 + row * line_h
+            if sel is not None:
+                a, b = max(sel[0], s), min(sel[1], e)
+                if a < b or (s == e and sel[0] < s < sel[1]):    # (empty line inside)
+                    x0 = x + 6 - ox + measure(text[s:a])
+                    x1 = x + 6 - ox + measure(text[s:b])
+                    pygame.draw.rect(screen, C_SEL, (x0, ly, max(x1 - x0, 3), line_h))
+            if e > s:
+                screen.blit(small.render(text[s:e], True, C_TXT), (x + 6 - ox, ly))
+            if focused and first + row == k:
+                px = x + 6 - ox + cx
+                pygame.draw.line(screen, C_TXT, (px, ly), (px, ly + line_h - 3), 1)
+        screen.set_clip(clip)
 
     def _key_save_form(self, name, ctrl=False):
         f = self.save_form
@@ -856,10 +1015,6 @@ class BenchApp:
         if name == 'tab':
             f['field'] = 'note' if f['field'] == 'title' else 'title'
             return 'save:field'
-        if name == 'backspace':
-            cur = f[f['field']]
-            f[f['field']] = self._erase_word(cur) if ctrl else cur[:-1]
-            return 'save:edit'
         return None
 
     def _save_form_rects(self):
@@ -868,7 +1023,7 @@ class BenchApp:
                     ok=(x + 20, y + 130, 120, 30), cancel=(x + 160, y + 130, 120, 30),
                     box=(x, y, w, 180))
 
-    def _press_save_form(self, pos, button):
+    def _press_save_form(self, pos, button, shift=False):
         if button != 1:
             return None
         r = self._save_form_rects()
@@ -881,6 +1036,7 @@ class BenchApp:
         for field in ('title', 'note'):
             if self._inside(r[field], pos):
                 self.save_form['field'] = field
+                self._caret_from_pos(self.save_edits[field], r[field], pos, shift, start_drag=True)
                 return f'save:{field}'
         return None
 
@@ -897,11 +1053,7 @@ class BenchApp:
         for field, label in (('title', 'Title'), ('note', 'Note')):
             rect = r[field]
             screen.blit(small.render(label, True, C_DIM), (bx + 20, rect[1] + 5))
-            on = (f['field'] == field)
-            pygame.draw.rect(screen, C_BG, rect, border_radius=3)
-            pygame.draw.rect(screen, C_ACCENT if on else C_EDGE, rect, 1, border_radius=3)
-            txt = f[field] + ('|' if on else '')
-            screen.blit(small.render(txt[-70:], True, C_TXT), (rect[0] + 6, rect[1] + 5))
+            self._draw_edit(screen, small, rect, self.save_edits[field], f['field'] == field)
         for key, label in (('ok', 'Save (Enter)'), ('cancel', 'Cancel (Esc)')):
             rect = r[key]
             pygame.draw.rect(screen, C_BTN_ON if key == 'ok' else C_BTN, rect, border_radius=4)
@@ -909,7 +1061,8 @@ class BenchApp:
             t = small.render(label, True, C_TXT)
             screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                             rect[1] + (rect[3] - t.get_height()) // 2))
-        screen.blit(small.render("Tab switches field. The recording end is already fixed.",
+        screen.blit(small.render("Tab = next field.  Ctrl+A/X/C/V, Shift+arrows.  "
+                                 "The recording end is already fixed.",
                                  True, C_DIM), (bx + 20, by + 165 - 8))
 
     # -- catalog ------------------------------------------------------------------
@@ -1837,7 +1990,7 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
     engine.start()
     print(f"[audio] {engine.status_text()}", flush=True)     # (a parent bench reads the pipe)
     pygame.init()
-    pygame.key.set_repeat(400, 35)     # held keys repeat (Backspace in the save form)
+    pygame.key.set_repeat(400, 35)     # held keys repeat (Backspace, arrows in text fields)
     app = BenchApp(runner.scene, engine, catalog=catalog)
     app.vol = runner.vol
     app.session_record = parent_record_id
@@ -1848,6 +2001,11 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
     screen = pygame.display.set_mode((app.width, app.height))
     pygame.display.set_caption(f"CASynth demo bench - {runner.scene.title}"
                                + (f"  [{caption}]" if caption else ''))
+    try:                               # system clipboard for the text fields (Ctrl+X/C/V)
+        pygame.scrap.init()
+        app.clip_get, app.clip_put = pygame.scrap.get_text, pygame.scrap.put_text
+    except Exception:                  # noqa: BLE001 -- none: the bench keeps its own
+        pass
     font = pygame.font.SysFont(FONT_NAMES, 17)
     small = pygame.font.SysFont(FONT_NAMES, 14)
     clock = pygame.time.Clock()
@@ -1861,11 +2019,15 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
                         and app.mode == 'live':
                     alive = False
                 elif ev.type == pygame.KEYDOWN:
-                    app.key(pygame.key.name(ev.key), ctrl=bool(ev.mod & pygame.KMOD_CTRL))
+                    app.key(pygame.key.name(ev.key), ctrl=bool(ev.mod & pygame.KMOD_CTRL),
+                            shift=bool(ev.mod & pygame.KMOD_SHIFT))
                 elif ev.type == pygame.TEXTINPUT:
                     app.text_input(ev.text)
                 elif ev.type == pygame.MOUSEBUTTONDOWN:
-                    app.press(ev.pos, ev.button)
+                    app.press(ev.pos, ev.button,
+                              shift=bool(pygame.key.get_mods() & pygame.KMOD_SHIFT))
+                elif ev.type == pygame.MOUSEWHEEL:
+                    app.wheel(pygame.mouse.get_pos(), ev.y)
                 elif ev.type == pygame.MOUSEMOTION and (ev.buttons[0] or ev.buttons[2]):
                     app.drag(ev.pos)
                 elif ev.type == pygame.MOUSEBUTTONUP:
