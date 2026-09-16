@@ -1,0 +1,749 @@
+{
+  "status": "research preflight; new Objects Laplace mode is not implemented",
+  "commit": "d2bcdbd",
+  "params": {
+    "n": 12,
+    "spread": 0.0,
+    "alpha": 1.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+  },
+  "f0_hz": 110.0,
+  "rate_hz": 6.0,
+  "seconds": 12.0,
+  "cases": {
+    "glider": {
+      "cells": [
+        [
+          5,
+          6
+        ],
+        [
+          6,
+          7
+        ],
+        [
+          7,
+          5
+        ],
+        [
+          7,
+          6
+        ],
+        [
+          7,
+          7
+        ]
+      ],
+      "checked_states": 73,
+      "edge_occupied_in_checked_states": false,
+      "component_size_sets": [
+        [
+          5
+        ]
+      ],
+      "first_period": [
+        {
+          "gen": 0,
+          "component_sizes": [
+            5
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            4
+          ]
+        },
+        {
+          "gen": 1,
+          "component_sizes": [
+            5
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            4
+          ]
+        },
+        {
+          "gen": 2,
+          "component_sizes": [
+            5
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            4
+          ]
+        },
+        {
+          "gen": 3,
+          "component_sizes": [
+            5
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            4
+          ]
+        }
+      ]
+    },
+    "galaxy": {
+      "cells": [
+        [
+          11,
+          11
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          11,
+          13
+        ],
+        [
+          11,
+          14
+        ],
+        [
+          11,
+          15
+        ],
+        [
+          11,
+          16
+        ],
+        [
+          11,
+          18
+        ],
+        [
+          11,
+          19
+        ],
+        [
+          12,
+          11
+        ],
+        [
+          12,
+          12
+        ],
+        [
+          12,
+          13
+        ],
+        [
+          12,
+          14
+        ],
+        [
+          12,
+          15
+        ],
+        [
+          12,
+          16
+        ],
+        [
+          12,
+          18
+        ],
+        [
+          12,
+          19
+        ],
+        [
+          13,
+          18
+        ],
+        [
+          13,
+          19
+        ],
+        [
+          14,
+          11
+        ],
+        [
+          14,
+          12
+        ],
+        [
+          14,
+          18
+        ],
+        [
+          14,
+          19
+        ],
+        [
+          15,
+          11
+        ],
+        [
+          15,
+          12
+        ],
+        [
+          15,
+          18
+        ],
+        [
+          15,
+          19
+        ],
+        [
+          16,
+          11
+        ],
+        [
+          16,
+          12
+        ],
+        [
+          16,
+          18
+        ],
+        [
+          16,
+          19
+        ],
+        [
+          17,
+          11
+        ],
+        [
+          17,
+          12
+        ],
+        [
+          18,
+          11
+        ],
+        [
+          18,
+          12
+        ],
+        [
+          18,
+          14
+        ],
+        [
+          18,
+          15
+        ],
+        [
+          18,
+          16
+        ],
+        [
+          18,
+          17
+        ],
+        [
+          18,
+          18
+        ],
+        [
+          18,
+          19
+        ],
+        [
+          19,
+          11
+        ],
+        [
+          19,
+          12
+        ],
+        [
+          19,
+          14
+        ],
+        [
+          19,
+          15
+        ],
+        [
+          19,
+          16
+        ],
+        [
+          19,
+          17
+        ],
+        [
+          19,
+          18
+        ],
+        [
+          19,
+          19
+        ]
+      ],
+      "checked_states": 73,
+      "edge_occupied_in_checked_states": false,
+      "component_size_sets": [
+        [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          7,
+          7,
+          7,
+          7
+        ],
+        [
+          10,
+          10,
+          10,
+          10
+        ],
+        [
+          12,
+          12,
+          12,
+          12
+        ],
+        [
+          36
+        ],
+        [
+          36,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          64
+        ]
+      ],
+      "first_period": [
+        {
+          "gen": 0,
+          "component_sizes": [
+            12,
+            12,
+            12,
+            12
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            11,
+            11,
+            11,
+            11
+          ]
+        },
+        {
+          "gen": 1,
+          "component_sizes": [
+            10,
+            10,
+            10,
+            10
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            9,
+            9,
+            9,
+            9
+          ]
+        },
+        {
+          "gen": 2,
+          "component_sizes": [
+            64
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            12
+          ]
+        },
+        {
+          "gen": 3,
+          "component_sizes": [
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            1,
+            1,
+            1,
+            1
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "gen": 4,
+          "component_sizes": [
+            36
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            12
+          ]
+        },
+        {
+          "gen": 5,
+          "component_sizes": [
+            36,
+            2,
+            2,
+            2,
+            2
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            12,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "gen": 6,
+          "component_sizes": [
+            7,
+            7,
+            7,
+            7
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            6,
+            6,
+            6,
+            6
+          ]
+        },
+        {
+          "gen": 7,
+          "component_sizes": [
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4,
+            4
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ]
+        }
+      ]
+    },
+    "neighbor": {
+      "cells": [
+        [
+          8,
+          8
+        ],
+        [
+          8,
+          9
+        ],
+        [
+          9,
+          8
+        ],
+        [
+          9,
+          10
+        ],
+        [
+          9,
+          17
+        ],
+        [
+          9,
+          18
+        ],
+        [
+          9,
+          19
+        ],
+        [
+          10,
+          9
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          11,
+          10
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          12,
+          11
+        ],
+        [
+          12,
+          13
+        ],
+        [
+          13,
+          12
+        ],
+        [
+          13,
+          14
+        ],
+        [
+          14,
+          13
+        ],
+        [
+          14,
+          15
+        ],
+        [
+          15,
+          14
+        ],
+        [
+          15,
+          16
+        ],
+        [
+          16,
+          15
+        ]
+      ],
+      "checked_states": 73,
+      "edge_occupied_in_checked_states": false,
+      "component_size_sets": [
+        [
+          17,
+          3
+        ]
+      ],
+      "first_period": [
+        {
+          "gen": 0,
+          "component_sizes": [
+            17,
+            3
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            12,
+            2
+          ]
+        },
+        {
+          "gen": 1,
+          "component_sizes": [
+            17,
+            3
+          ],
+          "edge_occupied": false,
+          "positive_modes": [
+            12,
+            2
+          ],
+          "receiver_events": {
+            "1.0": 0,
+            "1.5": 4
+          }
+        }
+      ],
+      "receiver_events_all_steps": {
+        "radius_1": 0,
+        "radius_1p5": 4
+      }
+    }
+  },
+  "galaxy_controls_on_generation_1": {
+    "n": {
+      "value": 4,
+      "changes_spectrum": true
+    },
+    "spread": {
+      "value": 1.0,
+      "changes_spectrum": false
+    },
+    "alpha": {
+      "value": 2.0,
+      "changes_spectrum": true
+    },
+    "shape": {
+      "value": 1.0,
+      "changes_spectrum": true
+    },
+    "harm": {
+      "value": 1.0,
+      "changes_spectrum": true
+    },
+    "fullshape": {
+      "value": 0,
+      "changes_spectrum": false
+    },
+    "dyn": {
+      "value": 1.0,
+      "changes_spectrum": true
+    }
+  },
+  "current_radius_catalog": [
+    {
+      "id": "20260916-213633-a52e8c",
+      "exact": {
+        "A": true,
+        "B": true,
+        "monitor": true
+      },
+      "notes": "Гипотеза - В Б спектр принадлежит глайдеру и движется вместе с ним: ожидаем повторяющееся чередование двух окрасок отклика при смене его фаз, сохраняющееся в разных местах поля. В А положение относительно прежних датчиков продолжает перестраивать звук. Проверяем, становится ли связь формы и звучания понятнее и интереснее; каждая из четырёх фаз не обязана давать отдельную высоту.\n\n"
+    },
+    {
+      "id": "20260916-213632-002902",
+      "exact": {
+        "A": true,
+        "B": true,
+        "monitor": true
+      },
+      "notes": "Гипотеза - В А после стартового хвоста остаются удары блинкера. В Б те же изменения должны поддерживать дополнительный резонансный отклик неподвижной соседней фигуры, чей круг охватывает блинкер. Ожидаем более многосоставный, звенящий отклик; проверяем, слышна ли такая связь фигур и интересна ли она в игре. При переносе блинкера за круг дополнительный отклик должен затухнуть.\n\n"
+    }
+  ],
+  "galaxy_controls_over_period": {
+    "n": {
+      "value": 4,
+      "changed_generations": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    "spread": {
+      "value": 1.0,
+      "changed_generations": [
+        2,
+        4,
+        5
+      ]
+    },
+    "alpha": {
+      "value": 2.0,
+      "changed_generations": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    "shape": {
+      "value": 1.0,
+      "changed_generations": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    "harm": {
+      "value": 1.0,
+      "changed_generations": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    "fullshape": {
+      "value": 0,
+      "changed_generations": [
+        2,
+        4,
+        5
+      ]
+    },
+    "dyn": {
+      "value": 1.0,
+      "changed_generations": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    }
+  }
+}
