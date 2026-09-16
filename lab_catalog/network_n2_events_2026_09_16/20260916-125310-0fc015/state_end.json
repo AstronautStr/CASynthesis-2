@@ -1,0 +1,279 @@
+{
+ "snapshot_file_version": 1,
+ "state": {
+  "version": 1,
+  "scene": {
+   "format": 2,
+   "id": "n2_travel",
+   "title": "N2.2 - Движение: glider, 16 поколений/с",
+   "grid": {
+    "rows": 32,
+    "cols": 32
+   },
+   "cells": [
+    [
+     28,
+     29
+    ],
+    [
+     29,
+     30
+    ],
+    [
+     30,
+     28
+    ],
+    [
+     30,
+     29
+    ],
+    [
+     30,
+     30
+    ]
+   ],
+   "rule": "B3/S23",
+   "boundary": "torus",
+   "rate_hz": 16.0,
+   "audio": {
+    "f0_hz": 110.0,
+    "level": 1.0
+   },
+   "variants": {
+    "A": {
+     "engine_id": "gutter_field_periodic",
+     "engine_params": {
+      "scale": 1.0,
+      "depth": 1.0,
+      "interaction": 127,
+      "freeze_ca": 0
+     }
+    },
+    "B": {
+     "engine_id": "ca_event_network",
+     "engine_params": {
+      "rho": 0.88
+     }
+    }
+   },
+   "initial_side": "A",
+   "listen": "1 / 2: А — поле меняет частоты / Б — события возбуждают сеть. Notes: hypothesis and your listening result. Draw, pause and run the CA on either side."
+  },
+  "ctx": {
+   "sr": 44100,
+   "block": 352,
+   "channels": 2,
+   "f0": 110.0,
+   "level": 1.0,
+   "rate_hz": 16.0
+  },
+  "grid": {
+   "__array__": "grid"
+  },
+  "exc": {
+   "__array__": "exc"
+  },
+  "gen": 191,
+  "out_samples": 529408,
+  "t_samples": 529408,
+  "ca_samples": 529408,
+  "running": true,
+  "paused": false,
+  "vol": 0.7,
+  "selected": "A",
+  "xfade_from": null,
+  "xfade_pos": 0,
+  "seq": 1,
+  "pending": [],
+  "memory": {
+   "A": {
+    "gutter_field_periodic": {
+     "scale": 1.0,
+     "depth": 1.0,
+     "interaction": 127,
+     "freeze_ca": 0
+    }
+   },
+   "B": {
+    "ca_event_network": {
+     "rho": 0.88
+    }
+   }
+  },
+  "sides": {
+   "A": {
+    "engine_id": "gutter_field_periodic",
+    "params": {
+     "scale": 1.0,
+     "depth": 1.0,
+     "interaction": 127,
+     "freeze_ca": 0
+    },
+    "peak": 0.05626020167501595,
+    "clip_blocks": 0,
+    "engine_state_version": 1,
+    "engine": {
+     "version": 1,
+     "engine_id": "gutter_field_periodic",
+     "model_version": "gutter_field_periodic_n2_v1",
+     "params": {
+      "scale": 1.0,
+      "depth": 1.0,
+      "interaction": 127,
+      "freeze_ca": 0
+     },
+     "frozen": false,
+     "gain_prev": 0.08378919674128826,
+     "delay": 2064,
+     "node": {
+      "__array__": "sides.A.engine.node"
+     },
+     "resets": {
+      "__array__": "sides.A.engine.resets"
+     },
+     "px1": {
+      "__array__": "sides.A.engine.px1"
+     },
+     "px2": {
+      "__array__": "sides.A.engine.px2"
+     },
+     "py1": {
+      "__array__": "sides.A.engine.py1"
+     },
+     "py2": {
+      "__array__": "sides.A.engine.py2"
+     },
+     "a0": {
+      "__array__": "sides.A.engine.a0"
+     },
+     "a1": {
+      "__array__": "sides.A.engine.a1"
+     },
+     "a2": {
+      "__array__": "sides.A.engine.a2"
+     },
+     "b1": {
+      "__array__": "sides.A.engine.b1"
+     },
+     "b2": {
+      "__array__": "sides.A.engine.b2"
+     },
+     "count": {
+      "__array__": "sides.A.engine.count"
+     },
+     "ffreq": {
+      "__array__": "sides.A.engine.ffreq"
+     },
+     "fQ": {
+      "__array__": "sides.A.engine.fQ"
+     },
+     "lp_a0": {
+      "__array__": "sides.A.engine.lp_a0"
+     },
+     "lp_b1": {
+      "__array__": "sides.A.engine.lp_b1"
+     },
+     "hp_ratio": {
+      "__array__": "sides.A.engine.hp_ratio"
+     },
+     "hp_cut": {
+      "__array__": "sides.A.engine.hp_cut"
+     },
+     "ramps": {
+      "__array__": "sides.A.engine.ramps"
+     },
+     "ramp_left": {
+      "__array__": "sides.A.engine.ramp_left"
+     },
+     "G": {
+      "__array__": "sides.A.engine.G"
+     },
+     "G_tgt": {
+      "__array__": "sides.A.engine.G_tgt"
+     },
+     "G_inc": {
+      "__array__": "sides.A.engine.G_inc"
+     },
+     "ints": {
+      "__array__": "sides.A.engine.ints"
+     },
+     "ring": {
+      "__array__": "sides.A.engine.ring"
+     },
+     "u_held": {
+      "__array__": "sides.A.engine.u_held"
+     },
+     "u_field": {
+      "__array__": "sides.A.engine.u_field"
+     },
+     "counts": {
+      "__array__": "sides.A.engine.counts"
+     },
+     "ratio": {
+      "__array__": "sides.A.engine.ratio"
+     }
+    }
+   },
+   "B": {
+    "engine_id": "ca_event_network",
+    "params": {
+     "rho": 0.88
+    },
+    "peak": 0.01954611047357429,
+    "clip_blocks": 0,
+    "engine_state_version": 1,
+    "engine": {
+     "version": 1,
+     "engine_id": "ca_event_network",
+     "model_version": "ca_event_network_n2_v1",
+     "params": {
+      "rho": 0.88
+     },
+     "sr": 44100,
+     "block": 352,
+     "gain_prev": 2.6879999999999997,
+     "out_scale": 96.0,
+     "grid_pending": {
+      "__array__": "sides.B.engine.grid_pending"
+     },
+     "grid_prev": {
+      "__array__": "sides.B.engine.grid_prev"
+     },
+     "ring": {
+      "__array__": "sides.B.engine.ring"
+     },
+     "D": {
+      "__array__": "sides.B.engine.D"
+     },
+     "lfilt": {
+      "__array__": "sides.B.engine.lfilt"
+     },
+     "zf": {
+      "__array__": "sides.B.engine.zf"
+     },
+     "zs": {
+      "__array__": "sides.B.engine.zs"
+     },
+     "M": {
+      "__array__": "sides.B.engine.M"
+     },
+     "ints": {
+      "__array__": "sides.B.engine.ints"
+     },
+     "rho": {
+      "__array__": "sides.B.engine.rho"
+     },
+     "last_e": {
+      "__array__": "sides.B.engine.last_e"
+     },
+     "last_a": {
+      "__array__": "sides.B.engine.last_a"
+     },
+     "level": {
+      "__array__": "sides.B.engine.level"
+     }
+    }
+   }
+  }
+ }
+}

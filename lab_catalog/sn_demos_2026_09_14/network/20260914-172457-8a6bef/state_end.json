@@ -1,0 +1,358 @@
+{
+ "snapshot_file_version": 1,
+ "state": {
+  "version": 1,
+  "scene": {
+   "format": 2,
+   "id": "sn_n_frozen_kok",
+   "title": "N-frozen (Kok's galaxy): live / frozen links",
+   "grid": {
+    "rows": 32,
+    "cols": 32
+   },
+   "cells": [
+    [
+     11,
+     11
+    ],
+    [
+     11,
+     12
+    ],
+    [
+     11,
+     13
+    ],
+    [
+     11,
+     14
+    ],
+    [
+     11,
+     15
+    ],
+    [
+     11,
+     16
+    ],
+    [
+     11,
+     18
+    ],
+    [
+     11,
+     19
+    ],
+    [
+     12,
+     11
+    ],
+    [
+     12,
+     12
+    ],
+    [
+     12,
+     13
+    ],
+    [
+     12,
+     14
+    ],
+    [
+     12,
+     15
+    ],
+    [
+     12,
+     16
+    ],
+    [
+     12,
+     18
+    ],
+    [
+     12,
+     19
+    ],
+    [
+     13,
+     18
+    ],
+    [
+     13,
+     19
+    ],
+    [
+     14,
+     11
+    ],
+    [
+     14,
+     12
+    ],
+    [
+     14,
+     18
+    ],
+    [
+     14,
+     19
+    ],
+    [
+     15,
+     11
+    ],
+    [
+     15,
+     12
+    ],
+    [
+     15,
+     18
+    ],
+    [
+     15,
+     19
+    ],
+    [
+     16,
+     11
+    ],
+    [
+     16,
+     12
+    ],
+    [
+     16,
+     18
+    ],
+    [
+     16,
+     19
+    ],
+    [
+     17,
+     11
+    ],
+    [
+     17,
+     12
+    ],
+    [
+     18,
+     11
+    ],
+    [
+     18,
+     12
+    ],
+    [
+     18,
+     14
+    ],
+    [
+     18,
+     15
+    ],
+    [
+     18,
+     16
+    ],
+    [
+     18,
+     17
+    ],
+    [
+     18,
+     18
+    ],
+    [
+     18,
+     19
+    ],
+    [
+     19,
+     11
+    ],
+    [
+     19,
+     12
+    ],
+    [
+     19,
+     14
+    ],
+    [
+     19,
+     15
+    ],
+    [
+     19,
+     16
+    ],
+    [
+     19,
+     17
+    ],
+    [
+     19,
+     18
+    ],
+    [
+     19,
+     19
+    ]
+   ],
+   "rule": "B3/S23",
+   "boundary": "torus",
+   "rate_hz": 2.0,
+   "audio": {
+    "f0_hz": 110.0,
+    "level": 1.0
+   },
+   "variants": {
+    "A": {
+     "engine_id": "pm_network",
+     "engine_params": {
+      "coupling": 2.0,
+      "freeze_links": 0,
+      "trim_db": 3.0
+     }
+    },
+    "B": {
+     "engine_id": "pm_network",
+     "engine_params": {
+      "coupling": 2.0,
+      "freeze_links": 1,
+      "trim_db": 3.0
+     }
+    }
+   },
+   "initial_side": "A",
+   "listen": "1 / 2 = listen A / B. Space pauses the CA; paint inside the six link marks."
+  },
+  "ctx": {
+   "sr": 44100,
+   "block": 352,
+   "channels": 2,
+   "f0": 110.0,
+   "level": 1.0,
+   "rate_hz": 2.0
+  },
+  "grid": {
+   "__array__": "grid"
+  },
+  "exc": {
+   "__array__": "exc"
+  },
+  "gen": 23,
+  "out_samples": 529408,
+  "t_samples": 529408,
+  "ca_samples": 529408,
+  "running": true,
+  "paused": false,
+  "vol": 0.7,
+  "selected": "A",
+  "xfade_from": null,
+  "xfade_pos": 0,
+  "seq": 1,
+  "pending": [],
+  "memory": {
+   "A": {
+    "pm_network": {
+     "coupling": 2.0,
+     "freeze_links": 0,
+     "trim_db": 3.0
+    }
+   },
+   "B": {
+    "pm_network": {
+     "coupling": 2.0,
+     "freeze_links": 1,
+     "trim_db": 3.0
+    }
+   }
+  },
+  "sides": {
+   "A": {
+    "engine_id": "pm_network",
+    "params": {
+     "coupling": 2.0,
+     "freeze_links": 0,
+     "trim_db": 3.0
+    },
+    "peak": 0.2653840412068921,
+    "clip_blocks": 0,
+    "engine_state_version": 1,
+    "engine": {
+     "version": 1,
+     "engine_id": "pm_network",
+     "params": {
+      "coupling": 2.0,
+      "freeze_links": 0,
+      "trim_db": 3.0
+     },
+     "oversample": 4,
+     "taps": 257,
+     "theta": 0.5188208616780976,
+     "beta": 2.0,
+     "gate": 1.0,
+     "frozen": false,
+     "gain_prev": 0.31640840999549696,
+     "W": {
+      "__array__": "sides.A.engine.W"
+     },
+     "W_target": {
+      "__array__": "sides.A.engine.W_target"
+     },
+     "fir_mem": {
+      "__array__": "sides.A.engine.fir_mem"
+     },
+     "hpf_zi": {
+      "__array__": "sides.A.engine.hpf_zi"
+     }
+    }
+   },
+   "B": {
+    "engine_id": "pm_network",
+    "params": {
+     "coupling": 2.0,
+     "freeze_links": 1,
+     "trim_db": 3.0
+    },
+    "peak": 0.26845159146927855,
+    "clip_blocks": 0,
+    "engine_state_version": 1,
+    "engine": {
+     "version": 1,
+     "engine_id": "pm_network",
+     "params": {
+      "coupling": 2.0,
+      "freeze_links": 1,
+      "trim_db": 3.0
+     },
+     "oversample": 4,
+     "taps": 257,
+     "theta": 0.5188208616780976,
+     "beta": 2.0,
+     "gate": 1.0,
+     "frozen": true,
+     "gain_prev": 0.31640840999549696,
+     "W": {
+      "__array__": "sides.B.engine.W"
+     },
+     "W_target": {
+      "__array__": "sides.B.engine.W_target"
+     },
+     "fir_mem": {
+      "__array__": "sides.B.engine.fir_mem"
+     },
+     "hpf_zi": {
+      "__array__": "sides.B.engine.hpf_zi"
+     }
+    }
+   }
+  }
+ }
+}
