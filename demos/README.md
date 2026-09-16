@@ -404,6 +404,53 @@ the REQ's hypotheses in Notes: N2.1 pulsar 6 gen/s (`n2_rhythm`), N2.2 glider
 reference bit-exactly).  Measurements: `python demos/n2_events_report.py` ->
 `demos/results/network_n2/report.{json,md}`.
 
+## N3 -- the field tunes the resonances, its events strike them (2026-09-16)
+
+REQ `memory/req-network-combined-n3-2026-09-16.md`: one NEW engine
+`ca_tuned_events` ("Tuned", `casynth_lab/tuned_events.py`) that joins the N2
+channels -- the events of the field strike, the live cells tune:
+
+    cell changes -> pulses + the N2-B delay network -> eight tuned banks -> sound
+    live cells   -> eight frequency multipliers -------------^
+
+The network part is the N2-B sample math unchanged (pulse 0.25 / 2 ms x 0.75,
+D = 149..1361, M = 0.25 - delta, 6 kHz loss, tanh) at rho = 0.88 FIXED: its
+states equal `ca_event_network`'s for the same field history.  Each node's
+loss-filter value drives a bank of 24 decaying complex resonators
+`z' = r e^{i theta} z + l_i`, `b_i = mean Re z'`, `r = 10^(-3 / (SR T60))`, at the
+EXACT N1 frequencies `CONFIG['filters_hz']` (8 x 24, never regenerated) times the
+node's multiplier `ratio_i = 2^(2 u_i - 1)` (u from the periodic readout, the
+N1 / N2-A law with scale 1, depth 1; float32 messages at the block boundary,
+states kept across a retune).  Output: N2 cos / sin panning of the banks, one
+20 Hz DC filter per channel, x4, then the bench gain.  Nothing but the banks
+is heard.  Controls: `Field tuning` (Fixed / Field: the comparison switch,
+retunes without reset and without an event) and `Decay` (T60 0.20..1.50 s,
+default 0.80; a manual change ramps r linearly over 20 ms).  Only SR 44100 /
+block 352 / stereo.  Snapshot = the whole network, Re / Im of the banks, the
+frequencies (checked against the field's law on restore), r and its ramp, both
+DC filters, previous / pending field, gain ramp, versions.  Panel: the last
+packet a_i per node (bars), the bank level (tick), the multiplier, the mode and
+the decay; overlay: node centres + half-weight ring.
+
+Entry: **`run_network_n3.bat`** opens the bench on the CATALOG screen of
+`lab_catalog/network_n3_combined_2026_09_16/` (build once with
+`python demos/build_n3_combined.py`; refuses a catalog that holds records).
+Both sides run the same engine on the same field: A = hits on fixed resonances
+(`field_tuning 0`), B = hits + field tuning (`field_tuning 1`); the REQ's
+hypotheses are in Notes.  Records (32 x 32 torus, B3/S23, evolution on, cells
+= the preflight fixtures `memory/research/network-n3-preflight-2026-09-16.json`):
+N3.1 `n3_cycles` 24 s at 6 gen/s -- Octagon II (period 5) for 12 s, then ONE
+journalled `set_cells` of the whole field at the first block boundary at or
+after 12 s puts the Tumbler (period 14) in its place (audio states and the CA
+clock kept), 12 s more; N3.2 `n3_travel` glider 16 gen/s, 12 s; N3.3
+`n3_growth` R-pentomino 6 gen/s, 12 s.  Gates: `tests/test_n3_tuned_events.py`
+(1k; the whole chain against an independent scalar reference within 1e-12,
+both modes, through a decay ramp).  Measurements:
+`python demos/n3_combined_report.py` -> `demos/results/network_n3/report.{json,md}`
+(scenes against the preflight, swap, tails, continuation, late edits, the two
+control probes, stress probes at gain 0.04, timing, catalog check; the summary
+keeps scenes and stress probes apart and lists the limitations).
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B
