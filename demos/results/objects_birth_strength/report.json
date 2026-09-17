@@ -1,0 +1,1275 @@
+{
+ "generated": "2026-09-18 01:30",
+ "commit": "ecb464bf3213d20dbe5ef7a93a2d940afa09108f",
+ "numba": true,
+ "law": {
+  "law": "s=0: Uniform. 0<s<1: normalize_L2((1-s)+s*b) to sqrt(m). s=1: return original b without renormalization. 1<s<=4: normalize_L2(b**s) to sqrt(m). No births: no packet at every s. Zero participation with births: Uniform at s=0, no packet at s>0.",
+  "profiles": [
+   {
+    "id": "gen1_11c_3b",
+    "b": [
+     1.28891,
+     0.0,
+     1.157027
+    ],
+    "strengths": {
+     "0": {
+      "c": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "c": [
+       1.201263,
+       0.524819,
+       1.132048
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "1": {
+      "c": [
+       1.28891,
+       0.0,
+       1.157027
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "c": [
+       1.348662,
+       0.0,
+       1.086789
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "4": {
+      "c": [
+       1.452653,
+       0.0,
+       0.943291
+      ],
+      "max_diff": 1.1102230246251565e-16
+     }
+    }
+   },
+   {
+    "id": "gen1_3c_2b",
+    "b": [
+     1.0,
+     1.0
+    ],
+    "strengths": {
+     "0": {
+      "c": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "c": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "1": {
+      "c": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "c": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "4": {
+      "c": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     }
+    }
+   },
+   {
+    "id": "gen2_16c_3b",
+    "b": [
+     0.7815,
+     0.703746,
+     1.376227
+    ],
+    "strengths": {
+     "0": {
+      "c": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "c": [
+       0.901214,
+       0.861881,
+       1.202071
+      ],
+      "max_diff": 1.1102230246251565e-16
+     },
+     "1": {
+      "c": [
+       0.7815,
+       0.703746,
+       1.376227
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "c": [
+       0.515832,
+       0.418295,
+       1.599671
+      ],
+      "max_diff": 4.440892098500626e-16
+     },
+     "4": {
+      "c": [
+       0.178722,
+       0.117524,
+       1.718792
+      ],
+      "max_diff": 2.220446049250313e-16
+     }
+    }
+   },
+   {
+    "id": "gen3_7c_0b",
+    "b": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strengths": {
+     "0": {
+      "c": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "c": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "max_diff": 0.0
+     },
+     "1": {
+      "c": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "c": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "max_diff": 0.0
+     },
+     "4": {
+      "c": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "max_diff": 0.0
+     }
+    }
+   },
+   {
+    "id": "gen3_3c_2b",
+    "b": [
+     1.224745,
+     0.707107
+    ],
+    "strengths": {
+     "0": {
+      "c": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "c": [
+       1.121971,
+       0.860919
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "1": {
+      "c": [
+       1.224745,
+       0.707107
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "c": [
+       1.341641,
+       0.447214
+      ],
+      "max_diff": 5.551115123125783e-17
+     },
+     "4": {
+      "c": [
+       1.405564,
+       0.156174
+      ],
+      "max_diff": 0.0
+     }
+    }
+   },
+   {
+    "id": "gen3_3c_1b",
+    "b": [
+     1.224745,
+     0.707107
+    ],
+    "strengths": {
+     "0": {
+      "c": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "c": [
+       1.121971,
+       0.860919
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "1": {
+      "c": [
+       1.224745,
+       0.707107
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "c": [
+       1.341641,
+       0.447214
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "4": {
+      "c": [
+       1.405564,
+       0.156174
+      ],
+      "max_diff": 0.0
+     }
+    }
+   },
+   {
+    "id": "equal_modes",
+    "b": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "strengths": {
+     "0": {
+      "c": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "c": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "1": {
+      "c": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "c": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "4": {
+      "c": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     }
+    }
+   },
+   {
+    "id": "one_mode",
+    "b": [
+     1.0
+    ],
+    "strengths": {
+     "0": {
+      "c": [
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "c": [
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "1": {
+      "c": [
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "c": [
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "4": {
+      "c": [
+       1.0
+      ],
+      "max_diff": 0.0
+     }
+    }
+   },
+   {
+    "id": "exact_zero_component",
+    "b": [
+     0.0,
+     1.0,
+     1.414214
+    ],
+    "strengths": {
+     "0": {
+      "c": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "c": [
+       0.526354,
+       1.052708,
+       1.270731
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "1": {
+      "c": [
+       0.0,
+       1.0,
+       1.414214
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "c": [
+       0.0,
+       0.774597,
+       1.549193
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "4": {
+      "c": [
+       0.0,
+       0.420084,
+       1.680336
+      ],
+      "max_diff": 2.220446049250313e-16
+     }
+    }
+   },
+   {
+    "id": "zero_participation_with_births",
+    "b": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "strengths": {
+     "0": {
+      "c": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "c": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "max_diff": 0.0
+     },
+     "1": {
+      "c": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "c": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "max_diff": 0.0
+     },
+     "4": {
+      "c": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "max_diff": 0.0
+     }
+    }
+   }
+  ],
+  "max_diff": 4.440892098500626e-16,
+  "max_norm_error": 8.881784197001252e-16,
+  "control_16_cells": {
+   "0": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "0.5": [
+    0.901214,
+    0.861881,
+    1.202071
+   ],
+   "1": [
+    0.7815,
+    0.703746,
+    1.376227
+   ],
+   "2": [
+    0.515832,
+    0.418295,
+    1.599671
+   ],
+   "4": [
+    0.178722,
+    0.117524,
+    1.718792
+   ]
+  },
+  "exact_zero": {
+   "0.5": 0.5263540128930309,
+   "1": 0.0,
+   "2": 0.0,
+   "4": 0.0
+  },
+  "equal_stay_equal": true,
+  "one_mode": true,
+  "s1_is_b_itself": true,
+  "all_nonnegative": true
+ },
+ "m1": {
+  "transitions": 72,
+  "equal": {
+   "frequencies": true,
+   "weights": true,
+   "packet_moments": true,
+   "a": true,
+   "tracker": true
+  },
+  "packets_with_events": 123,
+  "max_norm_error": 8.881784197001252e-16,
+  "phases": [
+   {
+    "phase": "gen1_11c_3b",
+    "frequencies_hz": [
+     110,
+     434.7,
+     551.0
+    ],
+    "strengths": {
+     "0": {
+      "measured": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "preflight": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "measured": [
+       1.2013,
+       0.5248,
+       1.132
+      ],
+      "preflight": [
+       1.2013,
+       0.5248,
+       1.132
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "1": {
+      "measured": [
+       1.2889,
+       0.0,
+       1.157
+      ],
+      "preflight": [
+       1.2889,
+       0.0,
+       1.157
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "2": {
+      "measured": [
+       1.3487,
+       0.0,
+       1.0868
+      ],
+      "preflight": [
+       1.3487,
+       0.0,
+       1.0868
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "4": {
+      "measured": [
+       1.4527,
+       0.0,
+       0.9433
+      ],
+      "preflight": [
+       1.4527,
+       0.0,
+       0.9433
+      ],
+      "max_diff": 4.440892098500626e-16
+     }
+    }
+   },
+   {
+    "phase": "gen1_3c_2b",
+    "frequencies_hz": [
+     110,
+     110
+    ],
+    "strengths": {
+     "0": {
+      "measured": [
+       1.0,
+       1.0
+      ],
+      "preflight": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "measured": [
+       1.0,
+       1.0
+      ],
+      "preflight": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "1": {
+      "measured": [
+       1.0,
+       1.0
+      ],
+      "preflight": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "measured": [
+       1.0,
+       1.0
+      ],
+      "preflight": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "4": {
+      "measured": [
+       1.0,
+       1.0
+      ],
+      "preflight": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     }
+    }
+   },
+   {
+    "phase": "gen2_16c_3b",
+    "frequencies_hz": [
+     110,
+     545.0,
+     659.8
+    ],
+    "strengths": {
+     "0": {
+      "measured": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "preflight": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "measured": [
+       0.9012,
+       0.8619,
+       1.2021
+      ],
+      "preflight": [
+       0.9012,
+       0.8619,
+       1.2021
+      ],
+      "max_diff": 0.0
+     },
+     "1": {
+      "measured": [
+       0.7815,
+       0.7037,
+       1.3762
+      ],
+      "preflight": [
+       0.7815,
+       0.7037,
+       1.3762
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "2": {
+      "measured": [
+       0.5158,
+       0.4183,
+       1.5997
+      ],
+      "preflight": [
+       0.5158,
+       0.4183,
+       1.5997
+      ],
+      "max_diff": 4.440892098500626e-16
+     },
+     "4": {
+      "measured": [
+       0.1787,
+       0.1175,
+       1.7188
+      ],
+      "preflight": [
+       0.1787,
+       0.1175,
+       1.7188
+      ],
+      "max_diff": 2.220446049250313e-16
+     }
+    }
+   },
+   {
+    "phase": "gen3_3c_2b",
+    "frequencies_hz": [
+     110,
+     216.2
+    ],
+    "strengths": {
+     "0": {
+      "measured": [
+       1.0,
+       1.0
+      ],
+      "preflight": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "measured": [
+       1.122,
+       0.8609
+      ],
+      "preflight": [
+       1.122,
+       0.8609
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "1": {
+      "measured": [
+       1.2247,
+       0.7071
+      ],
+      "preflight": [
+       1.2247,
+       0.7071
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "2": {
+      "measured": [
+       1.3416,
+       0.4472
+      ],
+      "preflight": [
+       1.3416,
+       0.4472
+      ],
+      "max_diff": 5.551115123125783e-17
+     },
+     "4": {
+      "measured": [
+       1.4056,
+       0.1562
+      ],
+      "preflight": [
+       1.4056,
+       0.1562
+      ],
+      "max_diff": 2.220446049250313e-16
+     }
+    }
+   },
+   {
+    "phase": "gen3_3c_1b",
+    "frequencies_hz": [
+     110,
+     216.2
+    ],
+    "strengths": {
+     "0": {
+      "measured": [
+       1.0,
+       1.0
+      ],
+      "preflight": [
+       1.0,
+       1.0
+      ],
+      "max_diff": 0.0
+     },
+     "0.5": {
+      "measured": [
+       1.122,
+       0.8609
+      ],
+      "preflight": [
+       1.122,
+       0.8609
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "1": {
+      "measured": [
+       1.2247,
+       0.7071
+      ],
+      "preflight": [
+       1.2247,
+       0.7071
+      ],
+      "max_diff": 0.0
+     },
+     "2": {
+      "measured": [
+       1.3416,
+       0.4472
+      ],
+      "preflight": [
+       1.3416,
+       0.4472
+      ],
+      "max_diff": 2.220446049250313e-16
+     },
+     "4": {
+      "measured": [
+       1.4056,
+       0.1562
+      ],
+      "preflight": [
+       1.4056,
+       0.1562
+      ],
+      "max_diff": 0.0
+     }
+    }
+   }
+  ],
+  "states": {
+   "0": {
+    "per_mode_max": 0.0,
+    "uniform_max": 3.2723536528484647e-292,
+    "zero_participation": 0,
+    "refused": 0
+   },
+   "0.5": {
+    "per_mode_max": 3.6714860756181285e-292,
+    "uniform_max": 0.0,
+    "zero_participation": 0,
+    "refused": 0
+   },
+   "1": {
+    "per_mode_max": 4.007798353705692e-292,
+    "uniform_max": 0.0,
+    "zero_participation": 0,
+    "refused": 0
+   },
+   "2": {
+    "per_mode_max": 4.390323128513367e-292,
+    "uniform_max": 0.0,
+    "zero_participation": 0,
+    "refused": 0
+   },
+   "4": {
+    "per_mode_max": 4.599502021757417e-292,
+    "uniform_max": 0.0,
+    "zero_participation": 0,
+    "refused": 0
+   }
+  }
+ },
+ "pcm": {
+  "s0_equals_uniform_whole_scene": true,
+  "uniform_same_at_s1_and_s4": true,
+  "s1_vs_s4_max_abs_diff": 795,
+  "records_2026_09_17_equal_current_code": {
+   "20260917-233513-cab7d1": {
+    "title": "E1 - Рождения / смерти: Events Births / Deaths (Octagon II p5)",
+    "commit": "a3efc67cbff6bc7e1ec5fd4f619e32ce99931a87",
+    "outputs": {
+     "A": true,
+     "B": true,
+     "monitor": true
+    }
+   },
+   "20260917-233512-1edfef": {
+    "title": "M1 - Общий удар / место рождения: Excitation Uniform / Birth position (Jam p3)",
+    "commit": "a3efc67cbff6bc7e1ec5fd4f619e32ce99931a87",
+    "outputs": {
+     "A": true,
+     "B": true,
+     "monitor": true
+    }
+   }
+  },
+  "still_field_change_no_packet_tail_equal": true,
+  "still_field_changes_counter_equal": true,
+  "sequence_e1": [
+   {
+    "transition": 1,
+    "s": 4.0,
+    "e": 8.0,
+    "c": [
+     0.7319,
+     1.4345,
+     0.6376
+    ],
+    "per_mode_before": 2.2444891494031883e-42,
+    "per_mode_after": 1.5627367769330485e-14,
+    "uniform_before": 0.0,
+    "uniform_after": 0.0
+   },
+   {
+    "transition": 2,
+    "s": 0.0,
+    "e": 16.0,
+    "c": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "per_mode_before": 1.5627367769330485e-14,
+    "per_mode_after": 2.1280206780868396e-28,
+    "uniform_before": 0.0,
+    "uniform_after": 1.2104238947966033e-14
+   },
+   {
+    "transition": 3,
+    "s": 0.5,
+    "e": 0.0,
+    "c": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "per_mode_before": 2.1280206780868396e-28,
+    "per_mode_after": 2.897782962049786e-42,
+    "uniform_before": 1.2104238947966033e-14,
+    "uniform_after": 1.6482667557314049e-28
+   },
+   {
+    "transition": 4,
+    "s": 1.0,
+    "e": 8.0,
+    "c": [
+     1.1061,
+     1.3085,
+     0.2538
+    ],
+    "per_mode_before": 2.897782962049786e-42,
+    "per_mode_after": 1.4254532442356924e-14,
+    "uniform_before": 1.6482667557314049e-28,
+    "uniform_after": 2.2444891494031883e-42
+   },
+   {
+    "transition": 5,
+    "s": 2.0,
+    "e": 8.0,
+    "c": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "per_mode_before": 1.4254532442356924e-14,
+    "per_mode_after": 1.0893815053169619e-14,
+    "uniform_before": 2.2444891494031883e-42,
+    "uniform_after": 3.056381210305487e-56
+   },
+   {
+    "transition": 6,
+    "s": 0.0,
+    "e": 8.0,
+    "c": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "per_mode_before": 1.0893815053169619e-14,
+    "per_mode_after": 1.4834400801582874e-28,
+    "uniform_before": 3.056381210305487e-56,
+    "uniform_after": 1.089381505316943e-14
+   }
+  ],
+  "journal_knob_changes_continue_exact": {
+   "changes": [
+    [
+     1.5,
+     2.0
+    ],
+    [
+     2.5,
+     0.0
+    ],
+    [
+     3.5,
+     4.0
+    ],
+    [
+     4.5,
+     0.5
+    ],
+    [
+     5.5,
+     1.0
+    ]
+   ],
+   "exact": true,
+   "b_strength_at_snapshot": 1.0
+  },
+  "v4_snapshot_imports_as_s1_same_sound": true
+ },
+ "levels": {
+  "unit": {
+   "0": {
+    "strength": 0.0,
+    "side_gain": 1.0,
+    "rms_db": -36.5972805223161,
+    "steady_rms_db": -36.84994076147174,
+    "peak": 0.13390141392185687,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "0.5": {
+    "strength": 0.5,
+    "side_gain": 1.0,
+    "rms_db": -36.21462129188144,
+    "steady_rms_db": -36.439698201948204,
+    "peak": 0.13390141392185703,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "1": {
+    "strength": 1.0,
+    "side_gain": 1.0,
+    "rms_db": -36.03322722045016,
+    "steady_rms_db": -36.24651696492477,
+    "peak": 0.13390141392185714,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "2": {
+    "strength": 2.0,
+    "side_gain": 1.0,
+    "rms_db": -35.79930768260584,
+    "steady_rms_db": -35.997726323391895,
+    "peak": 0.13390141392185714,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "4": {
+    "strength": 4.0,
+    "side_gain": 1.0,
+    "rms_db": -35.3422665568637,
+    "steady_rms_db": -35.51518259648692,
+    "peak": 0.13390141392185706,
+    "clip_blocks": 0,
+    "finite": true
+   }
+  },
+  "delivered": {
+   "0": {
+    "strength": 0.0,
+    "side_gain": 0.92,
+    "rms_db": -37.32204823854906,
+    "steady_rms_db": -37.57473316379197,
+    "peak": 0.12318930080810833,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "0.5": {
+    "strength": 0.5,
+    "side_gain": 0.92,
+    "rms_db": -36.939380646673065,
+    "steady_rms_db": -37.16448061719183,
+    "peak": 0.12318930080810846,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "1": {
+    "strength": 1.0,
+    "side_gain": 0.92,
+    "rms_db": -36.757996975777594,
+    "steady_rms_db": -36.971309227126994,
+    "peak": 0.12318930080810858,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "2": {
+    "strength": 2.0,
+    "side_gain": 0.92,
+    "rms_db": -36.52408669308713,
+    "steady_rms_db": -36.72253198084047,
+    "peak": 0.12318930080810858,
+    "clip_blocks": 0,
+    "finite": true
+   },
+   "4": {
+    "strength": 4.0,
+    "side_gain": 0.92,
+    "rms_db": -36.067021722509764,
+    "steady_rms_db": -36.2399600263476,
+    "peak": 0.12318930080810848,
+    "clip_blocks": 0,
+    "finite": true
+   }
+  }
+ },
+ "scenes": [
+  {
+   "id": "obs_m2",
+   "side_gain": {
+    "A": 1.0,
+    "B": 0.92
+   },
+   "strength": {
+    "A": 1.0,
+    "B": 4.0
+   },
+   "seconds": 12.0,
+   "block_ms": {
+    "p50": 0.6759000243619084,
+    "p99": 3.5910459735896443,
+    "max": 6.857000000309199,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -36.03322722045016,
+    "steady_rms_db": -36.24651696492477,
+    "peak": 0.13390141392185714,
+    "clip_blocks": 0,
+    "finite": true,
+    "figures": 1,
+    "sounding": 1,
+    "tails": 26,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0,
+    "excitation": "Birth position",
+    "birth_strength": 1.0,
+    "position_supported": true,
+    "unsupported": 0,
+    "zero_participation": 0
+   },
+   "B": {
+    "rms_db": -36.067021722509764,
+    "steady_rms_db": -36.2399600263476,
+    "peak": 0.12318930080810848,
+    "clip_blocks": 0,
+    "finite": true,
+    "figures": 1,
+    "sounding": 1,
+    "tails": 26,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0,
+    "excitation": "Birth position",
+    "birth_strength": 4.0,
+    "position_supported": true,
+    "unsupported": 0,
+    "zero_participation": 0
+   },
+   "a_minus_b_db": 0.03379450205960666,
+   "steady_a_minus_b_db": -0.0065569385771695465,
+   "within_1db": true,
+   "steady_a_minus_b_db_at_unit_side_gain": -0.7313343684378495,
+   "continue": {
+    "exact": true,
+    "field_changed": true,
+    "from_seconds": 6.0,
+    "blocks": 200
+   }
+  }
+ ],
+ "timing": {
+  "0": {
+   "p99_ms": 2.875916024204345,
+   "max_ms": 3.262900048866868,
+   "finite": true,
+   "peak_b": 0.006436025036444902,
+   "clip_b": 0
+  },
+  "0.5": {
+   "p99_ms": 3.0894979962613434,
+   "max_ms": 3.756500023882836,
+   "finite": true,
+   "peak_b": 0.007046715821929734,
+   "clip_b": 0
+  },
+  "1": {
+   "p99_ms": 3.433566014282406,
+   "max_ms": 4.730499989818782,
+   "finite": true,
+   "peak_b": 0.007620426775071177,
+   "clip_b": 0
+  },
+  "2": {
+   "p99_ms": 3.6213959893211727,
+   "max_ms": 4.1319000301882625,
+   "finite": true,
+   "peak_b": 0.007244218322656236,
+   "clip_b": 0
+  },
+  "4": {
+   "p99_ms": 3.3539240155369043,
+   "max_ms": 5.325399979483336,
+   "finite": true,
+   "peak_b": 0.009995418575102805,
+   "clip_b": 0
+  },
+  "knob_moved": {
+   "p99_ms": 3.4037359745707367,
+   "max_ms": 3.9997000130824745,
+   "finite": true,
+   "peak_b": 0.007613568875380326,
+   "clip_b": 0,
+   "final_strength": 1.0
+  },
+  "budget_ms": 7.98185941043084,
+  "ok": true
+ },
+ "catalog": {
+  "root": "C:\\Users\\Astro\\Documents\\Projects\\CASynth-2\\lab_catalog\\objects_birth_strength_2026_09_18",
+  "present": true,
+  "records": {
+   "20260918-013020-88dc88": {
+    "title": "M2 - Сила места рождения: Birth strength 1 / 4 (Jam p3)",
+    "status": "match",
+    "reason": "",
+    "pinned": "pinned",
+    "commit": "ecb464bf3213d20dbe5ef7a93a2d940afa09108f",
+    "has_notes": true,
+    "side_gain": {
+     "A": 1.0,
+     "B": 0.92
+    }
+   }
+  }
+ }
+}
