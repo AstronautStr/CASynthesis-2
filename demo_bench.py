@@ -63,7 +63,7 @@ PANEL_W = 270
 TAB_W, TAB_H = 96, 30
 ARROW_W = 28
 ENG_W, ENG_H = 74, 24
-ROW_H = 26
+ROW_H = 24                   # 26 until 2026-09-17: Objects has 13 knobs + a range row, the window stays < 1000 px
 DISPLAY_ROW_H = 14           # one bar row of an engine display (W links / node u)
 SLIDER_W = 120
 RANGE_FIELD_W = 54           # Min / Max field of a ranged knob (2026-09-17)
@@ -1223,6 +1223,9 @@ class BenchApp:
             # modes, lowest frequency), the last packet a (bar), the bank level (tick, /5)
             import pygame as _pg
             ramp = "  (ramping)" if int(disp.get('ramp_left', 0)) > 0 else ""
+            if 'attack_ms' in disp:
+                ramp += (f"   attack {float(disp['attack_ms']):.1f} ms"
+                         + ("  (ramping)" if int(disp.get('attack_ramp_left', 0)) > 0 else ""))
             extra = ""
             if disp.get('drops') or disp.get('evictions') or disp.get('inplace_fades'):
                 extra = (f"   faded {disp.get('evictions', 0)} in place {disp.get('inplace_fades', 0)}"

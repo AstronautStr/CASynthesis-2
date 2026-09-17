@@ -71,14 +71,27 @@ Sample path (float64), per sample k, for every slot s in use (active figures,
 tails, fading tails):
     p_s   = 0.75 ((1 - q_f) z_f - (1 - q_s) z_s) / (q_s - q_f)   the N2 pulse
     z_f  *= q_f ;  z_s *= q_s                                       tau 0.25 / 2 ms
+    u_s   = q u_s + (1 - q) p_s                                     Attack (v3, 2026-09-17):
+                                                                   one causal pole on the
+                                                                   pulse before the bank
     for the modes j < n_live of the slot:
-        z_j' = r e^{i theta_j} z_j  (+ p_s if j < n_driven)         theta_j = 2 pi f_j / SR
+        z_j' = r e^{i theta_j} z_j  (+ u_s if j < n_driven)         theta_j = 2 pi f_j / SR
         b_s += w_j Re z_j'                                           w_j = ramped weight
     L += panL_s b_s ;  R += panR_s b_s                             p = cx / (cols - 1),
                                                                    L / R = cos / sin(pi p / 2)
     hp[k] = h (hp[k-1] + mix[k] - mix[k-1])  per channel, h = exp(-2 pi 20 / SR)
     out   = hp * OUT_SCALE * gain[k]           gain = bench gain, 20 ms linear ramp
     r = 10 ** (-3 / (SR decay_s)), a manual decay change ramps r over 20 ms.
+    q = exp(-ln 9 / (SR attack_ms / 1000)) for attack_ms > 0, else 0 (REQ
+    memory/req-objects-radius-attack-2026-09-17.md: attack_ms is the 10 -> 90 %
+    rise time of the smoothing's step response, not a promise about the audible
+    attack of a note); a manual Attack change ramps q linearly over 20 ms.  At
+    q = 0 the formula gives u_s = p_s EXACTLY (0 u + 1 p), so Attack 0 -- and the
+    end of a ramp back to 0 -- is bit for bit the previous sample path; the
+    state u_s is per slot, zeroed with the pulse states when a bank becomes a
+    tail (a tail gets no excitation), part of the snapshot.  No level
+    compensation: the smoothing changes brightness and level (measured in
+    demos/objects_radius_attack_report.py).
 No sum over the number of figures, no AGC.  From zero state without events the
 output is exactly 0.
 
@@ -109,12 +122,16 @@ older snapshot = 1.0),
 `spectrum` (Figure / Laplace, registry default Laplace; absent from an older
 snapshot / parameter set = Figure), `frequency_scale` (55..880 Hz, default 220;
 Figure law only: retunes every Figure-tuned slot at once, states kept),
-`decay_s` (0.20..1.50 s, default 0.80; r ramp 20 ms), and the seven Laplace
-settings (Laplace law only; absent from an older snapshot = their defaults).
-Only SR 44100 / block 352 / stereo.  Own model_version / STATE_VERSION; the
-snapshot holds every slot array, the tracker (ids, slots, cells, centres, radii),
-the id counter, both fields and both excitations, the ramps, the DC filters and
-the gain.
+`decay_s` (0.20..1.50 s, default 0.80; r ramp 20 ms), `attack_ms` ("Attack",
+0..20 ms, default 0 = the previous pulse exactly; q ramp 20 ms; absent from an
+older parameter set / snapshot = 0), and the seven Laplace settings (Laplace law
+only; absent from an older snapshot = their defaults).
+Only SR 44100 / block 352 / stereo.  Own model_version / STATE_VERSION (v3 = the
+Attack state: `zu`, `qq`, a fourth counter; a v2 snapshot of model v2 is accepted
+as Attack 0 with those at zero -- bit for bit the v2 sound); the snapshot holds
+every slot array, the tracker (ids, slots, cells, centres, radii), the id
+counter, both fields and both excitations, the ramps, the DC filters and the
+gain.
 """
 import math
 
@@ -146,15 +163,20 @@ PARAMS = [('detector', 'Detector', 0, 1, True, 1),
           ('radius_mul', 'Radius x', 0.0, math.inf, False, 1.0),
           ('spectrum', 'Spectrum', 0, 1, True, 1),
           ('frequency_scale', 'Freq scale', 55.0, 880.0, False, 220.0),
-          ('decay_s', 'Decay', 0.20, 1.50, False, 0.80)] + list(LAPLACE_PARAMS)
+          ('decay_s', 'Decay', 0.20, 1.50, False, 0.80),
+          ('attack_ms', 'Attack', 0.0, 20.0, False, 0.0)] + list(LAPLACE_PARAMS)
 # absent from older snapshots / parameter sets: the bit-exact v1 behaviour (Figure law)
-OPTIONAL_PARAMS = {'radius_mul': 1.0, 'spectrum': 0}
+OPTIONAL_PARAMS = {'radius_mul': 1.0, 'spectrum': 0, 'attack_ms': 0.0}
 OPTIONAL_PARAMS.update({p[0]: p[5] for p in LAPLACE_PARAMS})
 CHOICES = {'detector': ('Own', 'Disk'), 'spectrum': ('Figure', 'Laplace')}
 DET_OWN, DET_DISK = 0, 1
 SPEC_FIGURE, SPEC_LAPLACE = 0, 1
-MODEL_VERSION = 'ca_object_resonators_n4_v2'
-STATE_VERSION = 2
+MODEL_VERSION = 'ca_object_resonators_n4_v3'
+STATE_VERSION = 3
+# older snapshots this engine restores (state version -> model version): the v2 state
+# (no Attack) is the v3 state with zu / qq / the attack ramp counter at zero
+COMPATIBLE_STATES = {2: 'ca_object_resonators_n4_v2'}
+ATTACK_LN9 = math.log(9.0)             # 10 -> 90 % of a one-pole step response takes ln 9 time constants
 SR_REQUIRED = en.SR_REQUIRED
 BLOCK_REQUIRED = en.BLOCK_REQUIRED
 N_BANK = 24
@@ -174,7 +196,7 @@ N_PALETTE = 12                         # colour index = (id - 1) % N_PALETTE (di
 OVERLAY_TEXT = "Objects: a colour per figure (cells, circle, centre); changes inside strike it"
 
 ROLE_FREE, ROLE_ACTIVE, ROLE_TAIL, ROLE_FADING = 0, 1, 2, 3
-I_K, I_R_LEFT, I_G_LEFT = range(3)
+I_K, I_R_LEFT, I_G_LEFT, I_Q_LEFT = range(4)
 R_CUR, R_TGT, R_INC = range(3)
 P_LCUR, P_LINC, P_LTGT, P_RCUR, P_RINC, P_RTGT = range(6)
 H_PREV, H_MIX = range(2)
@@ -183,6 +205,15 @@ C_EVICT, C_DROP, C_UNVOICED, C_CHANGES, C_INPLACE = range(5)
 
 def decay_r(t60_s, sr=SR_REQUIRED):
     return 10.0 ** (-3.0 / (float(sr) * float(t60_s)))
+
+
+def attack_q(attack_ms, sr=SR_REQUIRED):
+    """The one-pole coefficient of the Attack smoothing: 0 for attack_ms <= 0 (the
+    exact previous path), else exp(-ln 9 / (sr * attack_ms / 1000))."""
+    a = float(attack_ms)
+    if a <= 0.0:
+        return 0.0
+    return math.exp(-ATTACK_LN9 / (float(sr) * a / 1000.0))
 
 
 def pan_of(cx, cols):
@@ -240,7 +271,7 @@ def laplace_modes_of(cells, rows, cols, f0, settings, exc=None):
 
 @_jit
 def _render(n, out, role, ndrive, nlive, zre, zim, cth, sth, wcur, winc, wtgt, wleft,
-            zf, zs, pan, pleft, rr, gg, ints, cst, hp_h, hp, out_scale, level):
+            zf, zs, zu, pan, pleft, rr, gg, qq, ints, cst, hp_h, hp, out_scale, level):
     """`n` samples into out (n, 2) = the formulas of the module docstring INCLUDING
     OUT_SCALE and the ramped gain.  level[s] = max |b_s| over the block (display)."""
     S = role.shape[0]
@@ -265,8 +296,17 @@ def _render(n, out, role, ndrive, nlive, zre, zim, cth, sth, wcur, winc, wtgt, w
             else:
                 gg[R_CUR] = gg[R_CUR] + gg[R_INC]
             ints[I_G_LEFT] = left
+        left = ints[I_Q_LEFT]
+        if left > 0:
+            left -= 1
+            if left == 0:
+                qq[R_CUR] = qq[R_TGT]
+            else:
+                qq[R_CUR] = qq[R_CUR] + qq[R_INC]
+            ints[I_Q_LEFT] = left
         r = rr[R_CUR]
         g = gg[R_CUR]
+        q = qq[R_CUR]
         L = 0.0
         R = 0.0
         for s in range(S):
@@ -296,6 +336,9 @@ def _render(n, out, role, ndrive, nlive, zre, zim, cth, sth, wcur, winc, wtgt, w
             p = strength * ((1.0 - qf) * zf[s] - (1.0 - qs) * zs[s]) / (qs - qf)
             zf[s] = zf[s] * qf
             zs[s] = zs[s] * qs
+            u = q * zu[s] + (1.0 - q) * p        # Attack: q = 0 gives exactly p
+            zu[s] = u
+            p = u
             nd = ndrive[s]
             acc = 0.0
             for j in range(nl):
@@ -385,12 +428,15 @@ class ObjectResonatorsEngine(SoundEngine):
         self.wleft = np.zeros(S, np.int64)
         self.zf = np.zeros(S)
         self.zs = np.zeros(S)
+        self.zu = np.zeros(S)
         self.pan = np.zeros((S, 6))
         self.pleft = np.zeros(S, np.int64)
         r = decay_r(self.params['decay_s'], self.sr)
         self.rr = np.array([r, r, 0.0])
         self.gg = np.zeros(3)
-        self.ints = np.zeros(3, np.int64)
+        q = attack_q(self.params.get('attack_ms', OPTIONAL_PARAMS['attack_ms']), self.sr)
+        self.qq = np.array([q, q, 0.0])
+        self.ints = np.zeros(4, np.int64)
         self.hp = np.zeros((2, 2))
         self.level = np.zeros(S)
         self.last_e = np.zeros(S)
@@ -404,8 +450,8 @@ class ObjectResonatorsEngine(SoundEngine):
 
     def _kernel(self, n, out):
         _render(n, out, self.role, self.ndrive, self.nlive, self.zre, self.zim, self.cth, self.sth,
-                self.wcur, self.winc, self.wtgt, self.wleft, self.zf, self.zs, self.pan, self.pleft,
-                self.rr, self.gg, self.ints, self.consts, self.hp_h, self.hp, OUT_SCALE, self.level)
+                self.wcur, self.winc, self.wtgt, self.wleft, self.zf, self.zs, self.zu, self.pan, self.pleft,
+                self.rr, self.gg, self.qq, self.ints, self.consts, self.hp_h, self.hp, OUT_SCALE, self.level)
 
     # -- geometry helpers -------------------------------------------------------------
     def _radius_mul(self):
@@ -475,6 +521,7 @@ class ObjectResonatorsEngine(SoundEngine):
         self.wleft[s] = 0
         self.zf[s] = 0.0
         self.zs[s] = 0.0
+        self.zu[s] = 0.0
         self.pan[s] = 0.0
         self.pleft[s] = 0
         self.level[s] = 0.0
@@ -482,7 +529,7 @@ class ObjectResonatorsEngine(SoundEngine):
         self.last_a[s] = 0.0
 
     _SLOT_FIELDS = ('role', 'slot_id', 'smode', 'ndrive', 'nlive', 'zre', 'zim', 'sqrtlam', 'ffreq',
-                    'cth', 'sth', 'wcur', 'winc', 'wtgt', 'wleft', 'zf', 'zs', 'pan', 'pleft', 'level',
+                    'cth', 'sth', 'wcur', 'winc', 'wtgt', 'wleft', 'zf', 'zs', 'zu', 'pan', 'pleft', 'level',
                     'last_e', 'last_a')
 
     def _move_slot(self, src, dst):
@@ -565,6 +612,7 @@ class ObjectResonatorsEngine(SoundEngine):
         self.slot_id[s] = 0
         self.zf[s] = 0.0
         self.zs[s] = 0.0
+        self.zu[s] = 0.0                                          # a tail gets no excitation
         self.last_e[s] = 0.0
         self.last_a[s] = 0.0
         if self.nlive[s] == 0:
@@ -826,6 +874,16 @@ class ObjectResonatorsEngine(SoundEngine):
                 self.rr[R_CUR] = tgt
                 self.rr[R_INC] = 0.0
                 self.ints[I_R_LEFT] = 0
+        if float(self.params['attack_ms']) != float(old.get('attack_ms', OPTIONAL_PARAMS['attack_ms'])):
+            tgt = attack_q(self.params['attack_ms'], self.sr)
+            self.qq[R_TGT] = tgt
+            if self.ramp_n > 0:
+                self.qq[R_INC] = (tgt - self.qq[R_CUR]) / self.ramp_n
+                self.ints[I_Q_LEFT] = self.ramp_n
+            else:
+                self.qq[R_CUR] = tgt
+                self.qq[R_INC] = 0.0
+                self.ints[I_Q_LEFT] = 0
 
     def _set_gain(self, gain):
         g = float(gain)
@@ -907,11 +965,13 @@ class ObjectResonatorsEngine(SoundEngine):
                     frequency_scale=self._scale(), decay_s=float(self.params['decay_s']),
                     r=float(self.rr[R_CUR]), r_target=float(self.rr[R_TGT]),
                     ramp_left=int(self.ints[I_R_LEFT]), gain=float(self.gg[R_CUR]),
+                    attack_ms=float(self.params['attack_ms']), q=float(self.qq[R_CUR]),
+                    q_target=float(self.qq[R_TGT]), attack_ramp_left=int(self.ints[I_Q_LEFT]),
                     model=self.model_version)
 
     # -- snapshot ---------------------------------------------------------------------
     _ARRAYS = ('role', 'slot_id', 'smode', 'ndrive', 'nlive', 'zre', 'zim', 'sqrtlam', 'ffreq', 'wcur',
-               'winc', 'wtgt', 'wleft', 'zf', 'zs', 'pan', 'pleft', 'rr', 'gg', 'ints', 'hp',
+               'winc', 'wtgt', 'wleft', 'zf', 'zs', 'zu', 'pan', 'pleft', 'rr', 'gg', 'qq', 'ints', 'hp',
                'level', 'last_e', 'last_a', 'counters')
 
     def _fresh_arrays(self):
@@ -922,8 +982,9 @@ class ObjectResonatorsEngine(SoundEngine):
                     zre=np.zeros((S, M)), zim=np.zeros((S, M)), sqrtlam=np.zeros((S, M)),
                     ffreq=np.zeros((S, M)), wcur=np.zeros((S, M)), winc=np.zeros((S, M)),
                     wtgt=np.zeros((S, M)), wleft=np.zeros(S, np.int64), zf=np.zeros(S),
-                    zs=np.zeros(S), pan=np.zeros((S, 6)), pleft=np.zeros(S, np.int64),
-                    rr=np.zeros(3), gg=np.zeros(3), ints=np.zeros(3, np.int64), hp=np.zeros((2, 2)),
+                    zs=np.zeros(S), zu=np.zeros(S), pan=np.zeros((S, 6)), pleft=np.zeros(S, np.int64),
+                    rr=np.zeros(3), gg=np.zeros(3), qq=np.zeros(3), ints=np.zeros(4, np.int64),
+                    hp=np.zeros((2, 2)),
                     level=np.zeros(S), last_e=np.zeros(S), last_a=np.zeros(S),
                     counters=np.zeros(5, np.int64))
 
@@ -960,15 +1021,26 @@ class ObjectResonatorsEngine(SoundEngine):
         return st
 
     def restore_state(self, grid, exc, state):
-        if not isinstance(state, dict) or state.get('version') != self.STATE_VERSION:
+        version = state.get('version') if isinstance(state, dict) else None
+        if version != self.STATE_VERSION and version not in COMPATIBLE_STATES:
             raise ValueError(f"engine {ENGINE_ID}: state version "
                              f"{state.get('version') if isinstance(state, dict) else state!r}"
                              f" != {self.STATE_VERSION}")
         if state.get('engine_id') != self.engine_id:
             raise ValueError(f"engine state is for {state.get('engine_id')!r}, not {self.engine_id!r}")
-        if state.get('model_version') != self.model_version:
+        want_model = self.model_version if version == self.STATE_VERSION else COMPATIBLE_STATES[version]
+        if state.get('model_version') != want_model:
             raise ValueError(f"engine {ENGINE_ID}: model version {state.get('model_version')!r}"
-                             f" != {self.model_version!r}")
+                             f" != {want_model!r}")
+        if version != self.STATE_VERSION:
+            # an older state without Attack: the same sound with the attack state at zero
+            state = dict(state)
+            S = N_SLOTS
+            state.setdefault('zu', np.zeros(S))
+            state.setdefault('qq', np.zeros(3))
+            ints = state.get('ints')
+            if isinstance(ints, np.ndarray) and ints.shape == (3,):
+                state['ints'] = np.concatenate([ints, np.zeros(1, ints.dtype)])
         if int(state.get('sr', -1)) != int(self.sr) or int(state.get('block', -1)) != self._out.shape[0]:
             raise ValueError(f"engine {ENGINE_ID}: state sr / block do not match the context")
         params = state.get('params')
@@ -998,6 +1070,8 @@ class ObjectResonatorsEngine(SoundEngine):
             arrays[name] = np.array(a, proto.dtype, copy=True)
         if (arrays['ints'] < 0).any() or (arrays['wleft'] < 0).any() or (arrays['pleft'] < 0).any():
             raise ValueError(f"engine {ENGINE_ID}: negative counters in the state")
+        if (arrays['qq'][:2] < 0.0).any() or (arrays['qq'][:2] >= 1.0).any():
+            raise ValueError(f"engine {ENGINE_ID}: attack coefficient of the state outside [0, 1)")
         if not np.all(np.isin(arrays['role'], (ROLE_FREE, ROLE_ACTIVE, ROLE_TAIL, ROLE_FADING))):
             raise ValueError(f"engine {ENGINE_ID}: unknown slot role in the state")
         if not np.all(np.isin(arrays['smode'], (SPEC_FIGURE, SPEC_LAPLACE))):

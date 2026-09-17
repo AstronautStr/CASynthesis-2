@@ -916,7 +916,7 @@ class LevelsTimingAndContractTests(unittest.TestCase):
                 registry.create(orz.ENGINE_ID, ctx, registry.defaults(orz.ENGINE_ID))
         spec = registry.get(orz.ENGINE_ID)
         self.assertEqual(spec.defaults(), dict(detector=1, radius_mul=1.0, spectrum=1, frequency_scale=220.0,
-                                               decay_s=0.8, **orz.laplace_settings({})))
+                                               decay_s=0.8, attack_ms=0.0, **orz.laplace_settings({})))
         self.assertEqual(registry.value_text(orz.ENGINE_ID, 'detector', 0), 'Own')
         self.assertEqual(registry.value_text(orz.ENGINE_ID, 'detector', 1), 'Disk')
         with self.assertRaises(ValueError):
@@ -1034,12 +1034,12 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(a, (te.ENGINE_ID, dict(field_tuning=1, decay_s=0.8)))
         lap = orz.laplace_settings({})                       # the two N4 scenes keep the Figure law
         self.assertEqual(b, (orz.ENGINE_ID, dict(detector=1, radius_mul=1.0, spectrum=0, frequency_scale=220.0,
-                                                 decay_s=0.8, **lap)))
+                                                 decay_s=0.8, attack_ms=0.0, **lap)))
         a, b = CASES[1]['A'], CASES[1]['B']
         self.assertEqual(a, (orz.ENGINE_ID, dict(detector=0, radius_mul=1.0, spectrum=0, frequency_scale=220.0,
-                                                 decay_s=0.8, **lap)))
+                                                 decay_s=0.8, attack_ms=0.0, **lap)))
         self.assertEqual(b, (orz.ENGINE_ID, dict(detector=1, radius_mul=1.0, spectrum=0, frequency_scale=220.0,
-                                                 decay_s=0.8, **lap)))
+                                                 decay_s=0.8, attack_ms=0.0, **lap)))
         # the N4.2 figures evolve as independently placed figures and never merge
         g = grid(neighbor_cells())
         recv = grid(receiver_cells())

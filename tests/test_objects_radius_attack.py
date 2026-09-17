@@ -22,7 +22,13 @@
   - the bench: Min / Max fields (commit by Enter / leaving, Esc, Tab, refused
     numbers), the slider over a narrow range with 0.001 steps, the one-time clamp,
     hotkeys inert while typing, the full-cover frame, panel height
-  - Attack (part 2 of the REQ): see the attack classes below
+  - Attack (part 2 of the REQ): the coefficient formula and its 10 -> 90 % rise time,
+    Attack 0 = the v1/v2 scalar reference of the N4 gate bit for bit, the kernel
+    against an independent scalar reference of the smoothing through strikes, ramps
+    and zero crossings (exact bypass after a ramp back to 0), silence without events,
+    unchanged packet moments and pulse states, Continue mid-pulse / mid-ramp / with
+    overlapping events, a new front without a bank reset, tails without excitation,
+    a v2 snapshot = Attack 0, the level / brightness change of the probe
 
     python tests/test_objects_radius_attack.py
 
@@ -628,6 +634,322 @@ class BenchTests(unittest.TestCase):
         finally:
             eng.stop()
             pygame.quit()
+
+
+# ======================================================================================
+# Attack (part 2 of the REQ): one causal pole on the excitation pulse before the bank
+# ======================================================================================
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from test_n4_object_resonators import bare_engine, setup_slot, scalar_n4     # noqa: E402  (the v1/v2 reference)
+
+
+def scalar_attack(slots, blocks, sr=SR, ramp_n=882, hp_hz=20.0, out_scale=orz.OUT_SCALE, g0=GAIN,
+                  decay_s=0.8, attack0=0.0):
+    """An INDEPENDENT scalar sample path of the Attack smoothing (REQ formula):
+    slots = [dict(freqs, weights, pan_p, ndrive)] all driven, fixed tuning;
+    blocks = [{'inject': {slot: a}, 'attack': ms, 'gain': g}] (boundary actions).
+        p = 0.75 ((1-qf) zf - (1-qs) zs) / (qs-qf);  u = q u + (1-q) p;  bank driven by u
+        q = exp(-ln 9 / (sr ms / 1000)) (0 at ms = 0), a change ramps q linearly over ramp_n."""
+    qf = math.exp(-1.0 / (sr * 0.00025))
+    qs = math.exp(-1.0 / (sr * 0.002))
+    hp_h = math.exp(-2.0 * math.pi * hp_hz / sr)
+    r = 10.0 ** (-3.0 / (sr * decay_s))
+    S = []
+    for sd in slots:
+        n = len(sd['freqs'])
+        S.append(dict(re=[0.0] * n, im=[0.0] * n, c=[math.cos(2 * math.pi * f / sr) for f in sd['freqs']],
+                      s=[math.sin(2 * math.pi * f / sr) for f in sd['freqs']], w=list(sd['weights']),
+                      nd=int(sd['ndrive']), zf=0.0, zs=0.0, u=0.0,
+                      L=math.cos(math.pi * sd['pan_p'] / 2), R=math.sin(math.pi * sd['pan_p'] / 2)))
+
+    def q_of(ms):
+        return 0.0 if ms <= 0.0 else math.exp(-math.log(9.0) / (sr * ms / 1000.0))
+    q_cur = q_tgt = q_of(attack0)
+    q_inc, q_left = 0.0, 0
+    g_cur = g_tgt = g0
+    g_inc, g_left = 0.0, 0
+    hp = [[0.0, 0.0], [0.0, 0.0]]
+    out = []
+    for blk in blocks:
+        if 'attack' in blk and q_of(blk['attack']) != q_tgt:
+            q_tgt = q_of(blk['attack'])
+            q_inc = (q_tgt - q_cur) / ramp_n
+            q_left = ramp_n
+        for si, a in blk.get('inject', {}).items():
+            S[si]['zf'] += a
+            S[si]['zs'] += a
+        if 'gain' in blk and blk['gain'] != g_tgt:
+            g_tgt = blk['gain']
+            g_inc = (g_tgt - g_cur) / ramp_n
+            g_left = ramp_n
+        for _t in range(BLOCK):
+            if g_left > 0:
+                g_left -= 1
+                g_cur = g_tgt if g_left == 0 else g_cur + g_inc
+            if q_left > 0:
+                q_left -= 1
+                q_cur = q_tgt if q_left == 0 else q_cur + q_inc
+            L = 0.0
+            R = 0.0
+            for st in S:
+                p = 0.75 * ((1.0 - qf) * st['zf'] - (1.0 - qs) * st['zs']) / (qs - qf)
+                st['zf'] *= qf
+                st['zs'] *= qs
+                u = q_cur * st['u'] + (1.0 - q_cur) * p
+                st['u'] = u
+                acc = 0.0
+                for j in range(len(st['re'])):
+                    re, im, c, sn = st['re'][j], st['im'][j], st['c'][j], st['s'][j]
+                    nre = r * (c * re - sn * im) + (u if j < st['nd'] else 0.0)
+                    nim = r * (sn * re + c * im)
+                    st['re'][j], st['im'][j] = nre, nim
+                    acc += st['w'][j] * nre
+                L += st['L'] * acc
+                R += st['R'] * acc
+            yL = hp_h * ((hp[0][0] + L) - hp[0][1])
+            hp[0] = [yL, L]
+            yR = hp_h * ((hp[1][0] + R) - hp[1][1])
+            hp[1] = [yR, R]
+            out.append((yL * out_scale * g_cur, yR * out_scale * g_cur))
+    return np.array(out)
+
+
+PROBE_FREQS = [110.0, 440.0, 880.0]           # the Researcher's scalar probe (preflight attack_proposal_probe)
+PROBE_WEIGHTS = [1.0, 0.4, 0.1]
+
+
+def probe_engine(attack_ms, decay_s=1.39):
+    e = bare_engine()
+    e.set_params(dict(e.params, decay_s=decay_s, attack_ms=attack_ms))
+    e.ints[orz.I_R_LEFT] = 0                        # the settings are in force from the first sample
+    e.rr[:] = (e.rr[orz.R_TGT], e.rr[orz.R_TGT], 0.0)
+    e.qq[:] = (e.qq[orz.R_TGT], e.qq[orz.R_TGT], 0.0)
+    e.ints[orz.I_Q_LEFT] = 0
+    setup_slot(e, 0, PROBE_FREQS, 3, 0.5)
+    e.wcur[0, :3] = PROBE_WEIGHTS
+    e.wtgt[0, :3] = PROBE_WEIGHTS
+    return e
+
+
+class AttackTests(unittest.TestCase):
+    def test_coefficient_formula_and_the_10_to_90_percent_rise_time(self):
+        self.assertEqual(orz.attack_q(0.0), 0.0)
+        self.assertEqual(orz.attack_q(-1.0), 0.0)
+        for ms in (1.0, 4.0, 10.0, 20.0):
+            q = orz.attack_q(ms)
+            self.assertAlmostEqual(q, math.exp(-math.log(9.0) / (SR * ms / 1000.0)), places=15)
+            # the step response of u = q u + (1 - q) p: 10 % -> 90 % in attack_ms (+- one sample)
+            u, t10, t90 = 0.0, None, None
+            for k in range(int(SR * 0.1)):
+                u = q * u + (1.0 - q)
+                if t10 is None and u >= 0.1:
+                    t10 = k
+                if t90 is None and u >= 0.9:
+                    t90 = k
+                    break
+            self.assertAlmostEqual((t90 - t10) / SR * 1000.0, ms, delta=1000.0 / SR * 1.5)
+        pf = preflight()['attack_proposal_probe']['results']
+        for ms, row in pf.items():
+            self.assertAlmostEqual(orz.attack_q(float(ms)), row['q'], places=12)
+        spec = registry.get(EID).spec_of('attack_ms')
+        self.assertEqual(spec, ('attack_ms', 'Attack', 0.0, 20.0, False, 0.0))
+        self.assertEqual(orz.OPTIONAL_PARAMS['attack_ms'], 0.0)
+        self.assertEqual((orz.MODEL_VERSION, orz.STATE_VERSION), ('ca_object_resonators_n4_v3', 3))
+
+    def test_attack_zero_is_the_previous_path_bit_for_bit(self):
+        """The v1/v2 scalar reference of the N4 gate (no attack in its formulas) equals the
+        v3 kernel at Attack 0 through every ramp, tune, pan and strike of that gate."""
+        freqs_a = [220.0, 381.05, 512.3, 777.7, 1234.5]
+        freqs_b = [80.8, 130.1, 190.2]
+        e = bare_engine()
+        self.assertEqual(float(e.qq[orz.R_CUR]), 0.0)
+        setup_slot(e, 0, freqs_a, 5, 0.3)
+        setup_slot(e, 1, freqs_b + [640.0, 990.0], 3, 0.9,
+                   zre=[0.0, 0.0, 0.0, 0.02, -0.01], zim=[0.0, 0.0, 0.0, 0.01, 0.03])
+        slots = [dict(freqs=freqs_a, weights=[0.2] * 5, pan_p=0.3, ndrive=5),
+                 dict(freqs=freqs_b + [640.0, 990.0], weights=[1 / 3] * 3 + [0.2, 0.2], pan_p=0.9,
+                      ndrive=3, zre=[0.0, 0.0, 0.0, 0.02, -0.01], zim=[0.0, 0.0, 0.0, 0.01, 0.03])]
+        e.wcur[1, 3:5] = 0.2
+        e.wtgt[1, 3:5] = 0.2
+        blocks = [dict(inject={0: 0.6, 1: 0.75}), {}, dict(gain=GAIN * 1.5), {}, dict(decay=1.3),
+                  dict(inject={1: 0.4}), dict(tune={0: ([220.0, 381.05, 512.3, 777.7, 1234.5, 1500.0], 6)}),
+                  {}, dict(pan={1: 0.1}), {}, dict(tune={1: ([80.8, 130.1], 2)}), {}, {},
+                  dict(inject={0: 0.2, 1: 0.2}, decay=0.5, gain=GAIN), {}, {}, {}, {}]
+        ref = scalar_n4(slots, blocks)
+        got = []
+        for blk in blocks:
+            for si, (freqs, n) in blk.get('tune', {}).items():
+                e._tune_slot(si, np.asarray(freqs), np.full(n, 1.0 / n), np.asarray(freqs) / 220.0,
+                             orz.SPEC_FIGURE, ramp=True)
+            for si, p in blk.get('pan', {}).items():
+                e._set_pan(si, p * 31.0, ramp=True)
+            if 'decay' in blk:
+                e.set_params(dict(e.params, decay_s=blk['decay']))
+            for si, a in blk.get('inject', {}).items():
+                e.inject(si, a)
+            got.append(e.render_float(blk.get('gain', e.gg[orz.R_TGT]))[0])
+        got = np.concatenate(got)
+        self.assertGreater(float(np.abs(ref).max()), 1e-4)
+        self.assertEqual(float(np.abs(got - ref).max()), 0.0)          # exact, not merely close
+
+    def test_kernel_matches_the_attack_reference_through_strikes_ramps_and_zero_crossings(self):
+        freqs = [PROBE_FREQS, [150.0, 333.3, 520.0, 1010.0]]
+        weights = [PROBE_WEIGHTS, [0.3, 0.3, 0.2, 0.2]]
+        pans = [0.5, 0.15]
+        e = bare_engine()
+        for s in range(2):
+            setup_slot(e, s, freqs[s], len(freqs[s]), pans[s])
+            e.wcur[s, :len(weights[s])] = weights[s]
+            e.wtgt[s, :len(weights[s])] = weights[s]
+        slots = [dict(freqs=freqs[s], weights=weights[s], pan_p=pans[s], ndrive=len(freqs[s])) for s in range(2)]
+        blocks = [dict(inject={0: 0.6}), dict(attack=4.0), dict(inject={1: 0.75}), {}, {},
+                  dict(inject={0: 0.3, 1: 0.2}), dict(attack=1.0, inject={0: 0.9}), {}, {}, dict(gain=GAIN * 1.4),
+                  dict(attack=20.0), {}, {}, dict(inject={1: 0.5}), dict(attack=0.0), {}, {}, {},
+                  dict(inject={0: 0.4}), {}, dict(attack=4.0), dict(attack=0.0), {}, {}, dict(inject={1: 0.3}),
+                  {}, {}, {}]
+        ref = scalar_attack(slots, blocks)
+        got = []
+        for blk in blocks:
+            if 'attack' in blk:
+                e.set_params(dict(e.params, attack_ms=blk['attack']))
+            for si, a in blk.get('inject', {}).items():
+                e.inject(si, a)
+            got.append(e.render_float(blk.get('gain', e.gg[orz.R_TGT]))[0])
+        got = np.concatenate(got)
+        self.assertGreater(float(np.abs(ref).max()), 1e-4)
+        self.assertLessEqual(float(np.abs(got - ref).max()), TOL)
+        self.assertEqual(float(e.qq[orz.R_CUR]), 0.0)                  # back at zero: exactly 0
+        self.assertEqual(int(e.ints[orz.I_Q_LEFT]), 0)
+        # from here the previous path: an engine with the same state but the attack
+        # state cleared (zu = 0 is never read at q = 0) renders the same blocks
+        twin = bare_engine()
+        for name in e._ARRAYS + ('cth', 'sth'):
+            getattr(twin, name)[...] = getattr(e, name)
+        twin.params = dict(e.params)
+        twin.zu[:] = 0.0
+        self.assertTrue((e.zu[:2] != 0.0).all())
+        for _ in range(30):
+            np.testing.assert_array_equal(e.render_float(GAIN)[0], twin.render_float(GAIN)[0])
+
+    def test_silence_without_events_and_the_moments_of_the_packets_do_not_move(self):
+        e = bare_engine()
+        e.set_params(dict(e.params, attack_ms=4.0))
+        setup_slot(e, 0, PROBE_FREQS, 3, 0.5)
+        y = run(e, 60)
+        self.assertEqual(float(np.abs(y).max()), 0.0)
+        # the p3/p5 field at Attack 0 and 4: the same packets at the same boundaries,
+        # the same pulse states block by block (u never feeds back into them)
+        cells = sum(groups_of('p3_p5'), [])
+        e0 = engine(cells, screenshot_params(attack_ms=0.0))
+        e4 = engine(cells, screenshot_params(attack_ms=4.0))
+        g = grid(cells)
+        for b in range(int(3.0 * SR / BLOCK)):
+            if b and b % 12 == 0:
+                prev, g = g, step(g)
+                for e in (e0, e4):
+                    e.update_field(g, events_field(prev, g))
+            y0 = e0.render_float(GAIN)[0]
+            y4 = e4.render_float(GAIN)[0]
+            np.testing.assert_array_equal(e0.zf, e4.zf)
+            np.testing.assert_array_equal(e0.zs, e4.zs)
+            np.testing.assert_array_equal(e0.last_e, e4.last_e)
+            self.assertEqual([f['id'] for f in e0.display()['figures']], [f['id'] for f in e4.display()['figures']])
+            if float(np.abs(y0).max()) > 0.0:
+                self.assertGreater(float(np.abs(y0 - y4).max()), 0.0)   # but the sound differs
+
+    def test_snapshot_mid_pulse_mid_ramp_and_overlapping_events_continue_exactly(self):
+        cells = sum(groups_of('receiver'), [])
+        e = engine(cells, screenshot_params(attack_ms=4.0))
+        e.render_float(GAIN)                                            # the start packet: mid-pulse
+        e.set_params(dict(e.params, attack_ms=10.0))
+        e.render_float(GAIN)                                            # 8 ms into the 20 ms q ramp
+        e.inject(0, 0.5)                                                # a new strike on the ringing bank
+        self.assertGreater(int(e.ints[orz.I_Q_LEFT]), 0)
+        self.assertNotEqual(float(e.zu[0]), 0.0)
+        st = e.export_state()
+        self.assertEqual(st['version'], 3)
+        for name in ('zu', 'qq'):
+            self.assertIn(name, st)
+        twin = registry.create(EID, CTX, dict(e.params))
+        twin.init(np.zeros((32, 32), np.uint8), None, 0.0)
+        twin.restore_state(e._grid, e._exc, st)
+        self.assertEqual(float(twin.zu[0]), float(e.zu[0]))
+        for _ in range(60):
+            np.testing.assert_array_equal(e.render_float(GAIN)[0], twin.render_float(GAIN)[0])
+        # a strike never resets u or the bank: the smoothed pulse just gets a new front
+        u_before, z_before = float(e.zu[0]), e.zre[0, :3].copy()
+        e.inject(0, 0.4)
+        self.assertEqual(float(e.zu[0]), u_before)
+        np.testing.assert_array_equal(e.zre[0, :3], z_before)
+        # a bank that becomes a tail: pulse and attack states zeroed, no excitation any more
+        e._to_tail(0)
+        tails = [s for s in range(orz.N_ACTIVE, orz.N_SLOTS) if e.role[s] == orz.ROLE_TAIL]
+        self.assertEqual(len(tails), 1)
+        self.assertEqual((float(e.zu[tails[0]]), float(e.zf[tails[0]]), float(e.zs[tails[0]])), (0.0, 0.0, 0.0))
+        self.assertEqual(int(e.ndrive[tails[0]]), 0)
+
+    def test_older_v2_snapshot_means_attack_zero(self):
+        cells = sum(groups_of('receiver'), [])
+        e = engine(cells, screenshot_params(attack_ms=0.0))
+        e.render_float(GAIN)
+        st = e.export_state()
+        old = dict(st, version=2, model_version='ca_object_resonators_n4_v2', ints=st['ints'][:3].copy(),
+                   params={k: v for k, v in st['params'].items() if k != 'attack_ms'})
+        del old['zu']
+        del old['qq']
+
+        def fresh():
+            t = registry.create(EID, CTX, dict(e.params))
+            t.init(np.zeros((32, 32), np.uint8), None, 0.0)
+            return t
+        twin = fresh()
+        twin.restore_state(e._grid, e._exc, old)
+        self.assertEqual(twin.params['attack_ms'], 0.0)
+        self.assertEqual(float(twin.qq[orz.R_CUR]), 0.0)
+        self.assertEqual(tuple(twin.ints.shape), (4,))
+        for _ in range(40):
+            np.testing.assert_array_equal(e.render_float(GAIN)[0], twin.render_float(GAIN)[0])
+        with self.assertRaises(ValueError):                             # a v2 state must say model v2
+            fresh().restore_state(e._grid, e._exc, dict(old, model_version=orz.MODEL_VERSION))
+        with self.assertRaises(ValueError):
+            fresh().restore_state(e._grid, e._exc, dict(st, version=1))
+        with self.assertRaises(ValueError):                             # q outside [0, 1)
+            fresh().restore_state(e._grid, e._exc, dict(st, qq=np.array([1.0, 1.0, 0.0])))
+        # a parameter set without the key: 0 (the registry default is also 0)
+        e2 = registry.create(EID, CTX, dict(detector=1, frequency_scale=220.0, decay_s=0.8))
+        self.assertEqual(e2.params['attack_ms'], 0.0)
+        self.assertEqual(registry.defaults(EID)['attack_ms'], 0.0)
+
+    def test_levels_and_brightness_change_as_the_probe_predicts(self):
+        """The Researcher's scalar probe (preflight): Attack 4 ms softens the first
+        sample, removes energy above 3 kHz and lowers the level; measured here on
+        the engine's own output of the same three resonators."""
+        out = {}
+        for ms in (0.0, 4.0):
+            e = probe_engine(ms)
+            e.inject(0, 0.6)
+            y = run(e, int(1.0 * SR / BLOCK))[:, 0]
+            spec = np.abs(np.fft.rfft(y)) ** 2
+            f = np.fft.rfftfreq(len(y), 1.0 / SR)
+            out[ms] = dict(first=float(np.abs(y[:3]).max()), rms=float(np.sqrt(np.mean(y * y))),
+                           hf=float(spec[f > 3000.0].sum()), step=float(np.abs(np.diff(y)).max()))
+        self.assertLess(out[4.0]['first'], out[0.0]['first'] * 0.1)
+        self.assertLess(10.0 * math.log10(out[4.0]['hf'] / out[0.0]['hf']), -20.0)
+        self.assertLess(out[4.0]['rms'], out[0.0]['rms'])                # no compensation: the level falls
+        step_eq = out[4.0]['step'] / out[4.0]['rms'] / (out[0.0]['step'] / out[0.0]['rms'])
+        self.assertLess(20.0 * math.log10(step_eq), -8.0)
+        # the knob in the panel: display, ramp, the seven / detector / radius untouched
+        e = engine(sum(groups_of('receiver'), []))
+        run(e, 2)
+        before = dict(e.params)
+        e.set_params(dict(e.params, attack_ms=4.0))
+        d = e.display()
+        self.assertEqual((d['attack_ms'], d['attack_ramp_left']), (4.0, e.ramp_n))
+        self.assertAlmostEqual(d['q_target'], orz.attack_q(4.0), places=15)
+        self.assertEqual({k: v for k, v in e.params.items() if k != 'attack_ms'},
+                         {k: v for k, v in before.items() if k != 'attack_ms'})
+        run(e, 3)
+        self.assertEqual((e.display()['attack_ramp_left'], e.display()['q']), (0, orz.attack_q(4.0)))
 
 
 if __name__ == '__main__':
