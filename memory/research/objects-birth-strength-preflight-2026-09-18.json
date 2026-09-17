@@ -1,0 +1,525 @@
+{
+  "status": "Researcher formula preflight only; existing M1 geometry and coefficients reused; new audio is not implemented or measured",
+  "date": "2026-09-18",
+  "source": "objects-event-source-modal-preflight-2026-09-17.json",
+  "law": "s=0: Uniform. 0<s<1: normalize_L2((1-s)+s*b) to sqrt(m). s=1: return original b without renormalization. 1<s<=4: normalize_L2(b**s) to sqrt(m). No births: no packet at every s. Zero participation with births: Uniform at s=0, no packet at s>0.",
+  "cases": [
+    {
+      "generation": 1,
+      "cells": 11,
+      "births": 3,
+      "frequencies_hz": [
+        110,
+        434.6637083188775,
+        551.0100925759691
+      ],
+      "weights_spatial": [
+        1.288909862637116,
+        9.725155800435819e-16,
+        1.1570269512836644
+      ],
+      "profiles": [
+        {
+          "strength": 0,
+          "b": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 0.5,
+          "b": [
+            1.2012627795789605,
+            0.5248187354109933,
+            1.1320481568201222
+          ]
+        },
+        {
+          "strength": 1,
+          "b": [
+            1.288909862637116,
+            9.725155800435819e-16,
+            1.1570269512836644
+          ]
+        },
+        {
+          "strength": 2,
+          "b": [
+            1.348662420919928,
+            7.678056399780158e-31,
+            1.0867886981370387
+          ]
+        },
+        {
+          "strength": 4,
+          "b": [
+            1.4526534180436592,
+            4.708234585016541e-61,
+            0.9432910722815483
+          ]
+        }
+      ]
+    },
+    {
+      "generation": 1,
+      "cells": 3,
+      "births": 2,
+      "frequencies_hz": [
+        110,
+        110
+      ],
+      "weights_spatial": [
+        1,
+        1
+      ],
+      "profiles": [
+        {
+          "strength": 0,
+          "b": [
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 0.5,
+          "b": [
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 1,
+          "b": [
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 2,
+          "b": [
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 4,
+          "b": [
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "generation": 2,
+      "cells": 16,
+      "births": 3,
+      "frequencies_hz": [
+        110,
+        544.9830804582175,
+        659.7521924241601
+      ],
+      "weights_spatial": [
+        0.7814996203212149,
+        0.7037460155649663,
+        1.3762266851846143
+      ],
+      "profiles": [
+        {
+          "strength": 0,
+          "b": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 0.5,
+          "b": [
+            0.9012141550238824,
+            0.8618806359980243,
+            1.2020710528401515
+          ]
+        },
+        {
+          "strength": 1,
+          "b": [
+            0.7814996203212149,
+            0.7037460155649663,
+            1.3762266851846143
+          ]
+        },
+        {
+          "strength": 2,
+          "b": [
+            0.5158319297980197,
+            0.41829490677302983,
+            1.5996708383816323
+          ]
+        },
+        {
+          "strength": 4,
+          "b": [
+            0.17872221859597034,
+            0.11752418754126044,
+            1.7187921438972489
+          ]
+        }
+      ]
+    },
+    {
+      "generation": 3,
+      "cells": 7,
+      "births": 0,
+      "frequencies_hz": [
+        110,
+        217.1677096220092,
+        223.53180833315977
+      ],
+      "weights_spatial": [
+        0,
+        0,
+        0
+      ],
+      "profiles": [
+        {
+          "strength": 0,
+          "b": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "strength": 0.5,
+          "b": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "strength": 1,
+          "b": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "strength": 2,
+          "b": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "strength": 4,
+          "b": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "generation": 3,
+      "cells": 3,
+      "births": 2,
+      "frequencies_hz": [
+        110,
+        216.16832654823494
+      ],
+      "weights_spatial": [
+        1.2247448713915892,
+        0.7071067811865478
+      ],
+      "profiles": [
+        {
+          "strength": 0,
+          "b": [
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 0.5,
+          "b": [
+            1.1219710535938618,
+            0.8609186691537587
+          ]
+        },
+        {
+          "strength": 1,
+          "b": [
+            1.2247448713915892,
+            0.7071067811865478
+          ]
+        },
+        {
+          "strength": 2,
+          "b": [
+            1.3416407864998736,
+            0.4472135954999581
+          ]
+        },
+        {
+          "strength": 4,
+          "b": [
+            1.4055638569974545,
+            0.15617376188860624
+          ]
+        }
+      ]
+    },
+    {
+      "generation": 3,
+      "cells": 3,
+      "births": 1,
+      "frequencies_hz": [
+        110,
+        216.16832654823494
+      ],
+      "weights_spatial": [
+        1.2247448713915892,
+        0.7071067811865476
+      ],
+      "profiles": [
+        {
+          "strength": 0,
+          "b": [
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 0.5,
+          "b": [
+            1.121971053593862,
+            0.8609186691537587
+          ]
+        },
+        {
+          "strength": 1,
+          "b": [
+            1.2247448713915892,
+            0.7071067811865476
+          ]
+        },
+        {
+          "strength": 2,
+          "b": [
+            1.3416407864998738,
+            0.447213595499958
+          ]
+        },
+        {
+          "strength": 4,
+          "b": [
+            1.4055638569974545,
+            0.15617376188860602
+          ]
+        }
+      ]
+    }
+  ],
+  "synthetic": [
+    {
+      "id": "equal_modes",
+      "b": [
+        1,
+        1,
+        1
+      ],
+      "profiles": [
+        {
+          "strength": 0,
+          "b": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 0.5,
+          "b": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 1,
+          "b": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 2,
+          "b": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 4,
+          "b": [
+            1,
+            1,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "id": "one_mode",
+      "b": [
+        1
+      ],
+      "profiles": [
+        {
+          "strength": 0,
+          "b": [
+            1
+          ]
+        },
+        {
+          "strength": 0.5,
+          "b": [
+            1
+          ]
+        },
+        {
+          "strength": 1,
+          "b": [
+            1
+          ]
+        },
+        {
+          "strength": 2,
+          "b": [
+            1
+          ]
+        },
+        {
+          "strength": 4,
+          "b": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "id": "exact_zero_component",
+      "b": [
+        0,
+        1,
+        1.4142135623730951
+      ],
+      "profiles": [
+        {
+          "strength": 0,
+          "b": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 0.5,
+          "b": [
+            0.526354012893031,
+            1.052708025786062,
+            1.2707309965358582
+          ]
+        },
+        {
+          "strength": 1,
+          "b": [
+            0,
+            1,
+            1.4142135623730951
+          ]
+        },
+        {
+          "strength": 2,
+          "b": [
+            0,
+            0.7745966692414832,
+            1.5491933384829668
+          ]
+        },
+        {
+          "strength": 4,
+          "b": [
+            0,
+            0.4200840252084029,
+            1.680336100833612
+          ]
+        }
+      ]
+    },
+    {
+      "id": "zero_participation_with_births",
+      "b": [
+        0,
+        0,
+        0
+      ],
+      "profiles": [
+        {
+          "strength": 0,
+          "b": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "strength": 0.5,
+          "b": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "strength": 1,
+          "b": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "strength": 2,
+          "b": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "strength": 4,
+          "b": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "checks": {
+    "finite_nonnegative": true,
+    "strength_one_returns_original_coefficients": true,
+    "max_norm_squared_error": 1.3322676295501878e-15,
+    "note": "Floating-point fixtures include tiny nonzero coefficients. Do not infer PCM compatibility or loudness from this arithmetic check."
+  }
+}
