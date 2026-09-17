@@ -361,15 +361,30 @@ def timing(seconds=8.0):
 
 
 def verify_catalog(root):
+    """Every record replayed by the code that made it: a pinned record whose sound
+    code differs from this checkout is checked by a separate bench of its commit
+    (S6), the others in-process."""
     catalog = Catalog(str(root))
     checked = []
     for record, error in catalog.list():
         if error:
             checked.append(dict(error=str(error)))
             continue
-        result = catalog.replay(record.id, yield_cpu=False)
-        checked.append(dict(rid=record.id, title=record.title, status=result.status,
-                            reason=result.reason, notes_start=(record.notes or '')[:40]))
+        row = dict(rid=record.id, title=record.title, notes_start=(record.notes or '')[:40], version=None)
+        try:
+            plan = catalog.source_plan(record)
+            if plan['mode'] == 'worktree':
+                child = catalog.run_version(record, 'check')
+                child.wait(900)
+                res = child.result or {}
+                row.update(status=res.get('status', 'error'), reason=res.get('reason') or child.error or '',
+                           version=plan['commit'][:7], differs=plan.get('differs', []))
+            else:
+                res = catalog.replay(record.id, yield_cpu=False)
+                row.update(status=res.status, reason=res.reason)
+        except Exception as e:                                          # noqa: BLE001
+            row.update(status='error', reason=str(e))
+        checked.append(row)
     return checked
 
 
@@ -442,7 +457,8 @@ def write_markdown(rep, path):
             if 'error' in c_:
                 L.append(f"- ERROR {c_['error']}")
             else:
-                L.append(f"- {c_['rid']} {c_['title'][:50]}: {c_['status']} {c_['reason'] or ''} "
+                ver = f" [checked by its own version {c_['version']}]" if c_.get('version') else ''
+                L.append(f"- {c_['rid']} {c_['title'][:50]}: {c_['status']} {c_['reason'] or ''}{ver} "
                          f"(notes: {c_.get('notes_start', '')!r})")
     L += ['', '## Summary', '', f"- Scenes: {rep['summary']['scenes']}", f"- Stress probes: {rep['summary']['stress']}",
           '- Limitations:']
@@ -561,13 +577,11 @@ def main(argv=None):
         if isinstance(v, dict) and not v['ok']:
             scene_problems.append(f"timing {k}: p99 {v['p99']:.2f} ms over budget")
     for c_ in rep.get('catalog', []):
-        if c_.get('status') == 'unavailable':
-            # the records were made by the v1 engine (model ca_object_resonators_n4_v1); the
-            # bench opens them in their own version ("Continue in version"), not here
-            limitations.append(f"catalog {c_.get('rid')}: made by the v1 engine, opens in its own version "
-                               f"({c_.get('reason')})")
-        elif c_.get('status') != 'match':
+        if c_.get('status') != 'match':
             scene_problems.append(f"catalog {c_.get('rid')}: {c_.get('status')} {c_.get('reason')}")
+        elif c_.get('version'):
+            limitations.append(f"catalog {c_.get('rid')}: made by the v1 engine (pinned {c_['version']}), "
+                               f"replayed and continued by a separate bench of that version, not by this code")
     n41 = rep['scenes'][0]
     limitations += [
         f"N4.1 level: A (N3 Tuned) - B (N4 Disk) = {n41['a_minus_b_db']:+.2f} dB RMS at the same bench gain; no "

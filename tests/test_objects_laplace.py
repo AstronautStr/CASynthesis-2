@@ -781,6 +781,45 @@ class ScenesAndCatalogTests(unittest.TestCase):
                 self.assertIn('User feedback: test.', cat.load(rid).notes)
             self.assertEqual(len(set(firsts)), len(CASES))
 
+    def test_old_n4_records_are_pinned_and_run_in_their_own_version(self):
+        """Records made by the v1 engine: their scene documents lack the new Objects
+        parameters and the CURRENT code refuses them (no silent defaults); they are
+        pinned to the commit of their sound files, so the bench runs them in a
+        separate bench of that version (S6); the version's own check matches the
+        saved audio when the repository and the audio are present."""
+        from casynth_lab.catalog import Catalog
+        from casynth_lab import provenance as prov
+        root = os.path.join(ROOT, 'lab_catalog', 'object_resonators_n4_2026_09_16')
+        if not os.path.isdir(root):
+            self.skipTest('N4 catalog not present')
+        cat = Catalog(root)
+        entries = [r for r, err in cat.list() if err is None]
+        self.assertEqual(len(entries), 2)
+        for rec in entries:
+            doc = rec.meta['scene']
+            for side in ('A', 'B'):
+                if doc['variants'][side]['engine_id'] == orz.ENGINE_ID:
+                    self.assertNotIn('spectrum', doc['variants'][side]['engine_params'])
+            with self.assertRaises(SceneError):                           # strict: no defaults invented
+                scene_from_doc(doc)
+            self.assertEqual(rec.status, 'pinned')
+            self.assertTrue(rec.commit)
+            if cat.repo_root is None or not prov.commit_exists(cat.repo_root, rec.commit):
+                continue
+            plan = cat.source_plan(rec)
+            self.assertEqual(plan['mode'], 'worktree', plan)               # sound code differs -> its version
+            self.assertIn('casynth_lab/object_resonators.py', plan['differs'])
+            if not os.path.isfile(os.path.join(root, rec.id, 'monitor.wav')):
+                continue                                                  # audio is not in git
+            try:
+                child = cat.run_version(rec, 'check')
+            except Exception as e:                                        # noqa: BLE001  (no git worktree here)
+                self.skipTest(f'version bench unavailable: {e}')
+            self.assertTrue(child.wait(600))
+            self.assertIsNotNone(child.result, child.error)
+            self.assertEqual(child.result.get('status'), 'match', child.result)
+            self.assertEqual(child.result.get('commit'), rec.commit)
+
     def test_block_budget_of_both_sides_on_the_three_scenes(self):
         budget_ms = BLOCK / SR * 1000.0
         for sid in ('ol_glider', 'ol_galaxy', 'ol_neighbor'):

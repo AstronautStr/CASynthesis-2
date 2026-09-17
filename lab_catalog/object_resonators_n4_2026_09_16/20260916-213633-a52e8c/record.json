@@ -29,12 +29,10 @@
   },
   "digest": "13317c61b4e1fc0e5171b48d4dd91ca6940aad2d764afc7740748c0e030d95bd",
   "repo_id": "22b46903073195905f029c3c587445203c41ebbe",
-  "commit": "7af96e391a2550c75544e287edaa42c8c3caa4d6",
-  "match": "dirty",
-  "dirty": [
-   "casynth_lab/object_resonators.py"
-  ],
-  "reason": "sound files differ from HEAD: casynth_lab/object_resonators.py",
+  "commit": "6aee6a840b87ef1e5d0a4d6222767c8136bcae1b",
+  "match": "clean",
+  "dirty": [],
+  "reason": "",
   "environment": {
    "python": "3.14.5",
    "executable": "C:\\Users\\Astro\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
@@ -60,8 +58,12 @@
    "casynth_lab": true
   }
  },
- "status_reason": "sound files differ from HEAD: casynth_lab/object_resonators.py",
- "pin": null,
+ "status_reason": "",
+ "pin": {
+  "commit": "6aee6a840b87ef1e5d0a4d6222767c8136bcae1b",
+  "ref": "refs/casynth/pins/6aee6a840b87ef1e5d0a4d6222767c8136bcae1b",
+  "pinned_at": "2026-09-17T13:52:02"
+ },
  "origin_kind": "fresh",
  "parent_record_id": null,
  "snapshot": {
@@ -81,7 +83,7 @@
  "created": "2026-09-16T21:36:33",
  "title": "N4.1 - Спектр самой фигуры: glider, 6 поколений/с",
  "note": "А — N3 Tuned (удары + настройка от поля) / Б — N4 Objects, детектор Disk. Glider с исходной позицией (28,28), проходит через шов тора; 12 с, 6 поколений/с. А — прежний интересный Б N3 (ca_tuned_events, field_tuning=1, decay 0.8); Б — N4: частоты от лапласиана самой фигуры, детектор — круг от центра масс (Disk). Сравнение двух способов сонификации в целом. Обе стороны получают одно поле.",
- "status": "local",
+ "status": "pinned",
  "scene": {
   "format": 2,
   "id": "n4_spectrum",

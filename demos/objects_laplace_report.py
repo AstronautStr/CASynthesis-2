@@ -631,7 +631,8 @@ def main(argv=None):
         "above ~300 cells costs more than the block budget on the render thread (see the cost table)",
         f"the level match is one constant factor per scene on side B ({', '.join(s['id'] + ' ' + str(s['side_gain']['B']) for s in rep['scenes'])}), "
         f"chosen for <= 1 dB of integral RMS, not equal loudness; the old Laplace algorithm is untouched",
-        "the two N4 experiments keep the Figure law; their records were made by the v1 engine and open in their own version",
+        "the two N4 experiments keep the Figure law; their records (v1 engine, pinned to the commit of their "
+        "sound files) are replayed and continued by a separate bench of that version, never by this code",
     ]
     if clipped:
         limitations.append(f"stress clipping at gain 0.04 (vol 1) in {len(clipped)} of {len(rep['stress'])} probes: "

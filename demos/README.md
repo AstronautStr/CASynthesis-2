@@ -560,8 +560,13 @@ B = Objects / Laplace with the same seven, Disk, Decay 0.8: L1 `ol_glider` (glid
 the field, Radius x 1), L2 `ol_galaxy` (Kok's galaxy at (11, 11), Radius x 1), L3
 `ol_neighbor` (the N4.2 receiver + a blinker three columns right, Radius x 1.5).  Side
 gains B 1.08 / 0.74 / 1.25 bring the integral RMS of A and B within 0.03 dB.  The N4
-catalog, its two scenes (Figure law) and Notes stay; its records were made by the v1
-engine and open in their own version.  Gates: `tests/test_objects_laplace.py` (1m).
+catalog, its two scenes (Figure law) and Notes stay; its records (v1 engine) were Local
+(built while the Radius x change was uncommitted) and are now pinned to the commit of
+their sound files, so the bench runs them in a separate bench of that version ("Continue
+in version 6aee6a8"; the version's own check: match).  The current code refuses their
+scene documents on purpose: no parameter value is ever invented for an old record.
+**Rule (2026-09-17): commit the sound code BEFORE building a catalog** -- the builders
+refuse a dirty sound set (`require_pinnable()`), records must be pinned.  Gates: `tests/test_objects_laplace.py` (1m).
 Measurements: `python demos/objects_laplace_report.py` ->
 `demos/results/objects_laplace/report.{json,md}` (spectral equality, the seven settings on
 the galaxy, levels / continuation / timing of the scenes, no packet from settings or

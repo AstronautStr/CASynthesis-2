@@ -1,6 +1,6 @@
 {
- "generated": "2026-09-17 01:33:25",
- "commit": "289fb6d",
+ "generated": "2026-09-17 14:06:13",
+ "commit": "964950c",
  "spectral": [
   {
    "id": "ol_glider",
@@ -45,11 +45,9 @@
     0,
     1,
     2,
-    3,
     4,
     5,
-    6,
-    7
+    6
    ]
   },
   "spread": {
@@ -182,9 +180,9 @@
     "B": "ca_object_resonators"
    },
    "block_ms": {
-    "p50": 1.1935000075027347,
-    "p99": 2.6202479901257907,
-    "max": 5.251499998848885,
+    "p50": 1.2105000205338001,
+    "p99": 2.4826520064380024,
+    "max": 3.5479000071063638,
     "budget": 7.98185941043084,
     "ok": true
    },
@@ -228,9 +226,9 @@
     "B": "ca_object_resonators"
    },
    "block_ms": {
-    "p50": 1.784599997336045,
-    "p99": 6.2099780223798025,
-    "max": 9.422000002814457,
+    "p50": 1.9423000048846006,
+    "p99": 6.832347987219691,
+    "max": 8.775500056799501,
     "budget": 7.98185941043084,
     "ok": true
    },
@@ -274,9 +272,9 @@
     "B": "ca_object_resonators"
    },
    "block_ms": {
-    "p50": 1.3102999946568161,
-    "p99": 3.0568239901913334,
-    "max": 3.6942000151611865,
+    "p50": 1.4433999895118177,
+    "p99": 3.604525992413983,
+    "max": 5.760900035966188,
     "budget": 7.98185941043084,
     "ok": true
    },
@@ -612,26 +610,26 @@
  },
  "timing": {
   "ol_glider": {
-   "p50": 1.1650999949779361,
-   "p95": 2.0245000079739834,
-   "p99": 2.3166359961032867,
-   "max": 3.9376000058837235,
+   "p50": 1.379300025291741,
+   "p95": 2.781879983376711,
+   "p99": 3.6107960203662515,
+   "max": 5.45390002662316,
    "budget": 7.98185941043084,
    "ok": true
   },
   "ol_galaxy": {
-   "p50": 1.7768999969121069,
-   "p95": 3.783560002921147,
-   "p99": 5.935923996148631,
-   "max": 7.459199987351894,
+   "p50": 2.040299994405359,
+   "p95": 3.9944199961610094,
+   "p99": 6.864664035383615,
+   "max": 10.175400006119162,
    "budget": 7.98185941043084,
    "ok": true
   },
   "ol_neighbor": {
-   "p50": 1.3189000019337982,
-   "p95": 2.1883199922740357,
-   "p99": 3.0633960000704974,
-   "max": 3.861700010020286,
+   "p50": 1.5230999561026692,
+   "p95": 3.152380010578781,
+   "p99": 4.513735985383391,
+   "max": 6.723900034558028,
    "budget": 7.98185941043084,
    "ok": true
   },
@@ -650,8 +648,8 @@
     "dyn": 0.0
    },
    "gain": 0.04,
-   "block_ms_p99": 21.22591597901192,
-   "block_ms_max": 23.54699998977594,
+   "block_ms_p99": 24.562271028407853,
+   "block_ms_max": 28.814899967983365,
    "A": {
     "pre_clip_peak": 0.6127958464335709,
     "clip_blocks": 0,
@@ -684,8 +682,8 @@
     "dyn": 1.0
    },
    "gain": 0.04,
-   "block_ms_p99": 28.65812000469305,
-   "block_ms_max": 37.80709998682141,
+   "block_ms_p99": 32.56794198125135,
+   "block_ms_max": 47.121900017373264,
    "A": {
     "pre_clip_peak": 0.5987776360062808,
     "clip_blocks": 0,
@@ -718,8 +716,8 @@
     "dyn": 0.0
    },
    "gain": 0.04,
-   "block_ms_p99": 54.22119900060352,
-   "block_ms_max": 74.61780001176521,
+   "block_ms_p99": 68.81257699453272,
+   "block_ms_max": 87.84589997958392,
    "A": {
     "pre_clip_peak": 0.5043568207791927,
     "clip_blocks": 0,
@@ -752,8 +750,8 @@
     "dyn": 1.0
    },
    "gain": 0.04,
-   "block_ms_p99": 154.09743500698823,
-   "block_ms_max": 177.71170000196435,
+   "block_ms_p99": 141.50692098541185,
+   "block_ms_max": 144.5893000345677,
    "A": {
     "pre_clip_peak": 0.5011337642178484,
     "clip_blocks": 0,
@@ -786,8 +784,8 @@
     "dyn": 0.0
    },
    "gain": 0.04,
-   "block_ms_p99": 136.4609279757133,
-   "block_ms_max": 145.21799999056384,
+   "block_ms_p99": 151.1361169657903,
+   "block_ms_max": 175.55519996676594,
    "A": {
     "pre_clip_peak": 0.22788336533301543,
     "clip_blocks": 0,
@@ -820,8 +818,8 @@
     "dyn": 1.0
    },
    "gain": 0.04,
-   "block_ms_p99": 319.47059999394696,
-   "block_ms_max": 397.22539999638684,
+   "block_ms_p99": 303.6093310179422,
+   "block_ms_max": 362.411699956283,
    "A": {
     "pre_clip_peak": 0.9305012333500992,
     "clip_blocks": 0,
@@ -854,8 +852,8 @@
     "dyn": 0.0
    },
    "gain": 0.04,
-   "block_ms_p99": 19.76063999172766,
-   "block_ms_max": 23.579300002893433,
+   "block_ms_p99": 21.750141027150676,
+   "block_ms_max": 28.28520000912249,
    "A": {
     "pre_clip_peak": 0.3053259545373517,
     "clip_blocks": 0,
@@ -888,8 +886,8 @@
     "dyn": 1.0
    },
    "gain": 0.04,
-   "block_ms_p99": 19.893034994311165,
-   "block_ms_max": 30.229700001655146,
+   "block_ms_p99": 22.380718016065668,
+   "block_ms_max": 29.71350000007078,
    "A": {
     "pre_clip_peak": 1.0993762315933417,
     "clip_blocks": 2,
@@ -915,54 +913,96 @@
   {
    "cells": 64,
    "shape": 0.0,
-   "ms": 0.3559000033419579,
+   "ms": 0.3789999755099416,
    "over_budget": false
   },
   {
    "cells": 64,
    "shape": 1.0,
-   "ms": 1.1907999869436026,
+   "ms": 1.4455000055022538,
    "over_budget": false
   },
   {
    "cells": 256,
    "shape": 0.0,
-   "ms": 6.1209000123199075,
+   "ms": 7.180100015830249,
    "over_budget": false
   },
   {
    "cells": 256,
    "shape": 1.0,
-   "ms": 18.972899997606874,
+   "ms": 13.512699981220067,
    "over_budget": true
   },
   {
    "cells": 576,
    "shape": 0.0,
-   "ms": 39.37210000003688,
+   "ms": 42.57650004001334,
    "over_budget": true
   },
   {
    "cells": 576,
    "shape": 1.0,
-   "ms": 108.11629999079742,
+   "ms": 91.86779998708516,
    "over_budget": true
   },
   {
    "cells": 1024,
    "shape": 0.0,
-   "ms": 119.49230000027455,
+   "ms": 155.98989999853075,
    "over_budget": true
   },
   {
    "cells": 1024,
    "shape": 1.0,
-   "ms": 224.35060000861995,
+   "ms": 237.84259997773916,
    "over_budget": true
   }
  ],
  "catalog_root": "C:\\Users\\Astro\\Documents\\Projects\\CASynth-2\\lab_catalog\\objects_laplace_2026_09_17",
  "catalog": [
+  {
+   "rid": "20260917-022950-d468e1",
+   "title": "Laplace Objects 3",
+   "status": "match",
+   "reason": "",
+   "notes_start": ""
+  },
+  {
+   "rid": "20260917-022710-4ff587",
+   "title": "Laplace Objects My 2",
+   "status": "match",
+   "reason": "",
+   "notes_start": ""
+  },
+  {
+   "rid": "20260917-022652-9ca91c",
+   "title": "Laplace Objects My 1",
+   "status": "match",
+   "reason": "",
+   "notes_start": ""
+  },
+  {
+   "rid": "20260917-022450-ba7355",
+   "title": "Laplace Objects 2",
+   "status": "match",
+   "reason": "",
+   "notes_start": ""
+  },
+  {
+   "rid": "20260917-022339-0d81fc",
+   "title": "Laplace Objects 2026-09-17 02:23:15",
+   "status": "match",
+   "reason": "",
+   "notes_start": ""
+  },
+  {
+   "rid": "20260917-020548-ff12d3",
+   "title": "L2 - Сборка и распад: Laplace / Objects (Kok's galaxy, 6 поколений/с) 2026-09-17 02:05:46",
+   "status": "match",
+   "reason": "",
+   "notes_start": ""
+  },
   {
    "rid": "20260917-012137-af7136",
    "title": "L1 - Одна фигура: Laplace / Objects (glider, 6 поколений/с)",
@@ -997,9 +1037,9 @@
    "on a figure across the seam the old Laplace (bbox of the unwrapped labels) and Objects (torus component) may segment differently; none of the 73 states of the three scenes touches the seam",
    "the old Laplace's node ceiling (256, lattice decimation) is not carried into the Objects graph: a component above ~300 cells costs more than the block budget on the render thread (see the cost table)",
    "the level match is one constant factor per scene on side B (ol_glider 1.08, ol_galaxy 0.74, ol_neighbor 1.25), chosen for <= 1 dB of integral RMS, not equal loudness; the old Laplace algorithm is untouched",
-   "the two N4 experiments keep the Figure law; their records were made by the v1 engine and open in their own version",
+   "the two N4 experiments keep the Figure law; their records (v1 engine, pinned to the commit of their sound files) are replayed and continued by a separate bench of that version, never by this code",
    "stress clipping at gain 0.04 (vol 1) in 6 of 8 probes: dense_random_evolving A 0 / B 4 blocks (peaks 0.61 / 1.19); dense_random_evolving A 0 / B 26 blocks (peaks 0.60 / 2.08); random_every_block A 0 / B 25 blocks (peaks 0.50 / 1.50); random_every_block A 0 / B 32 blocks (peaks 0.50 / 2.10); full_toggle_every_block A 0 / B 206 blocks (peaks 0.93 / 2.97); knobs_moving A 2 / B 0 blocks (peaks 1.10 / 0.60)",
-   "8 of 8 stress probes exceed the block budget at p99 (worst 319.5 ms): the figure analysis of dense fields on the render thread -- offline exact, live underruns possible",
+   "8 of 8 stress probes exceed the block budget at p99 (worst 303.6 ms): the figure analysis of dense fields on the render thread -- offline exact, live underruns possible",
    "in-place fades under whole-field replacement every block: random_every_block: 117; random_every_block: 131",
    "worst stress pre-clip peak 2.974 at gain 0.04 -- measured for these finite probes, not guaranteed for any playing",
    "no listening in this report: hearing the difference is the user's verdict"

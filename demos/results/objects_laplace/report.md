@@ -1,6 +1,6 @@
 # Objects / Laplace -- hand-over measurements (technical evidence, not listening verdicts)
 
-Generated 2026-09-17 01:33:25 at commit 289fb6d.  SR 44100, block 352 (7.98 ms). A = `laplacian`, B = `ca_object_resonators` (Spectrum Laplace, LAPLACE_GAIN 0.7, output x0.5); f0 110 Hz, 6 gen/s, gain 0.028 = vol 0.7.  RMS = stereo RMS of the ready 12 s.
+Generated 2026-09-17 14:06:13 at commit 964950c.  SR 44100, block 352 (7.98 ms). A = `laplacian`, B = `ca_object_resonators` (Spectrum Laplace, LAPLACE_GAIN 0.7, output x0.5); f0 110 Hz, 6 gen/s, gain 0.028 = vol 0.7.  RMS = stereo RMS of the ready 12 s.
 
 ## Spectral data A / B (73 states, 3 setting sets, every component)
 
@@ -14,7 +14,7 @@ Generated 2026-09-17 01:33:25 at commit 289fb6d.  SR 44100, block 352 (7.98 ms).
 
 | setting | value | generations | preflight |
 |---|---|---|---|
-| n | 4 | [0, 1, 2, 4, 5, 6] | [0, 1, 2, 3, 4, 5, 6, 7] |
+| n | 4 | [0, 1, 2, 4, 5, 6] | [0, 1, 2, 4, 5, 6] |
 | spread | 1.0 | [2, 4, 5] | [2, 4, 5] |
 | alpha | 2.0 | [0, 1, 2, 3, 4, 5, 6, 7] | [0, 1, 2, 3, 4, 5, 6, 7] |
 | shape | 1.0 | [0, 1, 2, 3, 4, 5, 6, 7] | [0, 1, 2, 3, 4, 5, 6, 7] |
@@ -26,12 +26,12 @@ Generated 2026-09-17 01:33:25 at commit 289fb6d.  SR 44100, block 352 (7.98 ms).
 
 | scene | side | engine | rms dB | peak | clip | p99 ms |
 |---|---|---|---|---|---|---|
-| ol_glider | A | laplacian | -35.50 | 0.0470 | 0 | 2.62 |
-| ol_glider | B | ca_object_resonators | -35.52 | 0.0858 | 0 | 2.62 |
-| ol_galaxy | A | laplacian | -26.38 | 0.2263 | 0 | 6.21 |
-| ol_galaxy | B | ca_object_resonators | -26.39 | 0.2995 | 0 | 6.21 |
-| ol_neighbor | A | laplacian | -30.26 | 0.0820 | 0 | 3.06 |
-| ol_neighbor | B | ca_object_resonators | -30.23 | 0.1815 | 0 | 3.06 |
+| ol_glider | A | laplacian | -35.50 | 0.0470 | 0 | 2.48 |
+| ol_glider | B | ca_object_resonators | -35.52 | 0.0858 | 0 | 2.48 |
+| ol_galaxy | A | laplacian | -26.38 | 0.2263 | 0 | 6.83 |
+| ol_galaxy | B | ca_object_resonators | -26.39 | 0.2995 | 0 | 6.83 |
+| ol_neighbor | A | laplacian | -30.26 | 0.0820 | 0 | 3.60 |
+| ol_neighbor | B | ca_object_resonators | -30.23 | 0.1815 | 0 | 3.60 |
 
 - ol_glider: side gain {'A': 1.0, 'B': 1.08}; A - B = +0.02 dB (at unit side gain +0.69 dB); within 1 dB True; continue from 6 s exact True (200 blocks); B figures at the end 1, tails 0, faded 0, in place 0, dropped 0
 - ol_galaxy: side gain {'A': 1.0, 'B': 0.74}; A - B = +0.01 dB (at unit side gain -2.61 dB); within 1 dB True; continue from 6 s exact True (200 blocks); B figures at the end 8, tails 37, faded 0, in place 0, dropped 0
@@ -70,39 +70,45 @@ Restore (export / restore, the next 40 blocks): exact True.
 
 ## Timing (both sides, after 1 s of warm-up)
 
-- ol_glider: p50 1.17  p95 2.02  p99 2.32  max 3.94 ms (budget 7.98, ok True)
-- ol_galaxy: p50 1.78  p95 3.78  p99 5.94  max 7.46 ms (budget 7.98, ok True)
-- ol_neighbor: p50 1.32  p95 2.19  p99 3.06  max 3.86 ms (budget 7.98, ok True)
+- ol_glider: p50 1.38  p95 2.78  p99 3.61  max 5.45 ms (budget 7.98, ok True)
+- ol_galaxy: p50 2.04  p95 3.99  p99 6.86  max 10.18 ms (budget 7.98, ok True)
+- ol_neighbor: p50 1.52  p95 3.15  p99 4.51  max 6.72 ms (budget 7.98, ok True)
 - numba: True
 
 ## Stress probes (gain 0.04, 6 s, apart from the scenes)
 
 | mode | settings | A peak / clip | B peak / clip | figures / sounding / tails B | faded / in place / dropped B | p99 ms |
 |---|---|---|---|---|---|---|
-| dense_random_evolving | REQ table | 0.613 / 0 | 1.186 / 4 | 19/15/95 | 363/0/0 | 21.23 |
-| dense_random_evolving | n20 spread1 alpha0 shape1 full1 dyn1 | 0.599 / 0 | 2.076 / 26 | 18/13/96 | 429/0/0 | 28.66 |
-| random_every_block | REQ table | 0.504 / 0 | 1.497 / 25 | 3/1/96 | 2136/117/0 | 54.22 |
-| random_every_block | n20 spread1 alpha0 shape1 full1 dyn1 | 0.501 / 0 | 2.096 / 32 | 6/1/96 | 2098/131/0 | 154.10 |
-| full_toggle_every_block | REQ table | 0.228 / 0 | 0.728 / 0 | 0/0/96 | 349/0/0 | 136.46 |
-| full_toggle_every_block | n20 spread1 alpha0 shape1 full1 dyn1 | 0.931 / 0 | 2.974 / 206 | 0/0/96 | 349/0/0 | 319.47 |
-| knobs_moving | REQ table | 0.305 / 0 | 0.471 / 0 | 12/8/5 | 0/0/0 | 19.76 |
-| knobs_moving | n20 spread1 alpha0 shape1 full1 dyn1 | 1.099 / 2 | 0.598 / 0 | 12/8/5 | 0/0/0 | 19.89 |
+| dense_random_evolving | REQ table | 0.613 / 0 | 1.186 / 4 | 19/15/95 | 363/0/0 | 24.56 |
+| dense_random_evolving | n20 spread1 alpha0 shape1 full1 dyn1 | 0.599 / 0 | 2.076 / 26 | 18/13/96 | 429/0/0 | 32.57 |
+| random_every_block | REQ table | 0.504 / 0 | 1.497 / 25 | 3/1/96 | 2136/117/0 | 68.81 |
+| random_every_block | n20 spread1 alpha0 shape1 full1 dyn1 | 0.501 / 0 | 2.096 / 32 | 6/1/96 | 2098/131/0 | 141.51 |
+| full_toggle_every_block | REQ table | 0.228 / 0 | 0.728 / 0 | 0/0/96 | 349/0/0 | 151.14 |
+| full_toggle_every_block | n20 spread1 alpha0 shape1 full1 dyn1 | 0.931 / 0 | 2.974 / 206 | 0/0/96 | 349/0/0 | 303.61 |
+| knobs_moving | REQ table | 0.305 / 0 | 0.471 / 0 | 12/8/5 | 0/0/0 | 21.75 |
+| knobs_moving | n20 spread1 alpha0 shape1 full1 dyn1 | 1.099 / 2 | 0.598 / 0 | 12/8/5 | 0/0/0 | 22.38 |
 
 ## Cost of the Laplace law by component size (full torus graph, no decimation)
 
 | cells | shape | ms | over the block budget |
 |---|---|---|---|
 | 64 | 0 | 0.4 | False |
-| 64 | 1 | 1.2 | False |
-| 256 | 0 | 6.1 | False |
-| 256 | 1 | 19.0 | True |
-| 576 | 0 | 39.4 | True |
-| 576 | 1 | 108.1 | True |
-| 1024 | 0 | 119.5 | True |
-| 1024 | 1 | 224.4 | True |
+| 64 | 1 | 1.4 | False |
+| 256 | 0 | 7.2 | False |
+| 256 | 1 | 13.5 | True |
+| 576 | 0 | 42.6 | True |
+| 576 | 1 | 91.9 | True |
+| 1024 | 0 | 156.0 | True |
+| 1024 | 1 | 237.8 | True |
 
 ## Catalog check (C:\Users\Astro\Documents\Projects\CASynth-2\lab_catalog\objects_laplace_2026_09_17)
 
+- 20260917-022950-d468e1 Laplace Objects 3: match  (notes: '')
+- 20260917-022710-4ff587 Laplace Objects My 2: match  (notes: '')
+- 20260917-022652-9ca91c Laplace Objects My 1: match  (notes: '')
+- 20260917-022450-ba7355 Laplace Objects 2: match  (notes: '')
+- 20260917-022339-0d81fc Laplace Objects 2026-09-17 02:23:15: match  (notes: '')
+- 20260917-020548-ff12d3 L2 - Сборка и распад: Laplace / Objects (Kok's gal: match  (notes: '')
 - 20260917-012137-af7136 L1 - Одна фигура: Laplace / Objects (glider, 6 пок: match  (notes: 'Гипотеза - При одинаковой настройке спек')
 - 20260917-012134-38c688 L2 - Сборка и распад: Laplace / Objects (Kok's gal: match  (notes: 'Гипотеза - На одной и той же распадающей')
 - 20260917-012131-c47bd9 L3 - Сосед и радиус: Laplace / Objects (17 клеток : match  (notes: 'Гипотеза - В А обе фигуры звучат через о')
@@ -116,9 +122,9 @@ Restore (export / restore, the next 40 blocks): exact True.
   - on a figure across the seam the old Laplace (bbox of the unwrapped labels) and Objects (torus component) may segment differently; none of the 73 states of the three scenes touches the seam
   - the old Laplace's node ceiling (256, lattice decimation) is not carried into the Objects graph: a component above ~300 cells costs more than the block budget on the render thread (see the cost table)
   - the level match is one constant factor per scene on side B (ol_glider 1.08, ol_galaxy 0.74, ol_neighbor 1.25), chosen for <= 1 dB of integral RMS, not equal loudness; the old Laplace algorithm is untouched
-  - the two N4 experiments keep the Figure law; their records were made by the v1 engine and open in their own version
+  - the two N4 experiments keep the Figure law; their records (v1 engine, pinned to the commit of their sound files) are replayed and continued by a separate bench of that version, never by this code
   - stress clipping at gain 0.04 (vol 1) in 6 of 8 probes: dense_random_evolving A 0 / B 4 blocks (peaks 0.61 / 1.19); dense_random_evolving A 0 / B 26 blocks (peaks 0.60 / 2.08); random_every_block A 0 / B 25 blocks (peaks 0.50 / 1.50); random_every_block A 0 / B 32 blocks (peaks 0.50 / 2.10); full_toggle_every_block A 0 / B 206 blocks (peaks 0.93 / 2.97); knobs_moving A 2 / B 0 blocks (peaks 1.10 / 0.60)
-  - 8 of 8 stress probes exceed the block budget at p99 (worst 319.5 ms): the figure analysis of dense fields on the render thread -- offline exact, live underruns possible
+  - 8 of 8 stress probes exceed the block budget at p99 (worst 303.6 ms): the figure analysis of dense fields on the render thread -- offline exact, live underruns possible
   - in-place fades under whole-field replacement every block: random_every_block: 117; random_every_block: 131
   - worst stress pre-clip peak 2.974 at gain 0.04 -- measured for these finite probes, not guaranteed for any playing
   - no listening in this report: hearing the difference is the user's verdict

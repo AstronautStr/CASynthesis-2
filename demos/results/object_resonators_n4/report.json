@@ -1,6 +1,6 @@
 {
- "generated": "2026-09-17 01:42:58",
- "commit": "289fb6d",
+ "generated": "2026-09-17 14:16:33",
+ "commit": "964950c",
  "scenes": [
   {
    "id": "n4_spectrum",
@@ -66,9 +66,9 @@
    },
    "a_minus_b_db": -2.251470995742963,
    "block_ms": {
-    "p50": 0.28744999144691974,
-    "p99": 1.0211229923879712,
-    "max": 1.7081999976653606,
+    "p50": 0.2801000082399696,
+    "p99": 0.8302350022131574,
+    "max": 1.1058999807573855,
     "budget": 7.98185941043084,
     "ok": true
    },
@@ -172,9 +172,9 @@
    },
    "a_minus_b_db": -0.35364854387737665,
    "block_ms": {
-    "p50": 0.20589999621734023,
-    "p99": 1.2129369933973064,
-    "max": 1.8562999903224409,
+    "p50": 0.2109999768435955,
+    "p99": 1.1819180025486271,
+    "max": 2.024100045673549,
     "budget": 7.98185941043084,
     "ok": true
    },
@@ -275,8 +275,8 @@
    "decay_s": 0.2,
    "mode": "dense_random_evolving",
    "gain": 0.04,
-   "block_ms_p99": 12.29382499412168,
-   "block_ms_max": 15.29899999150075,
+   "block_ms_p99": 10.376854979549536,
+   "block_ms_max": 14.182500017341226,
    "A": {
     "rms_db": -21.228244389451735,
     "peak": 1.0,
@@ -314,8 +314,8 @@
    "decay_s": 0.2,
    "mode": "random_every_block",
    "gain": 0.04,
-   "block_ms_p99": 90.1413940047496,
-   "block_ms_max": 127.15230000321753,
+   "block_ms_p99": 110.0678640010301,
+   "block_ms_max": 127.81969999196008,
    "A": {
     "rms_db": -17.93768072639087,
     "peak": 1.0,
@@ -353,8 +353,8 @@
    "decay_s": 0.2,
    "mode": "full_toggle_every_block",
    "gain": 0.04,
-   "block_ms_p99": 5.917558980872855,
-   "block_ms_max": 8.745700004510581,
+   "block_ms_p99": 7.903876009513626,
+   "block_ms_max": 12.070900003891438,
    "A": {
     "rms_db": -29.77768657632815,
     "peak": 0.1480758079775384,
@@ -392,8 +392,8 @@
    "decay_s": 0.2,
    "mode": "repeated_edits_paused",
    "gain": 0.04,
-   "block_ms_p99": 39.07909699395532,
-   "block_ms_max": 43.38720001396723,
+   "block_ms_p99": 44.14949700818398,
+   "block_ms_max": 49.707099969964474,
    "A": {
     "rms_db": -38.58812739779557,
     "peak": 0.1619312112796411,
@@ -431,8 +431,8 @@
    "decay_s": 0.2,
    "mode": "knobs_moving",
    "gain": 0.04,
-   "block_ms_p99": 14.03666898724623,
-   "block_ms_max": 21.014500001911074,
+   "block_ms_p99": 16.311617970350202,
+   "block_ms_max": 39.989099954254925,
    "A": {
     "rms_db": -20.30200089385368,
     "peak": 1.0,
@@ -470,8 +470,8 @@
    "decay_s": 1.5,
    "mode": "dense_random_evolving",
    "gain": 0.04,
-   "block_ms_p99": 20.16555400623475,
-   "block_ms_max": 26.56369999749586,
+   "block_ms_p99": 23.7352149625076,
+   "block_ms_max": 32.05330000491813,
    "A": {
     "rms_db": -25.047171234171994,
     "peak": 0.5149693288979766,
@@ -509,8 +509,8 @@
    "decay_s": 1.5,
    "mode": "random_every_block",
    "gain": 0.04,
-   "block_ms_p99": 93.74507400818402,
-   "block_ms_max": 104.61559999384917,
+   "block_ms_p99": 119.27195600117561,
+   "block_ms_max": 136.0323000117205,
    "A": {
     "rms_db": -20.384101259564915,
     "peak": 0.5898312326425977,
@@ -548,8 +548,8 @@
    "decay_s": 1.5,
    "mode": "full_toggle_every_block",
    "gain": 0.04,
-   "block_ms_p99": 7.471789007249756,
-   "block_ms_max": 11.954899993725121,
+   "block_ms_p99": 11.103336992673578,
+   "block_ms_max": 16.0277999821119,
    "A": {
     "rms_db": -29.81525597666758,
     "peak": 0.15598010193182166,
@@ -587,8 +587,8 @@
    "decay_s": 1.5,
    "mode": "repeated_edits_paused",
    "gain": 0.04,
-   "block_ms_p99": 47.85045298573095,
-   "block_ms_max": 51.52580002322793,
+   "block_ms_p99": 51.381517013651326,
+   "block_ms_max": 57.21820000326261,
    "A": {
     "rms_db": -38.36392328560636,
     "peak": 0.09646900845362713,
@@ -626,8 +626,8 @@
    "decay_s": 1.5,
    "mode": "knobs_moving",
    "gain": 0.04,
-   "block_ms_p99": 13.887221991608387,
-   "block_ms_max": 18.304299999726936,
+   "block_ms_p99": 15.9464000078151,
+   "block_ms_max": 22.682600014377385,
    "A": {
     "rms_db": -20.407308044779576,
     "peak": 1.0,
@@ -665,8 +665,8 @@
    "decay_s": 0.2,
    "mode": "dense_random_evolving",
    "gain": 0.04,
-   "block_ms_p99": 11.220343005552424,
-   "block_ms_max": 14.35089998994954,
+   "block_ms_p99": 13.39079198834952,
+   "block_ms_max": 20.076400018297136,
    "A": {
     "rms_db": -21.24320377706287,
     "peak": 0.9751579332865383,
@@ -704,8 +704,8 @@
    "decay_s": 0.2,
    "mode": "random_every_block",
    "gain": 0.04,
-   "block_ms_p99": 92.00248701818055,
-   "block_ms_max": 119.05380000825971,
+   "block_ms_p99": 114.06234201509506,
+   "block_ms_max": 134.04309999896213,
    "A": {
     "rms_db": -18.017265322107544,
     "peak": 1.0,
@@ -743,8 +743,8 @@
    "decay_s": 0.2,
    "mode": "full_toggle_every_block",
    "gain": 0.04,
-   "block_ms_p99": 6.05914698186098,
-   "block_ms_max": 8.492099994327873,
+   "block_ms_p99": 8.163937000208534,
+   "block_ms_max": 9.47789999190718,
    "A": {
     "rms_db": -29.77768657632815,
     "peak": 0.1480758079775384,
@@ -782,8 +782,8 @@
    "decay_s": 0.2,
    "mode": "repeated_edits_paused",
    "gain": 0.04,
-   "block_ms_p99": 52.409585977147806,
-   "block_ms_max": 57.20320000546053,
+   "block_ms_p99": 58.50892297457905,
+   "block_ms_max": 62.29509995318949,
    "A": {
     "rms_db": -37.48994011072952,
     "peak": 0.217261268959624,
@@ -821,8 +821,8 @@
    "decay_s": 0.2,
    "mode": "knobs_moving",
    "gain": 0.04,
-   "block_ms_p99": 13.912864995654676,
-   "block_ms_max": 18.145699985325336,
+   "block_ms_p99": 16.741681008134044,
+   "block_ms_max": 19.776100001763552,
    "A": {
     "rms_db": -20.45350722984311,
     "peak": 1.0,
@@ -860,8 +860,8 @@
    "decay_s": 1.5,
    "mode": "dense_random_evolving",
    "gain": 0.04,
-   "block_ms_p99": 21.081277001940183,
-   "block_ms_max": 25.263099989388138,
+   "block_ms_p99": 25.348339035408575,
+   "block_ms_max": 59.2540999641642,
    "A": {
     "rms_db": -25.055494042274628,
     "peak": 0.521439252906888,
@@ -899,8 +899,8 @@
    "decay_s": 1.5,
    "mode": "random_every_block",
    "gain": 0.04,
-   "block_ms_p99": 94.300261985627,
-   "block_ms_max": 103.9703999995254,
+   "block_ms_p99": 115.83189199969641,
+   "block_ms_max": 128.69760004105046,
    "A": {
     "rms_db": -20.56751288897816,
     "peak": 0.6701254310739464,
@@ -938,8 +938,8 @@
    "decay_s": 1.5,
    "mode": "full_toggle_every_block",
    "gain": 0.04,
-   "block_ms_p99": 8.846760005108086,
-   "block_ms_max": 10.422699997434393,
+   "block_ms_p99": 11.140742025454529,
+   "block_ms_max": 12.617800035513937,
    "A": {
     "rms_db": -29.815183260806318,
     "peak": 0.15594958342234566,
@@ -977,8 +977,8 @@
    "decay_s": 1.5,
    "mode": "repeated_edits_paused",
    "gain": 0.04,
-   "block_ms_p99": 49.30122299701907,
-   "block_ms_max": 57.66819999553263,
+   "block_ms_p99": 56.28567400330214,
+   "block_ms_max": 66.62220001453534,
    "A": {
     "rms_db": -37.196823682300895,
     "peak": 0.11175878170110172,
@@ -1016,8 +1016,8 @@
    "decay_s": 1.5,
    "mode": "knobs_moving",
    "gain": 0.04,
-   "block_ms_p99": 12.836874996719418,
-   "block_ms_max": 16.073500009952113,
+   "block_ms_p99": 16.63565501512494,
+   "block_ms_max": 20.612500025890768,
    "A": {
     "rms_db": -20.506422665705543,
     "peak": 1.0,
@@ -1071,44 +1071,44 @@
  "analysis_cost": [
   {
    "cells": 64,
-   "spectrum_ms": 0.4645000153686851,
+   "spectrum_ms": 0.3457000129856169,
    "over_budget": false
   },
   {
    "cells": 121,
-   "spectrum_ms": 0.8168999920599163,
+   "spectrum_ms": 0.8941999985836446,
    "over_budget": false
   },
   {
    "cells": 256,
-   "spectrum_ms": 6.244399992283434,
+   "spectrum_ms": 7.822199957445264,
    "over_budget": false
   },
   {
    "cells": 529,
-   "spectrum_ms": 31.451099988771603,
+   "spectrum_ms": 35.47740000067279,
    "over_budget": true
   },
   {
    "cells": 1024,
-   "spectrum_ms": 95.09840002283454,
+   "spectrum_ms": 104.83409999869764,
    "over_budget": true
   }
  ],
  "timing": {
   "n4_spectrum": {
-   "p50": 0.21449998894240707,
-   "p95": 0.5253549854387527,
-   "p99": 0.708874013798777,
-   "max": 1.1325000086799264,
+   "p50": 0.2867999719455838,
+   "p95": 0.8550949947675689,
+   "p99": 1.1862370104063302,
+   "max": 2.644499996677041,
    "budget": 7.98185941043084,
    "ok": true
   },
   "n4_neighbor": {
-   "p50": 0.1996000064536929,
-   "p95": 0.5377400186262092,
-   "p99": 1.068658989388496,
-   "max": 1.4039999805390835,
+   "p50": 0.215600011870265,
+   "p95": 0.558570018620227,
+   "p99": 1.3633720221696424,
+   "max": 1.9783999887295067,
    "budget": 7.98185941043084,
    "ok": true
   },
@@ -1119,16 +1119,34 @@
   {
    "rid": "20260916-213633-a52e8c",
    "title": "N4.1 - Спектр самой фигуры: glider, 6 поколений/с",
-   "status": "unavailable",
-   "reason": "scene cannot be rebuilt: scene: missing variants.B.engine_params for ca_object_resonators: ['alpha', 'dyn', 'fullshape', 'harm', 'n', 'shape', 'spectrum', 'spread']",
-   "notes_start": "Гипотеза - В Б спектр принадлежит глайде"
+   "notes_start": "Гипотеза - В Б спектр принадлежит глайде",
+   "version": "6aee6a8",
+   "status": "match",
+   "reason": "",
+   "differs": [
+    "casynth_core.py",
+    "casynth_lab/figures.py",
+    "casynth_lab/object_resonators.py",
+    "casynth_lab/registry.py",
+    "casynth_lab/runner.py",
+    "casynth_lab/scene.py"
+   ]
   },
   {
    "rid": "20260916-213632-002902",
    "title": "N4.2 - Фигура слышит соседа: неподвижная фигура + blinker, 6 поколений/с",
-   "status": "unavailable",
-   "reason": "scene cannot be rebuilt: scene: missing variants.A.engine_params for ca_object_resonators: ['alpha', 'dyn', 'fullshape', 'harm', 'n', 'shape', 'spectrum', 'spread']",
-   "notes_start": "Гипотеза - В А после стартового хвоста о"
+   "notes_start": "Гипотеза - В А после стартового хвоста о",
+   "version": "6aee6a8",
+   "status": "match",
+   "reason": "",
+   "differs": [
+    "casynth_core.py",
+    "casynth_lab/figures.py",
+    "casynth_lab/object_resonators.py",
+    "casynth_lab/registry.py",
+    "casynth_lab/runner.py",
+    "casynth_lab/scene.py"
+   ]
   }
  ],
  "problems": {
@@ -1141,12 +1159,12 @@
   "limitations": [
    "stress clipping at gain 0.04 (vol 1) in 8 of 20 probes, none in the scenes (peaks <= 0.09): dense_random_evolving det 0 scale 55 decay 0.2: pre-clip peak 1.08, 2 clipped blocks; random_every_block det 0 scale 55 decay 0.2: pre-clip peak 1.22, 18 clipped blocks; knobs_moving det 0 scale 55 decay 0.2: pre-clip peak 1.20, 4 clipped blocks; knobs_moving det 0 scale 880 decay 1.5: pre-clip peak 1.13, 4 clipped blocks; dense_random_evolving det 1 scale 55 decay 0.2: pre-clip peak 1.07, 2 clipped blocks; random_every_block det 1 scale 55 decay 0.2: pre-clip peak 1.17, 15 clipped blocks; knobs_moving det 1 scale 55 decay 0.2: pre-clip peak 1.13, 7 clipped blocks; knobs_moving det 1 scale 880 decay 1.5: pre-clip peak 1.13, 5 clipped blocks. No AGC and no division by the figure count by the REQ; the only common lever is the N4 output x0.5",
    "in-place fades (v2: every tail and fading slot busy -> the leaving bank fades out in its own slot over 20 ms, no cut; the slot stays busy for those 20 ms): random_every_block det 0 scale 55: 121; random_every_block det 0 scale 880: 120; random_every_block det 1 scale 55: 105; random_every_block det 1 scale 880: 113",
-   "17 of 20 stress probes exceed the block budget at p99 (worst 94.3 ms, modes ['dense_random_evolving', 'full_toggle_every_block', 'knobs_moving', 'random_every_block', 'repeated_edits_paused']): the figure analysis (eigvalsh) of dense fields on the render thread -- offline exact, live underruns possible",
+   "19 of 20 stress probes exceed the block budget at p99 (worst 119.3 ms, modes ['dense_random_evolving', 'full_toggle_every_block', 'knobs_moving', 'random_every_block', 'repeated_edits_paused']): the figure analysis (eigvalsh) of dense fields on the render thread -- offline exact, live underruns possible",
    "tails probe (48 blinkers cleared / re-added 8 times within 16 blocks, gain 0.04): pre-clip peak 2.565, 17 clipped blocks, 48 faded, 24 in place, 0 hard drops, all freed after 3 s of silence",
-   "catalog 20260916-213633-a52e8c: made by the v1 engine, opens in its own version (scene cannot be rebuilt: scene: missing variants.B.engine_params for ca_object_resonators: ['alpha', 'dyn', 'fullshape', 'harm', 'n', 'shape', 'spectrum', 'spread'])",
-   "catalog 20260916-213632-002902: made by the v1 engine, opens in its own version (scene cannot be rebuilt: scene: missing variants.A.engine_params for ca_object_resonators: ['alpha', 'dyn', 'fullshape', 'harm', 'n', 'shape', 'spectrum', 'spread'])",
+   "catalog 20260916-213633-a52e8c: made by the v1 engine (pinned 6aee6a8), replayed and continued by a separate bench of that version, not by this code",
+   "catalog 20260916-213632-002902: made by the v1 engine (pinned 6aee6a8), replayed and continued by a separate bench of that version, not by this code",
    "N4.1 level: A (N3 Tuned) - B (N4 Disk) = -2.25 dB RMS at the same bench gain; no scene parameter acts on one side only, the only lever would be the N4 output x0.5 (kept at the preflight value; the preflight numbers are reproduced)",
-   "figure analysis (eigvalsh of L) runs on the render thread at every field change: 64 cells 0 ms, 121 cells 1 ms, 256 cells 6 ms, 529 cells 31 ms, 1024 cells 95 ms -- a component above ~300 cells exceeds the block budget by itself (the two scenes: <= 17 cells)",
+   "figure analysis (eigvalsh of L) runs on the render thread at every field change: 64 cells 0 ms, 121 cells 1 ms, 256 cells 8 ms, 529 cells 35 ms, 1024 cells 105 ms -- a component above ~300 cells exceeds the block budget by itself (the two scenes: <= 17 cells)",
    "worst stress pre-clip peak over EVERY probe 2.565 at gain 0.04 (table maximum 1.219: random_every_block, detector 0, scale 55, decay 0.2 s; tails probe 2.565): measured for these finite probes, not guaranteed for any playing",
    "split / merge retire identities (first model): the Tumbler and the R-pentomino change colours often",
    "tails are measured on the float output (int16 quantises below -90 dBFS to zero)",

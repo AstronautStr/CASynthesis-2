@@ -158,8 +158,22 @@ def write_scenes():
     return paths
 
 
+def require_pinnable():
+    """Records of a delivered catalog must be PINNED to a commit (rule 2026-09-17): the
+    sound code that renders them has to be committed BEFORE the build, otherwise the
+    records stay Local and cannot be run in their own version later."""
+    from casynth_lab import provenance as prov
+    doc = prov.current()
+    if doc.get('match') != 'clean':
+        raise SystemExit('error: the sound code is not a clean commit (' + str(doc.get('reason') or '?') +
+                         ')\ncommit it first -- catalog records must be pinned to a commit '
+                         '(developer rule 2026-09-17)')
+    return doc['commit']
+
+
 def build(root=CATALOG_ROOT):
     root = Path(root)
+    require_pinnable()
     if root.exists() and any(not p.name.startswith('.') for p in root.iterdir()):
         raise SystemExit('error: target catalog already holds records: ' + str(root) +
                          '\n(rebuild into a new directory with --root; records and Notes the '
