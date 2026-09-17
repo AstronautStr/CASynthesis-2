@@ -98,10 +98,14 @@ those 20 ms while every tail and fading slot is still busy (counted: dropped).
 Undriven modes below TAIL_FLOOR, and faded modes, are zeroed at block boundaries.
 
 Controls: `detector` (Own / Disk, default Disk; changes the masks of the NEXT
-events, no packet), `radius_mul` ("Radius x", 0.25..4.0, default 1.0: the Disk
-detector uses R_eff = radius_mul * R -- the geometric R of the figure is never
-changed, a single cell keeps R = 0, Own ignores it; a change acts on the masks of
-the NEXT events only, no packet; absent from an older snapshot = 1.0),
+events, no packet), `radius_mul` ("Radius x", any finite value >= 0, default 1.0,
+the bench slider covers a user-editable range with the default RADIUS_RANGE
+0.25..4 -- registry hint `ranges`, REQ memory/req-objects-radius-attack-2026-09-17.md:
+the Disk detector uses R_eff = radius_mul * R -- the geometric R of the figure is
+never changed, a single cell keeps R = 0, Own ignores it; once R_eff reaches
+figures.full_cover_radius the mask is the whole field (display: `covers_all`);
+a change acts on the masks of the NEXT events only, no packet; absent from an
+older snapshot = 1.0),
 `spectrum` (Figure / Laplace, registry default Laplace; absent from an older
 snapshot / parameter set = Figure), `frequency_scale` (55..880 Hz, default 220;
 Figure law only: retunes every Figure-tuned slot at once, states kept),
@@ -137,8 +141,9 @@ LABEL = 'Objects'
 # the seven settings of the old Laplace, metadata from the core registry (not duplicated)
 LAPLACE_PARAMS = tuple(tuple(p) for p in ENGINE_BY_ID['laplacian']['params'])
 SPECTRUM_KEYS = tuple(p[0] for p in LAPLACE_PARAMS)      # n spread alpha shape harm fullshape dyn
+RADIUS_RANGE = (0.25, 4.0)             # default slider range of Radius x (the value itself: 0 <= finite)
 PARAMS = [('detector', 'Detector', 0, 1, True, 1),
-          ('radius_mul', 'Radius x', 0.25, 4.0, False, 1.0),
+          ('radius_mul', 'Radius x', 0.0, math.inf, False, 1.0),
           ('spectrum', 'Spectrum', 0, 1, True, 1),
           ('frequency_scale', 'Freq scale', 55.0, 880.0, False, 220.0),
           ('decay_s', 'Decay', 0.20, 1.50, False, 0.80)] + list(LAPLACE_PARAMS)
@@ -876,9 +881,12 @@ class ObjectResonatorsEngine(SoundEngine):
             f = self.figures[fid]
             s = f.slot
             nd = int(self.ndrive[s]) if s >= 0 else 0
+            r_eff = self._eff_radius(f)
             figs.append(dict(id=fid, color=(fid - 1) % N_PALETTE, slot=s, n=int(len(f.cells)),
                              cells=f.cells.tolist(), centre=[f.centre[0], f.centre[1]],
-                             radius=self._eff_radius(f), radius_geom=f.radius, modes=nd,
+                             radius=r_eff, radius_geom=f.radius,
+                             covers_all=bool(det == DET_DISK and fg.covers_field(r_eff, rows, cols)),
+                             modes=nd,
                              f_low=(float(self.ffreq[s, 0]) if s >= 0 and nd > 0 else 0.0),
                              w_max=(float(self.wtgt[s, :nd].max()) if s >= 0 and nd > 0 else 0.0),
                              e=(float(self.last_e[s]) if s >= 0 else 0.0),
@@ -1121,4 +1129,5 @@ def overlay(params, rows, cols):
 
 
 register(EngineSpec(ENGINE_ID, LABEL, PARAMS, lambda ctx, params: ObjectResonatorsEngine(ctx, params),
-                    choices=CHOICES, inactive=inactive, overlay=overlay))
+                    choices=CHOICES, inactive=inactive, overlay=overlay,
+                    ranges={'radius_mul': RADIUS_RANGE}))

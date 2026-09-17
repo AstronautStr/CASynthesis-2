@@ -10,7 +10,13 @@ A/B tabs (select = listen + edit), the selected side's engine and its registry
 knobs, and a one-line summary of how A and B differ.  LMB paints, RMB erases;
 Clear (C) empties the field; the Patterns column (patterns.py, the synth's
 library) drags Life shapes onto the field.  Every text field (save Title /
-Note, Notes) is one model: caret, selection, Ctrl+A/X/C/V.
+Note, Notes, the Min / Max range fields of a ranged knob) is one model: caret,
+selection, Ctrl+A/X/C/V.  A ranged knob (registry EngineSpec.ranges, Objects
+"Radius x", 2026-09-17) gets a "range" row under its slider with two numeric
+fields: the slider is linear over min..max of the SELECTED side (runner
+set_range, saved with the record / Continue); Enter or leaving the field
+commits, Esc cancels, a bad number is refused in place; a committed range that
+excludes the current value clamps it once (a normal set_param).
 Startup stands on pause (silent); releasing Pause CA starts automaton + sound.
 Stop (S) = reset + pause + silence; Pause CA freezes only the automaton while
 running; Restart (R) starts again immediately.  Stop/Restart keep engines,
@@ -60,6 +66,8 @@ ENG_W, ENG_H = 74, 24
 ROW_H = 26
 DISPLAY_ROW_H = 14           # one bar row of an engine display (W links / node u)
 SLIDER_W = 120
+RANGE_FIELD_W = 54           # Min / Max field of a ranged knob (2026-09-17)
+RANGE_DECIMALS = 3           # slider rounding / value text of a ranged knob (steps of 0.001)
 FONT_NAMES = "segoeui,arial,dejavusans,freesans"
 C_ALIVE = (111, 208, 224)
 C_ALIVE_PAUSED = (200, 180, 90)
@@ -177,7 +185,7 @@ class BenchApp:
                                          ENG_W, ENG_H)
         self.engine_rows = (len(specs) + 2) // 3
         self.params_y = ey + self.engine_rows * (ENG_H + 6) + 12
-        self.param_rows_max = max([len(e.params) for e in specs] + [1])
+        self.param_rows_max = max([len(e.params) + len(e.ranges) for e in specs] + [1])
         # peak / message line: below the longest parameter list AND below the tallest
         # engine display (gutter_field: 4 parameter rows + a header + 8 node bars)
         self.footer_y = max(self.params_y + self.param_rows_max * ROW_H + 8,
@@ -206,6 +214,11 @@ class BenchApp:
         self.lib_scroll_min = min(0, (self.lib_rect[1] + self.lib_rect[3] - 4) - y)
         self.drag_pat = None              # {'item', 'cells', 'name', 'snap'} while dragging
         self._ghost = None                # alpha surface of one ghost cell (made in draw)
+        # ranged knobs (2026-09-17): the focused Min / Max field, if any
+        self.range_edit = None            # {'name', 'which', 'edit': TextEdit, 'rect'}
+        self.range_error = None           # (name, text) shown beside the fields until the next edit
+        self._range_pending = {}          # (side, name) -> (min, max) posted, not yet in the snapshot
+        self._clamp_pending = {}          # (side, name) -> value posted by a clamp, not yet in the snapshot
 
     # -- helpers -------------------------------------------------------------
     @staticmethod
@@ -227,12 +240,44 @@ class BenchApp:
         return side, eid, params
 
     def _param_rows(self, eid):
-        """[(spec, slider_rect)] for the selected side's engine."""
+        """[(spec, slider_rect)] for the selected side's engine; a ranged
+        parameter is followed by its extra "range" row."""
         rows = []
-        for i, spec in enumerate(registry.get(eid).params):
-            y = self.params_y + i * ROW_H
+        e = registry.get(eid)
+        y = self.params_y
+        for spec in e.params:
             rows.append((spec, (self.slider_x, y + 6, SLIDER_W, 10)))
+            y += ROW_H * (2 if spec[0] in e.ranges else 1)
         return rows
+
+    def _params_height(self, eid):
+        e = registry.get(eid)
+        return (len(e.params) + len(e.ranges)) * ROW_H
+
+    def _range_rects(self, eid):
+        """{name: {'min': rect, 'max': rect, 'y': row y}} of the range rows."""
+        out = {}
+        e = registry.get(eid)
+        for spec, (sx, sy, _w, _h) in self._param_rows(eid):
+            if spec[0] in e.ranges:
+                y = sy - 6 + ROW_H
+                out[spec[0]] = dict(min=(sx, y + 1, RANGE_FIELD_W, 20),
+                                    max=(sx + RANGE_FIELD_W + 14, y + 1, RANGE_FIELD_W, 20), y=y)
+        return out
+
+    def _range_of(self, snap, side, name):
+        """(min, max) of a ranged parameter on a side: the runner's snapshot, or a
+        range posted from here that the snapshot has not caught up with yet (two
+        commits within one audio block must not overwrite each other)."""
+        rr = (snap.get('ranges') or {}).get(side, {})
+        got = (float(rr[name][0]), float(rr[name][1])) if name in rr             else registry.default_range(snap['sides'][side][0], name)
+        pend = self._range_pending.get((side, name))
+        if pend is not None:
+            if pend == got:
+                del self._range_pending[(side, name)]
+            else:
+                return pend
+        return got
 
     def _choice_rects(self, eid, name, sy):
         """Word buttons of a named-choice parameter on the row whose slider
@@ -268,11 +313,17 @@ class BenchApp:
             return self._press_catalog(pos, button, now)
         if self.mode == 'report':
             return self._press_report(pos, button)
-        return self._press_live(pos, button, allow_lab=True)
+        return self._press_live(pos, button, allow_lab=True, shift=shift)
 
-    def _press_live(self, pos, button, allow_lab=True):
+    def _press_live(self, pos, button, allow_lab=True, shift=False):
         """The live view (transport, A/B, knobs, painting; lab buttons when
         allowed -- the Notes window passes clicks outside it here without them)."""
+        if self.range_edit is not None:
+            if self._inside(self.range_edit['rect'], pos) and button == 1:
+                self._caret_from_pos(self.range_edit['edit'], self.range_edit['rect'], pos,
+                                     shift=shift, start_drag=True)
+                return f"range:{self.range_edit['name']}:{self.range_edit['which']}"
+            self.commit_range()                     # leaving the field commits
         if button == 1 and self.catalog is not None and allow_lab:
             for key, rect in self.lab_buttons.items():
                 if self._inside(rect, pos):
@@ -322,6 +373,13 @@ class BenchApp:
                     return f'engine:{e_id}'
             inactive = self._inactive(eid, params)
             choices = registry.get(eid).choices
+            for name, rr in self._range_rects(eid).items():
+                if name in inactive:
+                    continue
+                for which in ('min', 'max'):
+                    if self._inside(rr[which], pos):
+                        self._focus_range(name, which, rr[which])
+                        return f'range:{name}:{which}'
             for spec, (sx, sy, sw, sh) in self._param_rows(eid):
                 name = spec[0]
                 if name in inactive:
@@ -393,6 +451,24 @@ class BenchApp:
         if name == 'escape' and self.drag_pat is not None:
             self.cancel_drag()
             return 'drag:cancel'
+        if self.range_edit is not None:
+            # a focused Min / Max field: editing keys, Enter commits, Esc cancels,
+            # Tab moves to the other bound; the bench hotkeys stay inert meanwhile
+            re = self.range_edit
+            if name in ('return', 'enter', 'kp_enter'):
+                return 'range:commit' if self.commit_range() else 'range:error'
+            if name == 'escape':
+                self.cancel_range()
+                return 'range:cancel'
+            if name == 'tab':
+                other = 'max' if re['which'] == 'min' else 'min'
+                _side, eid, _params = self._side()
+                rect = self._range_rects(eid)[re['name']][other]
+                if self.commit_range():
+                    self._focus_range(re['name'], other, rect)
+                return f"range:{re['name']}:{other}"
+            got = self._edit_key(re['edit'], re['rect'], name, ctrl, shift)
+            return f"range:{got}" if got else 'range:typing'
         if name == 'r':
             self._post('reset')
             return 'reset'
@@ -418,6 +494,8 @@ class BenchApp:
         self.drag_vol = False
         self.drag_param = None
         self.drag_text = None
+        if self.range_edit is not None:
+            self.range_edit['edit'].follow = True
         if self.drag_pat is not None:
             d, self.drag_pat = self.drag_pat, None
             if d['snap'] is not None:
@@ -442,12 +520,90 @@ class BenchApp:
         side, eid, params = self._side()
         spec = registry.get(eid).spec_of(self.drag_param)
         _arg, _label, lo, hi, integer, _d = spec
+        ranged = self.drag_param in registry.get(eid).ranges
+        if ranged:
+            lo, hi = self._range_of(self.engine.snapshot(), side, self.drag_param)
         frac = min(max((mx - self.slider_x) / SLIDER_W, 0.0), 1.0)
         v = lo + frac * (hi - lo)
-        v = int(round(v)) if integer else round(v, 3)
+        v = int(round(v)) if integer else round(v, RANGE_DECIMALS if ranged else 3)
+        if ranged:
+            v = min(max(v, lo), hi)                 # the rounded value stays inside the range
         if v != params[self.drag_param]:
             self._post('set_param', side=side, name=self.drag_param,
                        value=validate_param(eid, self.drag_param, v))
+
+    # -- ranged knobs: the Min / Max fields ------------------------------------------
+    @staticmethod
+    def range_text(v):
+        return f"{float(v):g}"
+
+    def _focus_range(self, name, which, rect):
+        side, _eid, _params = self._side()
+        lo, hi = self._range_of(self.engine.snapshot(), side, name)
+        edit = TextEdit(self.range_text(lo if which == 'min' else hi))
+        edit.select_all()                       # the first click: typing replaces the number
+        self.range_edit = dict(name=name, which=which, edit=edit, rect=rect)
+        self.range_error = None
+
+    def cancel_range(self):
+        self.range_edit = None
+        self.drag_text = None
+
+    def commit_range(self):
+        """Enter / leaving the field: parse the number, validate the pair
+        (finite, spec lo <= min < max <= spec hi), post set_range; a value the
+        new range excludes is clamped once to the nearest bound (set_param).
+        A bad number leaves the range and shows the reason; returns True when
+        the field was accepted (and closed)."""
+        re = self.range_edit
+        if re is None:
+            return True
+        side, eid, params = self._side()
+        name, which = re['name'], re['which']
+        lo, hi = self._range_of(self.engine.snapshot(), side, name)
+        text = re['edit'].text.strip()
+        try:
+            v = float(text)
+        except ValueError:
+            v = float('nan')
+        if not math.isfinite(v):
+            self.range_error = (name, 'not a number')
+            return False
+        if which == 'min':
+            lo = v
+        else:
+            hi = v
+        spec = registry.get(eid).spec_of(name)
+        if lo < spec[2]:
+            self.range_error = (name, f'min < {spec[2]:g}')
+            return False
+        if hi > spec[3]:
+            self.range_error = (name, f'max > {spec[3]:g}')
+            return False
+        if not lo < hi:
+            self.range_error = (name, 'min must be < max')
+            return False
+        self.range_edit = None
+        self.drag_text = None
+        self.range_error = None
+        cur = self._range_of(self.engine.snapshot(), side, name)
+        if (lo, hi) != cur:
+            if not self._post('set_range', side=side, name=name, lo=lo, hi=hi):
+                self.range_error = (name, 'refused')
+                return False
+            self._range_pending[(side, name)] = (lo, hi)
+        value = float(params[name])
+        pend = self._clamp_pending.get((side, name))
+        if pend is not None:                    # a clamp posted within this block counts once
+            if pend == value:
+                del self._clamp_pending[(side, name)]
+            else:
+                value = pend
+        clamped = min(max(value, lo), hi)
+        if clamped != value:
+            self._post('set_param', side=side, name=name, value=validate_param(eid, name, clamped))
+            self._clamp_pending[(side, name)] = clamped
+        return True
 
     # -- pattern library -------------------------------------------------------
     def stamp(self, cells, at):
@@ -623,9 +779,31 @@ class BenchApp:
                             rect[1] + (rect[3] - t.get_height()) // 2))
         inactive = self._inactive(eid, params)
         choices = registry.get(eid).choices
+        ranges = registry.get(eid).ranges
+        range_rects = self._range_rects(eid)
         for spec, (sx, sy, sw, sh) in self._param_rows(eid):
             name, label, lo, hi, integer, _d = spec
             v = params[name]
+            ranged = name in ranges
+            if ranged:
+                lo, hi = self._range_of(snap, side, name)
+                rr = range_rects[name]
+                screen.blit(small.render("range", True, C_DIM), (px + 12, rr['y']))
+                for which in ('min', 'max'):
+                    focused = (self.range_edit is not None and self.range_edit['name'] == name
+                               and self.range_edit['which'] == which)
+                    if focused:
+                        self._draw_edit(screen, small, rr[which], self.range_edit['edit'], True)
+                    elif name in inactive:
+                        screen.blit(small.render(self.range_text(lo if which == 'min' else hi), True, C_DIM),
+                                    (rr[which][0] + 6, rr[which][1] + 2))
+                    else:
+                        self._draw_edit(screen, small, rr[which],
+                                        TextEdit(self.range_text(lo if which == 'min' else hi)), False)
+                screen.blit(small.render("..", True, C_DIM), (rr['min'][0] + RANGE_FIELD_W + 3, rr['y'] + 2))
+                if self.range_error is not None and self.range_error[0] == name:
+                    screen.blit(small.render(self.range_error[1][:24], True, C_ERR),
+                                (rr['max'][0] + RANGE_FIELD_W + 6, rr['y'] + 2))
             screen.blit(small.render(label, True, C_DIM), (px, sy - 4))
             if name in inactive:
                 screen.blit(small.render(inactive[name], True, C_DIM), (sx, sy - 4))
@@ -644,9 +822,10 @@ class BenchApp:
                 screen.blit(small.render("on" if v else "off", True, C_TXT), (sx + 40, sy - 4))
             else:
                 frac = (v - lo) / (hi - lo) if hi > lo else 0.0
+                frac = min(max(frac, 0.0), 1.0)         # a value outside the user range sits at the end
                 pygame.draw.rect(screen, C_EDGE, (sx, sy, sw, sh), border_radius=3)
                 pygame.draw.rect(screen, C_ACCENT, (sx, sy, int(sw * frac), sh), border_radius=3)
-                txt = f"{v:d}" if integer else f"{v:.2f}"
+                txt = f"{v:d}" if integer else (f"{v:.{RANGE_DECIMALS}f}" if ranged else f"{v:.2f}")
                 screen.blit(small.render(txt, True, C_TXT), (sx + sw + 8, sy - 4))
         pk = snap['peak']
         screen.blit(small.render(f"peak A {pk['A']:.2f}   B {pk['B']:.2f}", True, C_DIM),
@@ -655,7 +834,7 @@ class BenchApp:
             screen.blit(small.render(self.message[:60], True, C_ERR),
                         (px, self.footer_y + 20))
         self._draw_display(screen, small, snap.get('display', {}).get(side),
-                           px, self.params_y + len(registry.get(eid).params) * ROW_H + 6)
+                           px, self.params_y + self._params_height(eid) + 6)
         self._draw_library(screen, font, small)
         # S4: lab buttons + status; overlays
         if self.catalog is not None:
@@ -981,6 +1160,7 @@ class BenchApp:
         own = int(disp.get('detector', 1)) == 0
         clip = screen.get_clip()
         screen.set_clip(pygame.Rect(fx, fy, self.field_w, self.field_h))
+        n_cover = 0
         for f in disp['figures']:
             col = C_FIGURES[int(f['color']) % len(C_FIGURES)]
             fill = col if not paused else tuple((a + b) // 2 for a, b in zip(col, C_ALIVE_PAUSED))
@@ -992,6 +1172,17 @@ class BenchApp:
             cy, cx = float(f['centre'][0]), float(f['centre'][1])
             rad = float(f['radius']) * CELL
             px, py = self._cell_px(cx, cy)
+            if f.get('covers_all'):
+                # the disk is the whole field (its outline is beyond the screen):
+                # a frame in the figure's colour just inside the field edge, one
+                # frame per such figure (nested), and its centre as usual
+                k = n_cover
+                n_cover += 1
+                pygame.draw.rect(screen, col, (fx + 2 * k, fy + 2 * k,
+                                               self.field_w - 4 * k, self.field_h - 4 * k), 1)
+                pygame.draw.circle(screen, C_BG, (int(px), int(py)), 4)
+                pygame.draw.circle(screen, col, (int(px), int(py)), 3)
+                continue
             for dy in (-rows * CELL, 0, rows * CELL):
                 for dx in (-cols * CELL, 0, cols * CELL):
                     ox, oy = px + dx, py + dy
@@ -1009,9 +1200,10 @@ class BenchApp:
                     pygame.draw.circle(screen, C_BG, (int(ox), int(oy)), 4)
                     pygame.draw.circle(screen, col, (int(ox), int(oy)), 3)
         screen.set_clip(clip)
+        cover = f"   {n_cover} circle{'s' if n_cover != 1 else ''} cover the whole field" if n_cover else ""
         t = small.render(f"sounding {disp.get('n_sounding', 0)} of {disp.get('n_figures', 0)} figures"
                          f"   tails {disp.get('n_tails', 0)}   detector {disp.get('detector_name', '?')}"
-                         f"   spectrum {disp.get('spectrum_name', '?')}",
+                         f"   spectrum {disp.get('spectrum_name', '?')}{cover}",
                          True, C_DIM)
         screen.blit(t, (fx + self.field_w - t.get_width(), fy - 18))
 
@@ -1043,7 +1235,7 @@ class BenchApp:
                        f"  {'full' if int(lap.get('fullshape', 1)) else '8x8'}")
             else:
                 law = f"scale {float(disp['frequency_scale']):.0f} Hz"
-            screen.blit(small.render(f"R x{float(disp.get('radius_mul', 1.0)):.2f}   {law}   decay "
+            screen.blit(small.render(f"R x{float(disp.get('radius_mul', 1.0)):.3f}   {law}   decay "
                                      f"{float(disp['decay_s']):.2f} s{ramp}   a | level", True, C_DIM),
                         (x, y + 14))
             bar_x, bar_w = x + 98, 76
@@ -1228,6 +1420,8 @@ class BenchApp:
     # -- text fields: one behaviour for every input --------------------------------
     def _active_edit(self):
         """(TextEdit, rect) of the focused text field in this mode, else (None, None)."""
+        if self.mode == 'live' and self.range_edit is not None:
+            return self.range_edit['edit'], self.range_edit['rect']
         if self.mode == 'save' and self.save_form is not None:
             field = self.save_form['field']
             edit = self.save_edits[field]
@@ -2396,7 +2590,7 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
                     # button as WINDOWCLOSE (no QUIT until the last window goes)
                     alive = False
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE \
-                        and app.mode == 'live' and app.drag_pat is None:
+                        and app.mode == 'live' and app.drag_pat is None and app.range_edit is None:
                     alive = False
                 elif ev.type == pygame.KEYDOWN:
                     app.key(pygame.key.name(ev.key), ctrl=bool(ev.mod & pygame.KMOD_CTRL),

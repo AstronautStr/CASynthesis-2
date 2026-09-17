@@ -57,6 +57,11 @@ class Scene:
             # per side: {engine_id: params} remembered for engines not currently on it
             self.param_memory = {k: {eid: dict(pp) for eid, pp in v.items()}
                                  for k, v in (d.get('param_memory') or {}).items()}
+        # per side: {engine_id: {param: (min, max)}} user slider ranges of ranged
+        # parameters (2026-09-17, Objects Radius x); absent = the registry defaults
+        self.param_ranges = {k: {eid: {p: (float(v[0]), float(v[1])) for p, v in rr.items()}
+                                 for eid, rr in per.items()}
+                             for k, per in (d.get('param_ranges') or {}).items()}
         # v1 convenience (single engine)
         self.engine_id, self.engine_params = self.variants['A']
         self.f0_hz = float(d['audio']['f0_hz'])
@@ -149,6 +154,25 @@ def validate(d):
                     _validate_engine(eid, pp, where=f"param_memory.{k}.{eid}.")
         if d.get('initial_side', 'A') not in SIDES:
             _fail(f"scene: initial_side must be A or B, got {d.get('initial_side')!r}")
+    pr = d.get('param_ranges')
+    if pr is not None:
+        if not isinstance(pr, dict) or any(k not in SIDES for k in pr):
+            _fail("scene: 'param_ranges' keys must be sides A/B")
+        for k, per_engine in pr.items():
+            if not isinstance(per_engine, dict):
+                _fail(f"scene: param_ranges.{k} must be an object")
+            for eid, rr in per_engine.items():
+                if eid not in registry.REGISTRY:
+                    _fail(f"scene: param_ranges.{k}: unknown engine {eid!r}")
+                if not isinstance(rr, dict):
+                    _fail(f"scene: param_ranges.{k}.{eid} must be an object")
+                for pname, pair in rr.items():
+                    if not (isinstance(pair, (list, tuple)) and len(pair) == 2):
+                        _fail(f"scene: param_ranges.{k}.{eid}.{pname} must be [min, max]")
+                    try:
+                        registry.validate_range(eid, pname, pair[0], pair[1])
+                    except ValueError as e:
+                        _fail(f"scene: param_ranges.{k}.{eid}.{pname}: {e}")
     a = d['audio']
     if not (isinstance(a, dict) and isinstance(a.get('f0_hz'), (int, float))
             and a['f0_hz'] > 0):

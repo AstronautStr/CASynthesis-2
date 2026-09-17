@@ -26,10 +26,17 @@ class EngineSpec:
       overlay  : overlay(params, rows, cols) -> dict drawn over the field for
                  the listened side (see demo_bench: 'polyline' of unwrapped
                  cell coordinates, 'start'/'ahead', 'labels', 'circles',
-                 'text').  It must use the SAME geometry as the engine."""
-    __slots__ = ('id', 'label', 'params', 'factory', 'choices', 'inactive', 'overlay')
+                 'text').  It must use the SAME geometry as the engine.
+      ranges   : {param: (min, max)} -- a float parameter whose slider covers a
+                 USER-EDITABLE sub-range (Objects "Radius x", 2026-09-17): the
+                 pair is the default range of the slider, the spec's lo / hi
+                 stay the validation bounds (lo <= min < max <= hi).  The bench
+                 keeps the edited range per side (runner set_range, scene
+                 `param_ranges`); the registry entry itself is never changed."""
+    __slots__ = ('id', 'label', 'params', 'factory', 'choices', 'inactive', 'overlay', 'ranges')
 
-    def __init__(self, id, label, params, factory, choices=None, inactive=None, overlay=None):
+    def __init__(self, id, label, params, factory, choices=None, inactive=None, overlay=None,
+                 ranges=None):
         self.id = id
         self.label = label
         self.params = tuple(tuple(p) for p in params)
@@ -37,6 +44,7 @@ class EngineSpec:
         self.choices = {k: tuple(v) for k, v in (choices or {}).items()}
         self.inactive = inactive
         self.overlay = overlay
+        self.ranges = {k: (float(v[0]), float(v[1])) for k, v in (ranges or {}).items()}
 
     def defaults(self):
         return {p[0]: p[5] for p in self.params}
@@ -86,6 +94,11 @@ def register(spec, replace=False):
         if p is None or not p[4] or p[2] != 0 or p[3] != len(names) - 1:
             raise ValueError(f"engine {spec.id!r}: choices of {name!r} do not match its "
                              f"integer range 0..{len(names) - 1}")
+    for name, (rmin, rmax) in spec.ranges.items():
+        p = spec.spec_of(name)
+        if p is None or p[4] or not (math.isfinite(rmin) and math.isfinite(rmax))                 or not (p[2] <= rmin < rmax <= p[3]):
+            raise ValueError(f"engine {spec.id!r}: default range of {name!r} must be a finite "
+                             f"lo <= min < max <= hi of a float parameter")
     REGISTRY[spec.id] = spec
     return spec
 
@@ -122,6 +135,35 @@ def defaults(engine_id):
 
 def create(engine_id, ctx, params):
     return get(engine_id).factory(ctx, params)
+
+
+def validate_range(engine_id, name, lo, hi):
+    """A user range of a ranged parameter (EngineSpec.ranges): finite numbers with
+    spec lo <= lo < hi <= spec hi; returns (lo, hi) as floats or raises ValueError."""
+    if engine_id not in REGISTRY:
+        raise ValueError(f"unknown engine {engine_id!r}")
+    spec = get(engine_id)
+    if name not in spec.ranges:
+        raise ValueError(f"{engine_id}.{name}: not a parameter with a user range")
+    _arg, _label, slo, shi, _integer, _default = spec.spec_of(name)
+    out = []
+    for label, v in (('min', lo), ('max', hi)):
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+            raise ValueError(f"{engine_id}.{name} range {label}: must be a finite number, got {v!r}")
+        out.append(float(v))
+    lo, hi = out
+    if not (slo <= lo):
+        raise ValueError(f"{engine_id}.{name} range min {lo!r} below {slo}")
+    if not (hi <= shi):
+        raise ValueError(f"{engine_id}.{name} range max {hi!r} above {shi}")
+    if not (lo < hi):
+        raise ValueError(f"{engine_id}.{name} range: min {lo!r} must be below max {hi!r}")
+    return lo, hi
+
+
+def default_range(engine_id, name):
+    """(min, max) default slider range of a ranged parameter, else None."""
+    return get(engine_id).ranges.get(name)
 
 
 def validate_param(engine_id, name, value):

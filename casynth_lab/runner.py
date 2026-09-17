@@ -42,7 +42,8 @@ XFADE_SAMPLES = int(round(XFADE_MS / 1000.0 * SR))   # 882
 COMMANDS = ('start', 'stop', 'pause', 'set_cell', 'reset', 'vol',
             'select', 'set_param', 'set_engine', 'copy_side', 'factory',
             'clear', 'set_cells',      # 2026-09-16: Clear button, pattern drop
-            'copy_spectrum')           # 2026-09-17: the shared spectrum settings only
+            'copy_spectrum',           # 2026-09-17: the shared spectrum settings only
+            'set_range')               # 2026-09-17: the slider range of a ranged parameter (UI, no sound)
 RUNNER_STATE_VERSION = 1           # export_state() / from_state() format
 
 # re-exported for callers that only import the runner
@@ -154,6 +155,15 @@ class DemoRunner:
             for eid, pp in per_engine.items():
                 if eid in registry.REGISTRY:
                     self._memory[(name, eid)] = dict(pp)
+        # per (side, engine) slider ranges of ranged parameters (registry EngineSpec.ranges,
+        # 2026-09-17): edited by the user, never a sound change; absent = the registry default
+        self._ranges = {}
+        for name, per_engine in getattr(scene, 'param_ranges', {}).items():
+            for eid, rr in per_engine.items():
+                if eid in registry.REGISTRY:
+                    for pname, (lo, hi) in rr.items():
+                        self._ranges.setdefault((name, eid), {})[pname] = registry.validate_range(
+                            eid, pname, lo, hi)
         self.sides = {}
         for name in SIDES:
             eid, params = scene.variants[name]
@@ -210,7 +220,7 @@ class DemoRunner:
         return self._seq
 
     def _check(self, kind, args):
-        if kind in ('select', 'set_param', 'set_engine'):
+        if kind in ('select', 'set_param', 'set_engine', 'set_range'):
             side = args.get('side')
             if side not in SIDES:
                 raise ValueError(f"unknown side {side!r} (expected A or B)")
@@ -234,11 +244,12 @@ class DemoRunner:
         elif kind == 'set_param':
             # validated against the engine the side WILL have when applied:
             # a queued set_engine for that side counts
-            eid = self.sides[args['side']].engine_id
-            for _seq, _at, k, a in self._pending:
-                if k == 'set_engine' and a['side'] == args['side']:
-                    eid = a['engine_id']
+            eid = self._engine_when_applied(args['side'])
             args['value'] = validate_param(eid, args.get('name'), args.get('value'))
+        elif kind == 'set_range':
+            eid = self._engine_when_applied(args['side'])
+            lo, hi = registry.validate_range(eid, args.get('name'), args.get('lo'), args.get('hi'))
+            args['lo'], args['hi'] = lo, hi
         elif kind == 'vol':
             v = args.get('value')
             if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
@@ -254,6 +265,13 @@ class DemoRunner:
                     raise ValueError(f"set_cells: ({r},{c}) outside the {rows}x{cols} field")
             args['cells'] = cells                  # plain lists: the journal is JSON
         return args
+
+    def _engine_when_applied(self, side):
+        eid = self.sides[side].engine_id
+        for _seq, _at, k, a in self._pending:
+            if k == 'set_engine' and a['side'] == side:
+                eid = a['engine_id']
+        return eid
 
     def _apply_due(self):
         due = [c for c in self._pending
@@ -355,6 +373,12 @@ class DemoRunner:
             for name in SIDES:
                 eid, params = self.scene.factory_variants[name]
                 self._set_side(self.sides[name], eid, params)
+        elif kind == 'set_range':
+            # the slider range only: the parameter value is untouched (the bench clamps
+            # it with a set_param of its own when the new range excludes it)
+            s = self.sides[args['side']]
+            lo, hi = registry.validate_range(s.engine_id, args['name'], args['lo'], args['hi'])
+            self._ranges.setdefault((s.name, s.engine_id), {})[args['name']] = (lo, hi)
 
     def _set_side(self, s, eid, params):
         """Put engine+params on a side (engine change / copy / factory).
@@ -458,6 +482,7 @@ class DemoRunner:
                           args=dict(a)) for (q, at, k, a) in self._pending],
             memory={n: {eid: dict(pp) for (nn, eid), pp in self._memory.items() if nn == n}
                     for n in SIDES},
+            ranges=self.param_ranges(),
             sides={n: s.export_state() for n, s in self.sides.items()},
         )
 
@@ -521,6 +546,18 @@ class DemoRunner:
         for n, per_engine in state['memory'].items():
             if n not in SIDES or not isinstance(per_engine, dict):
                 raise ValueError("snapshot: memory keys must be sides A/B")
+        ranges = state.get('ranges') or {}            # older snapshots: the registry defaults
+        if not isinstance(ranges, dict) or any(n not in SIDES or not isinstance(v, dict)
+                                               for n, v in ranges.items()):
+            raise ValueError("snapshot: ranges must be a mapping of sides A/B")
+        for n, per_engine in ranges.items():
+            for eid, rr in per_engine.items():
+                if eid not in registry.REGISTRY or not isinstance(rr, dict):
+                    raise ValueError(f"snapshot: ranges of side {n}: engine {eid!r} / not a mapping")
+                for pname, pair in rr.items():
+                    if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                        raise ValueError(f"snapshot: range of {eid}.{pname} must be [min, max]")
+                    registry.validate_range(eid, pname, pair[0], pair[1])
         # build: a plain runner on the scene, then overwrite everything
         r = cls(scene, vol=state['vol'], provenance=provenance)
         r.grid = np.ascontiguousarray(grid, dtype=np.uint8).copy()
@@ -541,6 +578,11 @@ class DemoRunner:
             for eid, pp in per_engine.items():
                 if eid in registry.REGISTRY:
                     r._memory[(n, eid)] = dict(pp)
+        r._ranges = {}
+        for n, per_engine in ranges.items():
+            for eid, rr in per_engine.items():
+                for pname, pair in rr.items():
+                    r._ranges.setdefault((n, eid), {})[pname] = (float(pair[0]), float(pair[1]))
         r.journal = []
         r._pending = []
         for n in SIDES:
@@ -566,6 +608,29 @@ class DemoRunner:
             out[name][eid] = dict(pp)
         return out
 
+    def param_ranges(self):
+        """{side: {engine_id: {param: [min, max]}}} -- the user-edited slider ranges
+        (only what was edited / loaded; absent = the registry default)."""
+        out = {n: {} for n in SIDES}
+        for (name, eid), rr in self._ranges.items():
+            if rr:
+                out[name][eid] = {k: [float(v[0]), float(v[1])] for k, v in rr.items()}
+        return {n: v for n, v in out.items() if v}
+
+    def range_of(self, side, name):
+        """(min, max) of the slider of a ranged parameter on the side's current
+        engine (the edited range, else the registry default); None when the
+        parameter has no user range."""
+        s = self.sides[side]
+        rr = self._ranges.get((s.name, s.engine_id), {})
+        if name in rr:
+            return tuple(rr[name])
+        return registry.default_range(s.engine_id, name)
+
+    def side_ranges(self):
+        return {n: {k: self.range_of(n, k) for k in registry.get(s.engine_id).ranges}
+                for n, s in self.sides.items()}
+
     def side_settings(self):
         return {n: (s.engine_id, dict(s.params)) for n, s in self.sides.items()}
 
@@ -581,6 +646,7 @@ class DemoRunner:
                     vol=self.vol, out_samples=self.out_samples,
                     selected=self.selected,
                     sides=self.side_settings(), modified=self.side_modified(),
+                    ranges=self.side_ranges(),
                     peak={n: s.peak for n, s in self.sides.items()},
                     clip_blocks={n: s.clip_blocks for n, s in self.sides.items()},
                     display={n: s.display() for n, s in self.sides.items()})

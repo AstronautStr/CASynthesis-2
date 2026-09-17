@@ -57,6 +57,7 @@ def _origin_state(runner):
                 settings={side: {'engine_id': eid, 'engine_params': dict(p)}
                           for side, (eid, p) in runner.side_settings().items()},
                 param_memory=runner.param_memory(),
+                param_ranges=runner.param_ranges(),
                 factory_variants={side: {'engine_id': eid, 'engine_params': dict(p)}
                                   for side, (eid, p) in runner.scene.factory_variants.items()})
 

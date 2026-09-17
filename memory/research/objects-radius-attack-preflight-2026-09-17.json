@@ -1,0 +1,2429 @@
+{
+  "commit": "64b7df1",
+  "status": "Researcher probe; radius above 4 passed directly to engine, current UI still limited to 4",
+  "sr": 44100,
+  "block": 352,
+  "rate_hz": 6,
+  "seconds": 12,
+  "gain": 0.028,
+  "f0_hz": 110,
+  "settings": {
+    "detector": 1,
+    "radius_mul": 1.0,
+    "spectrum": 1,
+    "frequency_scale": 220.0,
+    "decay_s": 1.39,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 1.82,
+    "shape": 0.95,
+    "harm": 0.87,
+    "fullshape": 1,
+    "dyn": 0.87
+  },
+  "cases": {
+    "receiver": {
+      "groups": [
+        [
+          [
+            8,
+            8
+          ],
+          [
+            8,
+            9
+          ],
+          [
+            9,
+            8
+          ],
+          [
+            9,
+            10
+          ],
+          [
+            10,
+            9
+          ],
+          [
+            10,
+            11
+          ],
+          [
+            11,
+            10
+          ],
+          [
+            11,
+            12
+          ],
+          [
+            12,
+            11
+          ],
+          [
+            12,
+            13
+          ],
+          [
+            13,
+            12
+          ],
+          [
+            13,
+            14
+          ],
+          [
+            14,
+            13
+          ],
+          [
+            14,
+            15
+          ],
+          [
+            15,
+            14
+          ],
+          [
+            15,
+            16
+          ],
+          [
+            16,
+            15
+          ]
+        ],
+        [
+          [
+            9,
+            17
+          ],
+          [
+            9,
+            18
+          ],
+          [
+            9,
+            19
+          ]
+        ]
+      ],
+      "runs": {
+        "1.0": {
+          "rms_db": -35.37258875564879,
+          "peak": 0.09194454101767048,
+          "clipped_samples": 0,
+          "foreign_events_sum": [
+            0,
+            0
+          ],
+          "packets": [
+            0,
+            71
+          ],
+          "trace": [
+            {
+              "gen": 0,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 17,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 1,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 2,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 3,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 4,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 5,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 6,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 7,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 8,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 9,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 10,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 11,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 12,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 13,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 14,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 15,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            }
+          ],
+          "drops": 0
+        },
+        "2.0": {
+          "rms_db": -31.57162603144295,
+          "peak": 0.09298175911944799,
+          "clipped_samples": 0,
+          "foreign_events_sum": [
+            284,
+            0
+          ],
+          "packets": [
+            71,
+            71
+          ],
+          "trace": [
+            {
+              "gen": 0,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 20,
+                  "foreign": 3
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 1,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 2,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 3,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 4,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 5,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 6,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 7,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 8,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 9,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 10,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 11,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 12,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 13,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 14,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 15,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 17,
+                  "e": 4,
+                  "foreign": 4
+                },
+                {
+                  "id": 2,
+                  "family": 1,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                }
+              ]
+            }
+          ],
+          "drops": 0,
+          "difference_relative_db": 1.3894058044507418,
+          "residual_after_best_scalar_fit_db": -2.4119505723108445,
+          "rms_difference_db": 3.800962724205842,
+          "initial_b_side_gain_for_equal_rms": 0.645582670157623
+        }
+      }
+    },
+    "p3_p5": {
+      "groups": [
+        [
+          [
+            5,
+            6
+          ],
+          [
+            5,
+            7
+          ],
+          [
+            6,
+            5
+          ],
+          [
+            6,
+            8
+          ],
+          [
+            7,
+            3
+          ],
+          [
+            7,
+            6
+          ],
+          [
+            7,
+            8
+          ],
+          [
+            8,
+            3
+          ],
+          [
+            8,
+            7
+          ],
+          [
+            9,
+            3
+          ],
+          [
+            10,
+            6
+          ],
+          [
+            11,
+            4
+          ],
+          [
+            11,
+            5
+          ]
+        ],
+        [
+          [
+            17,
+            22
+          ],
+          [
+            17,
+            23
+          ],
+          [
+            18,
+            21
+          ],
+          [
+            18,
+            24
+          ],
+          [
+            19,
+            20
+          ],
+          [
+            19,
+            25
+          ],
+          [
+            20,
+            19
+          ],
+          [
+            20,
+            26
+          ],
+          [
+            21,
+            19
+          ],
+          [
+            21,
+            26
+          ],
+          [
+            22,
+            20
+          ],
+          [
+            22,
+            25
+          ],
+          [
+            23,
+            21
+          ],
+          [
+            23,
+            24
+          ],
+          [
+            24,
+            22
+          ],
+          [
+            24,
+            23
+          ]
+        ]
+      ],
+      "runs": {
+        "1.0": {
+          "rms_db": -28.847569423611212,
+          "peak": 0.174928874001535,
+          "clipped_samples": 0,
+          "foreign_events_sum": [
+            0,
+            0
+          ],
+          "packets": [
+            118,
+            71
+          ],
+          "trace": [
+            {
+              "gen": 0,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 7,
+                  "e": 7,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 3,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 16,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 1,
+              "figures": [
+                {
+                  "id": 3,
+                  "family": 0,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 8,
+                  "foreign": 0
+                },
+                {
+                  "id": 5,
+                  "family": 0,
+                  "n": 11,
+                  "e": 5,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 2,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 32,
+                  "foreign": 0
+                },
+                {
+                  "id": 6,
+                  "family": 0,
+                  "n": 16,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 3,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 8,
+                  "foreign": 0
+                },
+                {
+                  "id": 7,
+                  "family": 0,
+                  "n": 7,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 8,
+                  "family": 0,
+                  "n": 3,
+                  "e": 2,
+                  "foreign": 0
+                },
+                {
+                  "id": 9,
+                  "family": 0,
+                  "n": 3,
+                  "e": 1,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 4,
+              "figures": [
+                {
+                  "id": 9,
+                  "family": 0,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 8,
+                  "foreign": 0
+                },
+                {
+                  "id": 10,
+                  "family": 0,
+                  "n": 11,
+                  "e": 5,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 5,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 24,
+                  "foreign": 0
+                },
+                {
+                  "id": 11,
+                  "family": 0,
+                  "n": 16,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 6,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 8,
+                  "foreign": 0
+                },
+                {
+                  "id": 12,
+                  "family": 0,
+                  "n": 7,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 13,
+                  "family": 0,
+                  "n": 3,
+                  "e": 2,
+                  "foreign": 0
+                },
+                {
+                  "id": 14,
+                  "family": 0,
+                  "n": 3,
+                  "e": 1,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 7,
+              "figures": [
+                {
+                  "id": 14,
+                  "family": 0,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 32,
+                  "foreign": 0
+                },
+                {
+                  "id": 15,
+                  "family": 0,
+                  "n": 11,
+                  "e": 5,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 8,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 8,
+                  "foreign": 0
+                },
+                {
+                  "id": 16,
+                  "family": 0,
+                  "n": 16,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 9,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 8,
+                  "foreign": 0
+                },
+                {
+                  "id": 17,
+                  "family": 0,
+                  "n": 7,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 18,
+                  "family": 0,
+                  "n": 3,
+                  "e": 2,
+                  "foreign": 0
+                },
+                {
+                  "id": 19,
+                  "family": 0,
+                  "n": 3,
+                  "e": 1,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 10,
+              "figures": [
+                {
+                  "id": 19,
+                  "family": 0,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 24,
+                  "foreign": 0
+                },
+                {
+                  "id": 20,
+                  "family": 0,
+                  "n": 11,
+                  "e": 5,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 11,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 8,
+                  "foreign": 0
+                },
+                {
+                  "id": 21,
+                  "family": 0,
+                  "n": 16,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 12,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 32,
+                  "foreign": 0
+                },
+                {
+                  "id": 22,
+                  "family": 0,
+                  "n": 7,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 23,
+                  "family": 0,
+                  "n": 3,
+                  "e": 2,
+                  "foreign": 0
+                },
+                {
+                  "id": 24,
+                  "family": 0,
+                  "n": 3,
+                  "e": 1,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 13,
+              "figures": [
+                {
+                  "id": 24,
+                  "family": 0,
+                  "n": 3,
+                  "e": 4,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 8,
+                  "foreign": 0
+                },
+                {
+                  "id": 25,
+                  "family": 0,
+                  "n": 11,
+                  "e": 5,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 14,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 8,
+                  "foreign": 0
+                },
+                {
+                  "id": 26,
+                  "family": 0,
+                  "n": 16,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 15,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 24,
+                  "foreign": 0
+                },
+                {
+                  "id": 27,
+                  "family": 0,
+                  "n": 7,
+                  "e": 0,
+                  "foreign": 0
+                },
+                {
+                  "id": 28,
+                  "family": 0,
+                  "n": 3,
+                  "e": 2,
+                  "foreign": 0
+                },
+                {
+                  "id": 29,
+                  "family": 0,
+                  "n": 3,
+                  "e": 1,
+                  "foreign": 0
+                }
+              ]
+            }
+          ],
+          "drops": 0
+        },
+        "8.0": {
+          "rms_db": -26.740333857445417,
+          "peak": 0.2221084902810271,
+          "clipped_samples": 0,
+          "foreign_events_sum": [
+            392,
+            519
+          ],
+          "packets": [
+            141,
+            71
+          ],
+          "trace": [
+            {
+              "gen": 0,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 7,
+                  "e": 13,
+                  "foreign": 0
+                },
+                {
+                  "id": 2,
+                  "family": 0,
+                  "n": 3,
+                  "e": 13,
+                  "foreign": 0
+                },
+                {
+                  "id": 3,
+                  "family": 0,
+                  "n": 3,
+                  "e": 13,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 29,
+                  "foreign": 13
+                }
+              ]
+            },
+            {
+              "gen": 1,
+              "figures": [
+                {
+                  "id": 3,
+                  "family": 0,
+                  "n": 3,
+                  "e": 9,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 5,
+                  "family": 0,
+                  "n": 11,
+                  "e": 13,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 2,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 36,
+                  "foreign": 4
+                },
+                {
+                  "id": 6,
+                  "family": 0,
+                  "n": 16,
+                  "e": 19,
+                  "foreign": 16
+                }
+              ]
+            },
+            {
+              "gen": 3,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 7,
+                  "family": 0,
+                  "n": 7,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 8,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 9,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 4,
+              "figures": [
+                {
+                  "id": 9,
+                  "family": 0,
+                  "n": 3,
+                  "e": 9,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 10,
+                  "family": 0,
+                  "n": 11,
+                  "e": 13,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 5,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 28,
+                  "foreign": 4
+                },
+                {
+                  "id": 11,
+                  "family": 0,
+                  "n": 16,
+                  "e": 11,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 6,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 12,
+                  "family": 0,
+                  "n": 7,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 13,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 14,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 7,
+              "figures": [
+                {
+                  "id": 14,
+                  "family": 0,
+                  "n": 3,
+                  "e": 9,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 41,
+                  "foreign": 9
+                },
+                {
+                  "id": 15,
+                  "family": 0,
+                  "n": 11,
+                  "e": 21,
+                  "foreign": 16
+                }
+              ]
+            },
+            {
+              "gen": 8,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 12,
+                  "foreign": 4
+                },
+                {
+                  "id": 16,
+                  "family": 0,
+                  "n": 16,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 9,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 17,
+                  "family": 0,
+                  "n": 7,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 18,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 19,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 10,
+              "figures": [
+                {
+                  "id": 19,
+                  "family": 0,
+                  "n": 3,
+                  "e": 9,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 33,
+                  "foreign": 9
+                },
+                {
+                  "id": 20,
+                  "family": 0,
+                  "n": 11,
+                  "e": 13,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 11,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 12,
+                  "foreign": 4
+                },
+                {
+                  "id": 21,
+                  "family": 0,
+                  "n": 16,
+                  "e": 11,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 12,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 41,
+                  "foreign": 9
+                },
+                {
+                  "id": 22,
+                  "family": 0,
+                  "n": 7,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 23,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 24,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 13,
+              "figures": [
+                {
+                  "id": 24,
+                  "family": 0,
+                  "n": 3,
+                  "e": 9,
+                  "foreign": 0
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 25,
+                  "family": 0,
+                  "n": 11,
+                  "e": 5,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 14,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 12,
+                  "foreign": 4
+                },
+                {
+                  "id": 26,
+                  "family": 0,
+                  "n": 16,
+                  "e": 11,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 15,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 33,
+                  "foreign": 9
+                },
+                {
+                  "id": 27,
+                  "family": 0,
+                  "n": 7,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 28,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 29,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            }
+          ],
+          "drops": 0,
+          "difference_relative_db": -7.234777205739955,
+          "residual_after_best_scalar_fit_db": -10.596177955918382,
+          "rms_difference_db": 2.1072355661657944
+        },
+        "32.0": {
+          "rms_db": -25.586530729313107,
+          "peak": 0.263495476327803,
+          "clipped_samples": 0,
+          "foreign_events_sum": [
+            1312,
+            519
+          ],
+          "packets": [
+            141,
+            71
+          ],
+          "trace": [
+            {
+              "gen": 0,
+              "figures": [
+                {
+                  "id": 1,
+                  "family": 0,
+                  "n": 7,
+                  "e": 29,
+                  "foreign": 16
+                },
+                {
+                  "id": 2,
+                  "family": 0,
+                  "n": 3,
+                  "e": 29,
+                  "foreign": 16
+                },
+                {
+                  "id": 3,
+                  "family": 0,
+                  "n": 3,
+                  "e": 29,
+                  "foreign": 16
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 29,
+                  "foreign": 13
+                }
+              ]
+            },
+            {
+              "gen": 1,
+              "figures": [
+                {
+                  "id": 3,
+                  "family": 0,
+                  "n": 3,
+                  "e": 17,
+                  "foreign": 8
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 5,
+                  "family": 0,
+                  "n": 11,
+                  "e": 13,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 2,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 36,
+                  "foreign": 4
+                },
+                {
+                  "id": 6,
+                  "family": 0,
+                  "n": 16,
+                  "e": 19,
+                  "foreign": 16
+                }
+              ]
+            },
+            {
+              "gen": 3,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 7,
+                  "family": 0,
+                  "n": 7,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 8,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                },
+                {
+                  "id": 9,
+                  "family": 0,
+                  "n": 3,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 4,
+              "figures": [
+                {
+                  "id": 9,
+                  "family": 0,
+                  "n": 3,
+                  "e": 17,
+                  "foreign": 8
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 10,
+                  "family": 0,
+                  "n": 11,
+                  "e": 13,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 5,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 28,
+                  "foreign": 4
+                },
+                {
+                  "id": 11,
+                  "family": 0,
+                  "n": 16,
+                  "e": 11,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 6,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 12,
+                  "family": 0,
+                  "n": 7,
+                  "e": 11,
+                  "foreign": 8
+                },
+                {
+                  "id": 13,
+                  "family": 0,
+                  "n": 3,
+                  "e": 11,
+                  "foreign": 8
+                },
+                {
+                  "id": 14,
+                  "family": 0,
+                  "n": 3,
+                  "e": 11,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 7,
+              "figures": [
+                {
+                  "id": 14,
+                  "family": 0,
+                  "n": 3,
+                  "e": 41,
+                  "foreign": 32
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 41,
+                  "foreign": 9
+                },
+                {
+                  "id": 15,
+                  "family": 0,
+                  "n": 11,
+                  "e": 21,
+                  "foreign": 16
+                }
+              ]
+            },
+            {
+              "gen": 8,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 12,
+                  "foreign": 4
+                },
+                {
+                  "id": 16,
+                  "family": 0,
+                  "n": 16,
+                  "e": 3,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 9,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 17,
+                  "family": 0,
+                  "n": 7,
+                  "e": 11,
+                  "foreign": 8
+                },
+                {
+                  "id": 18,
+                  "family": 0,
+                  "n": 3,
+                  "e": 11,
+                  "foreign": 8
+                },
+                {
+                  "id": 19,
+                  "family": 0,
+                  "n": 3,
+                  "e": 11,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 10,
+              "figures": [
+                {
+                  "id": 19,
+                  "family": 0,
+                  "n": 3,
+                  "e": 33,
+                  "foreign": 24
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 33,
+                  "foreign": 9
+                },
+                {
+                  "id": 20,
+                  "family": 0,
+                  "n": 11,
+                  "e": 13,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 11,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 12,
+                  "foreign": 4
+                },
+                {
+                  "id": 21,
+                  "family": 0,
+                  "n": 16,
+                  "e": 11,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 12,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 41,
+                  "foreign": 9
+                },
+                {
+                  "id": 22,
+                  "family": 0,
+                  "n": 7,
+                  "e": 19,
+                  "foreign": 16
+                },
+                {
+                  "id": 23,
+                  "family": 0,
+                  "n": 3,
+                  "e": 19,
+                  "foreign": 16
+                },
+                {
+                  "id": 24,
+                  "family": 0,
+                  "n": 3,
+                  "e": 19,
+                  "foreign": 16
+                }
+              ]
+            },
+            {
+              "gen": 13,
+              "figures": [
+                {
+                  "id": 24,
+                  "family": 0,
+                  "n": 3,
+                  "e": 17,
+                  "foreign": 8
+                },
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 17,
+                  "foreign": 9
+                },
+                {
+                  "id": 25,
+                  "family": 0,
+                  "n": 11,
+                  "e": 5,
+                  "foreign": 0
+                }
+              ]
+            },
+            {
+              "gen": 14,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 24,
+                  "e": 12,
+                  "foreign": 4
+                },
+                {
+                  "id": 26,
+                  "family": 0,
+                  "n": 16,
+                  "e": 11,
+                  "foreign": 8
+                }
+              ]
+            },
+            {
+              "gen": 15,
+              "figures": [
+                {
+                  "id": 4,
+                  "family": 1,
+                  "n": 16,
+                  "e": 33,
+                  "foreign": 9
+                },
+                {
+                  "id": 27,
+                  "family": 0,
+                  "n": 7,
+                  "e": 11,
+                  "foreign": 8
+                },
+                {
+                  "id": 28,
+                  "family": 0,
+                  "n": 3,
+                  "e": 11,
+                  "foreign": 8
+                },
+                {
+                  "id": 29,
+                  "family": 0,
+                  "n": 3,
+                  "e": 11,
+                  "foreign": 8
+                }
+              ]
+            }
+          ],
+          "drops": 0,
+          "difference_relative_db": -3.265816177436877,
+          "residual_after_best_scalar_fit_db": -7.618667062279068,
+          "rms_difference_db": 3.2610386942981044,
+          "initial_b_side_gain_for_equal_rms": 0.6869862824654206
+        }
+      }
+    }
+  },
+  "attack_proposal_probe": {
+    "status": "scalar prototype only; not the current engine or the prepared scene",
+    "law": "extra one-pole on pulse, q=exp(-ln(9)/(SR*Attack_ms/1000)); zero bypass",
+    "meaning": "10-90 percent rise time of smoothing step response, not measured audible-note attack",
+    "frequencies_hz": [
+      110,
+      440,
+      880
+    ],
+    "weights": [
+      1.0,
+      0.4,
+      0.1
+    ],
+    "decay_s": 1.39,
+    "duration_s": 1.0,
+    "results": {
+      "0.0": {
+        "pulse_first_sample": 0.75,
+        "pulse_peak": 0.75,
+        "pulse_hf_energy_above_3khz": 9908.913044900108,
+        "response_rms": 1.683433106981277,
+        "response_peak": 8.927742810044982,
+        "response_max_adjacent_step": 1.013370264484144,
+        "q": 0.0,
+        "hf_energy_change_db": 0.0,
+        "rms_change_db": 0.0,
+        "adjacent_step_at_equal_rms_vs_old_db": 0.0
+      },
+      "1.0": {
+        "pulse_first_sample": 0.03645213463654401,
+        "pulse_peak": 0.18758509750314456,
+        "pulse_hf_energy_above_3khz": 48.79865633211098,
+        "response_rms": 1.5336508175021122,
+        "response_peak": 7.662927186865587,
+        "response_max_adjacent_step": 0.2619203051724712,
+        "q": 0.9513971538179413,
+        "hf_energy_change_db": -23.07618153404914,
+        "rms_change_db": -0.8093874691841897,
+        "adjacent_step_at_equal_rms_vs_old_db": -10.942592300345435
+      },
+      "4.0": {
+        "pulse_first_sample": 0.00928400080284611,
+        "pulse_peak": 0.06640726845132759,
+        "pulse_hf_energy_above_3khz": 3.0722858900358885,
+        "response_rms": 0.9725493915471862,
+        "response_peak": 4.781273883906415,
+        "response_max_adjacent_step": 0.09967230900012614,
+        "q": 0.9876213322628719,
+        "hf_energy_change_db": -35.08564391004431,
+        "rms_change_db": -4.765683948549781,
+        "adjacent_step_at_equal_rms_vs_old_db": -15.378188798454797
+      },
+      "10.0": {
+        "pulse_first_sample": 0.0037274829340842586,
+        "pulse_peak": 0.029516329975899907,
+        "pulse_hf_energy_above_3khz": 0.4917680774241564,
+        "response_rms": 0.472648126361952,
+        "response_peak": 2.199482316634058,
+        "response_max_adjacent_step": 0.04216814561359766,
+        "q": 0.9950300227545543,
+        "hf_energy_change_db": -43.042656837252686,
+        "rms_change_db": -11.033158465528793,
+        "adjacent_step_at_equal_rms_vs_old_db": -16.58251460758991
+      },
+      "20.0": {
+        "pulse_first_sample": 0.0018660629276086582,
+        "pulse_peak": 0.015381815671200534,
+        "pulse_hf_energy_above_3khz": 0.12294924976451505,
+        "response_rms": 0.24490303879271072,
+        "response_peak": 1.1464865750422826,
+        "response_max_adjacent_step": 0.02151810145366307,
+        "q": 0.9975119160965218,
+        "hf_energy_change_db": -49.063001342805535,
+        "rms_change_db": -16.744033799253963,
+        "adjacent_step_at_equal_rms_vs_old_db": -16.715250315935023
+      }
+    }
+  },
+  "user_record_diagnostics": [
+    {
+      "id": "20260917-022950-d468e1",
+      "title": "Laplace Objects 3",
+      "note": "",
+      "samples": 1323168,
+      "b_peak_pcm": 19639,
+      "b_rail_channel_samples": 0,
+      "diagnostics": {
+        "device_ok": true,
+        "device_error": null,
+        "underruns": 0,
+        "block_errors": 0,
+        "last_error": null,
+        "clip_blocks": {
+          "A": 0,
+          "B": 0
+        },
+        "record_error": null
+      },
+      "audio_start_sample": 1913472,
+      "end_sample": 3236640
+    },
+    {
+      "id": "20260917-022710-4ff587",
+      "title": "Laplace Objects My 2",
+      "note": "",
+      "samples": 54560,
+      "b_peak_pcm": 7159,
+      "b_rail_channel_samples": 0,
+      "diagnostics": {
+        "device_ok": true,
+        "device_error": null,
+        "underruns": 0,
+        "block_errors": 0,
+        "last_error": null,
+        "clip_blocks": {
+          "A": 0,
+          "B": 0
+        },
+        "record_error": null
+      },
+      "audio_start_sample": 88704,
+      "end_sample": 143264
+    },
+    {
+      "id": "20260917-022652-9ca91c",
+      "title": "Laplace Objects My 1",
+      "note": "",
+      "samples": 38368,
+      "b_peak_pcm": 8371,
+      "b_rail_channel_samples": 0,
+      "diagnostics": {
+        "device_ok": true,
+        "device_error": null,
+        "underruns": 0,
+        "block_errors": 0,
+        "last_error": null,
+        "clip_blocks": {
+          "A": 0,
+          "B": 0
+        },
+        "record_error": null
+      },
+      "audio_start_sample": 422400,
+      "end_sample": 460768
+    },
+    {
+      "id": "20260917-022450-ba7355",
+      "title": "Laplace Objects 2",
+      "note": "",
+      "samples": 1323168,
+      "b_peak_pcm": 17087,
+      "b_rail_channel_samples": 0,
+      "diagnostics": {
+        "device_ok": true,
+        "device_error": null,
+        "underruns": 129,
+        "block_errors": 0,
+        "last_error": null,
+        "clip_blocks": {
+          "A": 0,
+          "B": 119
+        },
+        "record_error": null
+      },
+      "audio_start_sample": 65146752,
+      "end_sample": 66469920
+    },
+    {
+      "id": "20260917-022339-0d81fc",
+      "title": "Laplace Objects 2026-09-17 02:23:15",
+      "note": "вайб",
+      "samples": 1323168,
+      "b_peak_pcm": 8268,
+      "b_rail_channel_samples": 0,
+      "diagnostics": {
+        "device_ok": true,
+        "device_error": null,
+        "underruns": 129,
+        "block_errors": 0,
+        "last_error": null,
+        "clip_blocks": {
+          "A": 0,
+          "B": 119
+        },
+        "record_error": null
+      },
+      "audio_start_sample": 61599648,
+      "end_sample": 62922816
+    },
+    {
+      "id": "20260917-020548-ff12d3",
+      "title": "L2 - Сборка и распад: Laplace / Objects (Kok's galaxy, 6 поколений/с) 2026-09-17 02:05:46",
+      "note": "",
+      "samples": 1323168,
+      "b_peak_pcm": 32767,
+      "b_rail_channel_samples": 283,
+      "diagnostics": {
+        "device_ok": true,
+        "device_error": null,
+        "underruns": 67,
+        "block_errors": 0,
+        "last_error": null,
+        "clip_blocks": {
+          "A": 0,
+          "B": 90
+        },
+        "record_error": null
+      },
+      "audio_start_sample": 15327488,
+      "end_sample": 16650656
+    }
+  ],
+  "targeted_tests": {
+    "command": "python tests/test_objects_laplace.py",
+    "passed": 13,
+    "total": 13,
+    "log": "artifacts/objects_laplace_researcher_20260917.log"
+  }
+}

@@ -115,6 +115,8 @@ def _effective_scene(scene_doc, state):
         d['factory_variants'] = copy.deepcopy(state['factory_variants'])
     if state.get('param_memory'):
         d['param_memory'] = copy.deepcopy(state['param_memory'])
+    if state.get('param_ranges'):
+        d['param_ranges'] = copy.deepcopy(state['param_ranges'])
     d.setdefault('listen', '')
     return d
 
@@ -334,6 +336,8 @@ def bench_scene(rec, state=None):
         d['factory_variants'] = copy.deepcopy(fv)
     if st.get('param_memory'):
         d['param_memory'] = copy.deepcopy(st['param_memory'])
+    if st.get('param_ranges'):
+        d['param_ranges'] = copy.deepcopy(st['param_ranges'])
     d.setdefault('listen', '')
     try:
         scene = scene_from_doc(d)

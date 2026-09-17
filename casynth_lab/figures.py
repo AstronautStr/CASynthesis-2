@@ -23,8 +23,12 @@ smallest coordinate.  For a compact figure this is exactly its unwrapped mean.
 
 Radius: R = max over the cells of the torus distance between the cell and the
 centre (cell centres; a single cell has R = 0).  Disk mask: every cell whose
-torus distance to the centre is <= R (+ 1e-9, the boundary included).  Own mask:
-exactly the figure's cells.
+torus distance to the centre is <= R (+ 1e-9, the boundary included).  A radius
+of at least full_cover_radius (the largest torus distance any cell can have from
+any point, hypot(rows / 2, cols / 2)) covers the whole field: the mask is then
+the full field directly (no distance is squared or compared -- any finite or
+infinite radius above the bound gives the same equivalent full mask, 2026-09-17).
+Own mask: exactly the figure's cells.
 
 Spectrum: the full unweighted 8-connectivity graph of the component (adjacency
 modulo the torus), L = D - A, eigvalsh; the zero mode is dropped (a connected
@@ -150,8 +154,24 @@ def radius_of(cells, centre, rows, cols):
     return float(np.sqrt(dr * dr + dc * dc).max())
 
 
+def full_cover_radius(rows, cols):
+    """The largest torus distance a cell centre can have from any point of the
+    field: a disk of this radius (or more) is the whole field."""
+    return float(np.hypot(rows / 2.0, cols / 2.0))
+
+
+def covers_field(radius, rows, cols):
+    """True when a disk of `radius` is the whole rows x cols torus (radius >= the
+    full-cover bound; non-finite radii count as covering)."""
+    r = float(radius)
+    return (not np.isfinite(r)) or r >= full_cover_radius(rows, cols)
+
+
 def disk_mask(centre, radius, rows, cols):
-    """bool (rows, cols): torus distance from the cell centre to `centre` <= radius."""
+    """bool (rows, cols): torus distance from the cell centre to `centre` <= radius
+    (the equivalent full mask once the radius covers the field)."""
+    if covers_field(radius, rows, cols):
+        return np.ones((rows, cols), bool)
     dr = torus_delta(np.arange(rows), centre[0], rows)
     dc = torus_delta(np.arange(cols), centre[1], cols)
     dist = np.sqrt(dr[:, None] ** 2 + dc[None, :] ** 2)
