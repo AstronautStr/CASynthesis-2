@@ -1201,10 +1201,11 @@ class BenchApp:
                     pygame.draw.circle(screen, col, (int(ox), int(oy)), 3)
         screen.set_clip(clip)
         cover = f"   {n_cover} circle{'s' if n_cover != 1 else ''} cover the whole field" if n_cover else ""
-        t = small.render(f"sounding {disp.get('n_sounding', 0)} of {disp.get('n_figures', 0)} figures"
-                         f"   tails {disp.get('n_tails', 0)}   detector {disp.get('detector_name', '?')}"
-                         f"   spectrum {disp.get('spectrum_name', '?')}{cover}",
-                         True, C_DIM)
+        head = f"sounding {disp.get('n_sounding', 0)} of {disp.get('n_figures', 0)} figures   tails {disp.get('n_tails', 0)}"
+        modes = f"   detector {disp.get('detector_name', '?')}   spectrum {disp.get('spectrum_name', '?')}"
+        t = small.render(head + modes + cover, True, C_DIM)
+        if t.get_width() > self.field_w - 4:                    # keep it inside the field's width
+            t = small.render(head + cover, True, C_DIM)
         screen.blit(t, (fx + self.field_w - t.get_width(), fy - 18))
 
     def _draw_display(self, screen, small, disp, x, y):
@@ -1223,15 +1224,16 @@ class BenchApp:
             # modes, lowest frequency), the last packet a (bar), the bank level (tick, /5)
             import pygame as _pg
             ramp = "  (ramping)" if int(disp.get('ramp_left', 0)) > 0 else ""
+            attack = ""
             if 'attack_ms' in disp:
-                ramp += (f"   attack {float(disp['attack_ms']):.1f} ms"
-                         + ("  (ramping)" if int(disp.get('attack_ramp_left', 0)) > 0 else ""))
+                attack = (f"   attack {float(disp['attack_ms']):.1f} ms"
+                          + (" (ramping)" if int(disp.get('attack_ramp_left', 0)) > 0 else ""))
             extra = ""
             if disp.get('drops') or disp.get('evictions') or disp.get('inplace_fades'):
                 extra = (f"   faded {disp.get('evictions', 0)} in place {disp.get('inplace_fades', 0)}"
                          f" dropped {disp.get('drops', 0)}")
             screen.blit(small.render(f"Figures: sounding {disp['n_sounding']} of {disp['n_figures']}"
-                                     f"   tails {disp['n_tails']}{extra}", True, C_DIM), (x, y))
+                                     f"   tails {disp['n_tails']}{attack}{extra}", True, C_DIM), (x, y))
             if int(disp.get('spectrum', 0)) == 1:
                 lap = disp.get('laplace', {})
                 law = (f"Laplace f0 {float(disp.get('f0', 0.0)):.0f} Hz  n {int(lap.get('n', 0))}"

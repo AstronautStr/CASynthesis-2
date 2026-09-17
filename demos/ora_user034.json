@@ -1,0 +1,196 @@
+{
+ "format": 2,
+ "id": "ora_user034",
+ "title": "U0 - Пресет пользователя: Radius x 0.34 (Jam p3 + Octagon II p5, обе стороны)",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   5,
+   6
+  ],
+  [
+   5,
+   7
+  ],
+  [
+   6,
+   5
+  ],
+  [
+   6,
+   8
+  ],
+  [
+   7,
+   3
+  ],
+  [
+   7,
+   6
+  ],
+  [
+   7,
+   8
+  ],
+  [
+   8,
+   3
+  ],
+  [
+   8,
+   7
+  ],
+  [
+   9,
+   3
+  ],
+  [
+   10,
+   6
+  ],
+  [
+   11,
+   4
+  ],
+  [
+   11,
+   5
+  ],
+  [
+   17,
+   22
+  ],
+  [
+   17,
+   23
+  ],
+  [
+   18,
+   21
+  ],
+  [
+   18,
+   24
+  ],
+  [
+   19,
+   20
+  ],
+  [
+   19,
+   25
+  ],
+  [
+   20,
+   19
+  ],
+  [
+   20,
+   26
+  ],
+  [
+   21,
+   19
+  ],
+  [
+   21,
+   26
+  ],
+  [
+   22,
+   20
+  ],
+  [
+   22,
+   25
+  ],
+  [
+   23,
+   21
+  ],
+  [
+   23,
+   24
+  ],
+  [
+   24,
+   22
+  ],
+  [
+   24,
+   23
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 6.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0,
+  "side_gain": {
+   "A": 1.0,
+   "B": 1.0
+  }
+ },
+ "variants": {
+  "A": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 1,
+    "radius_mul": 0.34,
+    "spectrum": 1,
+    "frequency_scale": 220.0,
+    "decay_s": 1.39,
+    "attack_ms": 0.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 1.82,
+    "shape": 0.95,
+    "harm": 0.87,
+    "fullshape": 1,
+    "dyn": 0.87
+   }
+  },
+  "B": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 1,
+    "radius_mul": 0.34,
+    "spectrum": 1,
+    "frequency_scale": 220.0,
+    "decay_s": 1.39,
+    "attack_ms": 0.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 1.82,
+    "shape": 0.95,
+    "harm": 0.87,
+    "fullshape": 1,
+    "dyn": 0.87
+   }
+  }
+ },
+ "param_ranges": {
+  "A": {
+   "ca_object_resonators": {
+    "radius_mul": [
+     0.25,
+     1.0
+    ]
+   }
+  },
+  "B": {
+   "ca_object_resonators": {
+    "radius_mul": [
+     0.25,
+     1.0
+    ]
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: А — Objects / Laplace, Radius x 0.34, Attack 0 / Б — Objects / Laplace, Radius x 0.34, Attack 0. Notes: hypothesis and your listening result. Radius x: Min / Max under the slider set its range for the selected side."
+}
