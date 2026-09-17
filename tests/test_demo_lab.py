@@ -1196,45 +1196,47 @@ def test_text_fields_share_one_model():
             load=lambda rid: types.SimpleNamespace(id=rid, title='T', notes='line one\nline two\n'),
             write_notes=lambda rid, text: log.append(text))
         app.session_record = 'rec'
-        assert app.open_notes() and app.mode == 'notes'
+        assert app.open_notes() and app.mode == 'live' and app.notes_window is not None
         assert app.notes_edit.text == 'line one\nline two'
         r = app._notes_rects()['text']
-        assert app.key('up') == 'notes:caret' and app.notes_edit.cursor == 8
-        app.key('home')
-        app.key('end', shift=True)
+        assert app.notes_key('up') == 'notes:caret' and app.notes_edit.cursor == 8
+        app.notes_key('home')
+        app.notes_key('end', shift=True)
         assert app.notes_edit.selected_text() == 'line one'
-        app.text_input('first')
+        app.notes_text('first')
         assert app.notes_form['text'] == 'first\nline two' and log[-1] == 'first\nline two'
-        assert app.press((r[0] + 6 + 7 * 4, r[1] + 4 + app.line_h + 3), 1) == 'notes:caret'
+        assert app.notes_press((r[0] + 6 + 7 * 4, r[1] + 4 + app.line_h + 3), 1) == 'notes:caret'
         assert app.notes_edit.cursor == 10                    # 'line| two'
-        assert app.key('return') == 'notes:edit' and app.notes_form['text'] == 'first\nline\n two'
-        assert app.key('backspace', ctrl=True) == 'notes:edit'
+        assert app.notes_key('return') == 'notes:edit' and app.notes_form['text'] == 'first\nline\n two'
+        assert app.notes_key('backspace', ctrl=True) == 'notes:edit'
         assert app.notes_form['text'] == 'first\n two' and app.notes_edit.cursor == 6
-        assert app.wheel((r[0] + 5, r[1] + 5), -1) == 'notes:scroll' and app.notes_edit.cursor == 6
-        app.key('a', ctrl=True)
-        app.key('x', ctrl=True)
+        assert app.notes_wheel((r[0] + 5, r[1] + 5), -1) == 'notes:scroll' and app.notes_edit.cursor == 6
+        app.notes_key('a', ctrl=True)
+        app.notes_key('x', ctrl=True)
         assert app.notes_form['text'] == '' and log[-1] == '' and app.clipboard == 'first\n two'
-        app.key('v', ctrl=True)
+        app.notes_key('v', ctrl=True)
         assert app.notes_form['text'] == 'first\n two'
-        app.key('a', ctrl=True)
-        app.text_input('w' * 100)                             # wraps by width: 64 per line
+        app.notes_key('a', ctrl=True)
+        app.notes_text('w' * 100)                             # wraps by width: 64 per line
         spans = app.notes_edit.layout(app.measure, r[2] - 12)
-        assert [s for s, _t in spans] == [0, 64]
-        app.key('home')
-        assert app.notes_edit.cursor == 64
-        app.key('up')
+        per_line = (r[2] - 12) // 7
+        assert [s for s, _t in spans] == [0, per_line]
+        app.notes_key('home')
+        assert app.notes_edit.cursor == per_line
+        app.notes_key('up')
         assert app.notes_edit.cursor == 0
-        app.key('down')
-        assert app.notes_edit.cursor == 64
-        app.key('down')
+        app.notes_key('down')
+        assert app.notes_edit.cursor == per_line
+        app.notes_key('down')
         assert app.notes_edit.cursor == 100
-        # drawing (headless): Notes, then the save form; the font's metrics take over
+        # drawing (headless): the bench, the notes window, then the save form; the font's metrics take over
         screen = pygame.Surface((app.width, app.height))
         font = pygame.font.SysFont(db.FONT_NAMES, 17)
         small = pygame.font.SysFont(db.FONT_NAMES, 14)
         app.draw(screen, font, small)
+        app.draw_notes(font, small)
         assert app.measure('ww') == small.size('ww')[0]
-        assert app.key('escape') == 'notes:close'
+        assert app.notes_key('escape') == 'notes:close' and app.notes_window is None
         app._open_save_form(types.SimpleNamespace(seconds=1.0, window_seconds=8.0))
         app.key('a', ctrl=True)
         app.text_input('x' * 200)                             # single-line: view follows the caret
@@ -1323,61 +1325,55 @@ def test_pattern_library_drag_drop():
 
 
 def test_notes_in_a_window_of_their_own():
-    """2026-09-17 (user's request): the listening notes open in a SEPARATE OS window
-    (tkinter, pumped from the bench loop) so the field stays in control; every edit
-    is written at once; the window belongs to one record and closes when the notes
-    would go to another record, when the record is left and with the bench.  Headless
-    (dummy video) benches keep the in-window form; the test forces the window."""
+    """2026-09-17 (user's request): the SAME notes form in a pygame window of its own
+    (title bar, minimise / close, keyboard focus) so the field stays in control;
+    events are routed by window, every edit is written at once, the window belongs
+    to one record and closes when the notes would go to another record, when the
+    OS closes it and with the bench."""
     import types
     import pygame
     import demo_bench as db
-    from casynth_lab import notes_window as nw
-    try:
-        import tkinter as tk
-        probe = tk.Tk()
-        probe.destroy()
-    except Exception:                                    # noqa: BLE001 -- no display for Tk here
-        print("    (skipped: no Tk display)")
-        return
-    assert not nw.available()                            # dummy video driver: the form by default
-    # the window alone: text -> on_change at once, close is final
-    log = []
-    w = nw.NotesWindow('rec', 'Title', 'hello', on_change=lambda t: log.append(t))
-    assert w.alive and w.pump()
-    w.widget.insert('end', ' world')
-    w.pump()
-    assert log == ['hello world'], log
-    w.close()
-    assert not w.alive and not w.pump()
-    # the bench: open -> window (no in-window form), record change -> closed
     scene = load_scene(os.path.join(ROOT, 'demos', 'laplace_ab.json'))
     runner = DemoRunner(scene)
     eng = LiveEngine(runner, sink=lambda m, b: None)
     pygame.init()
     app = db.BenchApp(scene, eng)
+    screen = pygame.display.set_mode((app.width, app.height))
+    font, small = pygame.font.SysFont(db.FONT_NAMES, 17), pygame.font.SysFont(db.FONT_NAMES, 14)
     written = []
     app.catalog = types.SimpleNamespace(
-        load=lambda rid: types.SimpleNamespace(id=rid, title='T ' + rid, notes='one\n'),
+        load=lambda rid: types.SimpleNamespace(id=rid, title='T ' + rid, notes='one'),
         write_notes=lambda rid, text: written.append((rid, text)))
     app.session_record = 'r1'
-    nw.available = lambda: True
     try:
-        assert app.open_notes() and app.mode == 'live' and app.notes_form is None
+        assert app.open_notes() and app.mode == 'live' and app.notes_window is not None
         w = app.notes_window
-        assert w is not None and w.alive and w.rid == 'r1'
-        w.widget.insert('end', ' two')
-        app.pump_notes()
+        assert w.alive and w.rid == 'r1' and w.size[0] >= 320
+        app.draw(screen, font, small)
+        app.draw_notes(font, small)                                   # the form drawn into the window
+        # events of the notes window are routed to the form, the bench's own keys are not touched
+        win = w.window
+        assert app.notes_owns(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_END, mod=0, window=win))
+        assert not app.notes_owns(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_END, mod=0))
+        assert app.notes_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_END, mod=0, window=win)) == 'notes:caret'
+        assert app.notes_event(pygame.event.Event(pygame.TEXTINPUT, text=' two', window=win)) == 'notes:edit'
         assert written[-1] == ('r1', 'one two'), written
-        assert app.open_notes() and app.notes_window is w         # the same record: focus, not a second window
-        app.session_record = 'r2'                                 # the notes would go elsewhere now
-        app.pump_notes()
-        assert app.notes_window is None and not w.alive
+        assert app.key('r') == 'reset'                                # the bench keeps its hotkeys
+        assert app.open_notes() and app.notes_window is w             # the same record: to the front, no second window
+        r = app._notes_rects()
+        assert app.notes_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(r['text'][0] + 5, r['text'][1] + 5),
+                                                  button=1, window=win)) == 'notes:caret'
+        assert app.notes_event(pygame.event.Event(pygame.WINDOWCLOSE, window=win)) == 'notes:close'
+        assert app.notes_window is None and not w.alive and app.notes_form is None
+        assert app.open_notes()
+        w2 = app.notes_window
+        app.session_record = 'r2'                                     # the notes would go elsewhere now
+        app.sync_notes()
+        assert app.notes_window is None and not w2.alive
         assert app.open_notes() and app.notes_window.rid == 'r2'
-        app.close_notes_window()
-        assert app.notes_window is None
+        assert app.notes_key('escape') == 'notes:close' and app.notes_window is None
     finally:
-        nw.available = lambda: os.environ.get('SDL_VIDEODRIVER', '').lower() != 'dummy'
-        app.close_notes_window()
+        app.close_notes()
         eng.stop()
 
 

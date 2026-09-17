@@ -140,8 +140,8 @@ class BenchApp:
         # listening notes (2026-09-14): the record this session belongs to --
         # the record continued / opened, or the last one saved here
         self.session_record = None
-        self.notes_form = None            # {'rid', 'title', 'text', 'from'} while editing (in-window form)
-        self.notes_window = None          # NotesWindow of one record (separate OS window, 2026-09-17)
+        self.notes_form = None            # {'rid', 'title', 'text'} while the notes window is open
+        self.notes_window = None          # casynth_lab.notes_window.NotesWindow (a window of its own, 2026-09-17)
         # text fields (2026-09-16): ONE model for every input (casynth_lab.textedit):
         # caret, click / arrows / Shift selection, Ctrl+A/X/C/V, word rules
         self.save_edits = None            # {'title': TextEdit, 'note': TextEdit} with the form
@@ -264,8 +264,6 @@ class BenchApp:
         click in a text field extends the selection)."""
         if self.mode == 'save':
             return self._press_save_form(pos, button, shift)
-        if self.mode == 'notes':
-            return self._press_notes(pos, button, now, shift)
         if self.mode == 'catalog':
             return self._press_catalog(pos, button, now)
         if self.mode == 'report':
@@ -370,17 +368,14 @@ class BenchApp:
         `ctrl` / `shift`: modifiers held (text editing: Ctrl+Backspace, Ctrl+A/X/C/V,
         Shift+arrows select)."""
         name = name.lower()
-        if self.mode in ('save', 'notes'):
+        if self.mode == 'save':
             # every text field: the same editing keys before the form's own
             edit, rect = self._active_edit()
             if edit is not None:
                 got = self._edit_key(edit, rect, name, ctrl, shift)
                 if got is not None:
                     return f"{self.mode}:{got}"
-        if self.mode == 'save':
             return self._key_save_form(name, ctrl)
-        if self.mode == 'notes':
-            return self._key_notes(name, ctrl)
         if self.mode == 'catalog':
             if name == 'escape':
                 self.close_catalog()
@@ -677,8 +672,6 @@ class BenchApp:
                 screen.blit(small.render(self.status[:90], True, col), (MARGIN + 300, TOP_H - 26))
         if self.mode == 'save':
             self._draw_save_form(screen, font, small)
-        if self.mode == 'notes':
-            self._draw_notes(screen, font, small)
 
     # =====================================================================
     # Listening notes (2026-09-14): free text attached to the session's record
@@ -699,34 +692,25 @@ class BenchApp:
         return rec.id, rec.title
 
     def open_notes(self):
+        """The notes of the record the session belongs to, in a window of their own
+        (the same form as before: casynth_lab.notes_window).  A second press for
+        the same record brings that window to the front."""
         rid, why = self.notes_target()
         if rid is None:
             self.status = f"Notes: {why}"
             return False
+        if self.notes_window is not None and self.notes_window.alive and self.notes_window.rid == rid:
+            self.notes_window.focus()
+            return True
+        self.close_notes()
         rec = self.catalog.load(rid)
         text = rec.notes
         if text.endswith('\n'):
             text = text[:-1]                  # the file's final newline is added on write
-        if _notes_win.available():
-            # a window of its own next to the bench: the field stays in control
-            if self.notes_window is not None and self.notes_window.alive and self.notes_window.rid == rid:
-                self.notes_window.focus()
-                return True
-            self.close_notes_window()
-            try:
-                self.notes_window = _notes_win.NotesWindow(
-                    rid, rec.title, text,
-                    on_change=lambda t, rid=rid, title=rec.title: self._notes_write(rid, title, t),
-                    on_close=lambda: setattr(self, 'status', "Notes window closed"),
-                    position=self._notes_window_position())
-                self.status = f"Notes window: {rec.title[:40]}"
-                return True
-            except Exception as e:                # noqa: BLE001 -- no Tk display: the in-window form
-                self.status = f"Notes window unavailable ({e}); in-window form"
-        self.notes_form = dict(rid=rid, title=rec.title, text=text, from_mode=self.mode)
+        self.notes_form = dict(rid=rid, title=rec.title, text=text)
         self.notes_edit = TextEdit(text, multiline=True)
-        self.mode = 'notes'
-        self.status = ""
+        self.notes_window = _notes_win.NotesWindow(rid, rec.title, position=self._notes_window_position())
+        self.status = f"Notes: {rec.title[:40]}"
         return True
 
     def _notes_window_position(self):
@@ -738,41 +722,31 @@ class BenchApp:
         except Exception:                          # noqa: BLE001
             return None
 
-    def _notes_write(self, rid, title, text):
-        try:
-            self.catalog.write_notes(rid, text)
-            self.status = f"Notes saved: {title[:40]}"
-        except CatalogError as e:
-            self.status = f"Notes NOT saved: {e}"
-            raise
+    def close_notes(self):
+        """Close the notes window (the text is already written on every edit)."""
+        if self.notes_window is not None:
+            self.notes_window.close()
+        self.notes_window = None
+        if self.drag_text is not None and self.notes_edit is not None and self.drag_text[0] is self.notes_edit:
+            self.drag_text = None
+        self.notes_form = None
+        self.notes_edit = None
+        if self.mode == 'catalog':
+            self.refresh_catalog()
 
-    def pump_notes(self):
-        """Once per frame from the main loop: drive the notes window and close it
-        when the record the notes would go to is no longer its record (another
-        record selected, Back to the catalog, Continue / Save of another one)."""
+    def sync_notes(self):
+        """Once per frame: the window belongs to one record -- closed when the notes
+        would go to another record (another record selected, Back to the catalog,
+        Continue / Save of another one) or when the OS closed it."""
         w = self.notes_window
         if w is None:
             return
         if not w.alive:
-            self.notes_window = None
+            self.close_notes()
             return
         rid, _why = self.notes_target()
         if rid != w.rid:
-            self.close_notes_window()
-            return
-        if not w.pump():
-            self.notes_window = None
-
-    def close_notes_window(self):
-        if self.notes_window is not None:
-            self.notes_window.close()
-            self.notes_window = None
-
-    def close_notes(self):
-        f, self.notes_form = self.notes_form, None
-        self.mode = f['from_mode'] if f is not None else 'live'
-        if self.mode == 'catalog':
-            self.refresh_catalog()
+            self.close_notes()
 
     def _notes_edit(self, text):
         """Every edit is written at once (small file, atomic replace): nothing
@@ -785,8 +759,46 @@ class BenchApp:
         except CatalogError as e:
             self.status = f"Notes NOT saved: {e}"
 
-    def _key_notes(self, name, ctrl=False):
-        f = self.notes_form
+    def _notes_rects(self):
+        """The form's rectangles in the notes window's own coordinates."""
+        w, h = self.notes_window.size if self.notes_window is not None else _notes_win.DEFAULT_SIZE
+        return dict(box=(0, 0, w, h), close=(w - 110, 8, 100, 24), text=(12, 40, w - 24, h - 78))
+
+    # -- events of the notes window (the main loop routes them by window) --------------
+    def notes_owns(self, ev):
+        return self.notes_window is not None and self.notes_window.owns(ev)
+
+    def notes_event(self, ev):
+        """One pygame event that belongs to the notes window."""
+        import pygame
+        if ev.type == pygame.WINDOWCLOSE:
+            self.close_notes()
+            return 'notes:close'
+        if ev.type == pygame.KEYDOWN:
+            return self.notes_key(pygame.key.name(ev.key), ctrl=bool(ev.mod & pygame.KMOD_CTRL),
+                                  shift=bool(ev.mod & pygame.KMOD_SHIFT))
+        if ev.type == pygame.TEXTINPUT:
+            return self.notes_text(ev.text)
+        if ev.type == pygame.MOUSEBUTTONDOWN:
+            return self.notes_press(ev.pos, ev.button, shift=bool(pygame.key.get_mods() & pygame.KMOD_SHIFT))
+        if ev.type == pygame.MOUSEWHEEL:
+            return self.notes_wheel(pygame.mouse.get_pos(), ev.y)
+        if ev.type == pygame.MOUSEMOTION and ev.buttons[0]:
+            return self.notes_drag(ev.pos)
+        if ev.type == pygame.MOUSEBUTTONUP:
+            self.notes_release()
+            return 'notes:release'
+        return None
+
+    def notes_key(self, name, ctrl=False, shift=False):
+        """Keys of the notes window: the editing keys of every text field, then
+        Esc (close) and Enter (new line)."""
+        if self.notes_form is None:
+            return None
+        name = name.lower()
+        got = self._edit_key(self.notes_edit, self._notes_rects()['text'], name, ctrl, shift)
+        if got is not None:
+            return f"notes:{got}"
         if name == 'escape':
             self.close_notes()
             return 'notes:close'
@@ -796,13 +808,16 @@ class BenchApp:
             return 'notes:edit'
         return None
 
-    def _notes_rects(self):
-        x, y = self.field_x + 12, self.field_y + 12
-        w, h = self.field_w - 24, self.field_h - 24
-        return dict(box=(x, y, w, h), close=(x + w - 110, y + 8, 100, 24),
-                    text=(x + 12, y + 40, w - 24, h - 78))
+    def notes_text(self, text):
+        if self.notes_form is None:
+            return None
+        self.notes_edit.insert(text)
+        self._after_edit()
+        return 'notes:edit'
 
-    def _press_notes(self, pos, button, now=None, shift=False):
+    def notes_press(self, pos, button, shift=False):
+        if self.notes_form is None:
+            return None
         r = self._notes_rects()
         if self._inside(r['close'], pos) and button == 1:
             self.close_notes()
@@ -810,31 +825,50 @@ class BenchApp:
         if self._inside(r['text'], pos) and button == 1:
             self._caret_from_pos(self.notes_edit, r['text'], pos, shift, start_drag=True)
             return 'notes:caret'
-        if self._inside(r['box'], pos):
-            return None
-        # outside the window: the live controls keep working while writing
-        # (A/B tabs, transport, knobs, painting) -- never Save / Catalog / Notes
-        if self.notes_form is not None and self.notes_form['from_mode'] == 'live':
-            return self._press_live(pos, button, allow_lab=False)
         return None
 
-    def _draw_notes(self, screen, font, small):
+    def notes_wheel(self, pos, dy):
+        """Wheel over the text (dy > 0 = up): scrolls, the caret stays."""
+        if self.notes_form is None:
+            return None
+        r = self._notes_rects()['text']
+        if self._inside(r, pos):
+            self.notes_edit.scroll = max(0, self.notes_edit.scroll - int(dy) * 3)
+            self.notes_edit.follow = False
+            return 'notes:scroll'
+        return None
+
+    def notes_drag(self, pos):
+        if self.drag_text is not None and self.notes_edit is not None and self.drag_text[0] is self.notes_edit:
+            self._caret_from_pos(self.notes_edit, self.drag_text[1], pos, shift=True)
+            return 'notes:caret'
+        return None
+
+    def notes_release(self):
+        if self.drag_text is not None and self.notes_edit is not None and self.drag_text[0] is self.notes_edit:
+            self.drag_text = None
+
+    def draw_notes(self, font, small):
+        """The form -- drawn exactly as before -- into the notes window (every frame)."""
         import pygame
+        w = self.notes_window
+        if w is None or not w.alive or self.notes_form is None:
+            return
+        screen = w.surface
         r = self._notes_rects()
         f = self.notes_form
-        pygame.draw.rect(screen, C_PANEL, r['box'], border_radius=6)
-        pygame.draw.rect(screen, C_ACCENT, r['box'], 1, border_radius=6)
-        bx, by = r['box'][0], r['box'][1]
-        screen.blit(font.render(f"Notes: {f['title']}"[:42], True, C_TXT), (bx + 12, by + 10))
+        pygame.draw.rect(screen, C_PANEL, r['box'])
+        pygame.draw.rect(screen, C_ACCENT, r['box'], 1)
+        screen.blit(font.render(f"Notes: {f['title']}"[:42], True, C_TXT), (12, 10))
         cr = r['close']
         pygame.draw.rect(screen, C_BTN, cr, border_radius=4)
         pygame.draw.rect(screen, C_EDGE, cr, 1, border_radius=4)
         t = small.render('Close (Esc)', True, C_TXT)
         screen.blit(t, (cr[0] + (cr[2] - t.get_width()) // 2, cr[1] + (cr[3] - t.get_height()) // 2))
         self._draw_edit(screen, small, r['text'], self.notes_edit, True)
-        screen.blit(small.render("Saved as you type.  Enter = new line.  Ctrl+A/X/C/V.  "
-                                 "Clicks outside still work.", True, C_DIM),
-                    (bx + 12, by + r['box'][3] - 26))
+        screen.blit(small.render("Saved as you type.  Enter = new line.  Ctrl+A/X/C/V.", True, C_DIM),
+                    (12, r['box'][3] - 26))
+        w.flip()
 
     # =====================================================================
     # S/N demos (2026-09-14): field overlay of the listened side + engine display
@@ -1200,10 +1234,6 @@ class BenchApp:
             if edit.text != self.save_form[field]:        # written from outside (scripts)
                 edit.set_text(self.save_form[field])
             return edit, self._save_form_rects()[field]
-        if self.mode == 'notes' and self.notes_form is not None:
-            if self.notes_edit.text != self.notes_form['text']:
-                self.notes_edit.set_text(self.notes_form['text'])
-            return self.notes_edit, self._notes_rects()['text']
         return None, None
 
     def _after_edit(self):
@@ -1211,7 +1241,8 @@ class BenchApp:
         if self.mode == 'save' and self.save_form is not None:
             for k, e in self.save_edits.items():
                 self.save_form[k] = e.text
-        elif self.mode == 'notes' and self.notes_form is not None:
+        if self.notes_form is not None and self.notes_edit is not None \
+                and self.notes_edit.text != self.notes_form['text']:
             self._notes_edit(self.notes_edit.text)
 
     def text_input(self, text):
@@ -1266,13 +1297,7 @@ class BenchApp:
     def wheel(self, pos, dy):
         """Mouse wheel (dy > 0 = up): scrolls the Notes text (the caret
         stays) or the pattern library."""
-        if self.mode == 'notes' and self.notes_form is not None:
-            r = self._notes_rects()['text']
-            if self._inside(r, pos):
-                self.notes_edit.scroll = max(0, self.notes_edit.scroll - int(dy) * 3)
-                self.notes_edit.follow = False
-                return 'notes:scroll'
-        if self.mode in ('live', 'save', 'notes') and self._inside(self.lib_rect, pos):
+        if self.mode in ('live', 'save') and self._inside(self.lib_rect, pos):
             self.lib_scroll = max(self.lib_scroll_min, min(0, self.lib_scroll + int(dy) * 24))
             return 'lib:scroll'
         return None
@@ -2362,6 +2387,9 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
         alive = True
         while alive:
             for ev in pygame.event.get():
+                if app.notes_owns(ev):             # the notes window: its own form
+                    app.notes_event(ev)
+                    continue
                 if ev.type == pygame.QUIT:
                     alive = False
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE \
@@ -2383,10 +2411,11 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
                     app.release()
             app.draw(screen, font, small)
             pygame.display.flip()
-            app.pump_notes()
+            app.draw_notes(font, small)
+            app.sync_notes()
             clock.tick(60)
     finally:
-        app.close_notes_window()
+        app.close_notes()
         engine.stop()
         pygame.quit()
         if app.child is not None:

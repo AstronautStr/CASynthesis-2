@@ -118,9 +118,13 @@ Continue), сцены против ТЗ/preflight, события L3, катал
 
 - «Note:» в панели каталога и поле формы Save переименованы в **Description** (описание опыта при
   сохранении, `record.json['note']`, не редактируется); **Notes** — живой журнал `<record>/notes.md`.
-- Заметки открываются **отдельным окном ОС** (`casynth_lab/notes_window.py`: tkinter `Text`, прокачка
-  `root.update()` раз в кадр из главного цикла `BenchApp.pump_notes()`, запись `notes.md` на каждое изменение);
-  поле стенда остаётся под контролем; окно принадлежит одной записи и закрывается, когда адресат заметок
-  меняется (`notes_target()` ≠ rid окна: другая запись в каталоге, Back, Continue/Save другой), и при выходе
-  из стенда; повторное нажатие Notes — фокус на то же окно; подпись «Notes (open)». Headless (dummy video)
-  — прежняя форма. Модуль в `SOUND_EXCLUDE`. Тест `test_notes_in_a_window_of_their_own` (test_demo_lab).
+- Заметки открываются **отдельным окном ОС с той же формой** (первый вариант на tkinter с другим видом
+  пользователь отверг — «окно Windows» значило только собственный заголовок/свернуть/закрыть/фокус, не новый
+  дизайн; откачено в тот же день). `casynth_lab/notes_window.py` — второе `pygame.Window` (resizable, справа
+  от стенда); форма рисуется прежним кодом (`draw_notes` → surface окна, `flip`), модель `TextEdit` и клавиши
+  те же; главный цикл маршрутизирует события с `ev.window` окна в `notes_event` (KEYDOWN/TEXTINPUT/мышь/
+  WINDOWCLOSE), остальное — стенду; режим `notes` у стенда удалён (поле не блокируется). Окно принадлежит
+  одной записи: `sync_notes()` закрывает его, когда `notes_target()` ≠ rid (другая запись, Back,
+  Continue/Save другой), при закрытии ОС и при выходе; повторное нажатие Notes — фокус. Запись `notes.md` на
+  каждое изменение. Модуль в `SOUND_EXCLUDE`. Тесты: `test_text_fields_share_one_model` (через
+  `notes_key/notes_text/notes_press/notes_wheel`), `test_notes_in_a_window_of_their_own`.
