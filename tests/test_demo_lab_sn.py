@@ -689,12 +689,12 @@ def test_registry_ui_hints_and_scene_validation():
 
 
 def test_notes_button_editor_extraction():
-    """Listening notes (2026-09-14): in a session continued from a record the
-    Notes button opens an editor whose text is saved as typed into
-    <record>/notes.md; clicks outside the window still drive A/B and the
-    transport; the catalog offers Notes for the selected record and marks
-    records that have them; `python -m casynth_lab.catalog notes ROOT`
-    prints them for the agents; nothing else in the record changes."""
+    """Listening notes (2026-09-14; a window of their own since 2026-09-17): in a
+    session continued from a record the Notes button opens the notes window whose
+    text is saved as typed into <record>/notes.md; the bench window keeps driving
+    A/B and the transport meanwhile; the catalog offers Notes for the selected
+    record and marks records that have them; `python -m casynth_lab.catalog notes
+    ROOT` prints them for the agents; nothing else in the record changes."""
     import hashlib
     import demo_bench as db
     from casynth_lab.audio_out import LiveEngine
@@ -737,50 +737,55 @@ def test_notes_button_editor_extraction():
     app.select_record([i for i, (r, _e) in enumerate(app.cat['entries']) if r and r.id == rid][0])
     app.continue_record()
     assert app.mode == 'live' and app.session_record == rid
-    assert app.press((nb[0] + 3, nb[1] + 3), 1) == 'notes' and app.mode == 'notes'
+    import pygame
+    pygame.init()
+    assert app.press((nb[0] + 3, nb[1] + 3), 1) == 'notes' and app.mode == 'live'
+    assert app.notes_window is not None and app.notes_window.alive and app.notes_window.rid == rid
     assert app.notes_form['rid'] == rid and app.notes_form['text'] == ''
+    # the notes window's own events (the main loop routes them to it)
     for ch in "Ellipse thinner":
-        app.text_input(ch)
-    app.key('return')
+        app.notes_text(ch)
+    app.notes_key('return')
     for ch in "raster has more body":
-        app.text_input(ch)
-    app.key('backspace')
-    app.key('backspace', ctrl=True)
-    app.text_input("body!")
+        app.notes_text(ch)
+    app.notes_key('backspace')
+    app.notes_key('backspace', ctrl=True)
+    app.notes_text("body!")
     want = "Ellipse thinner\nraster has more body!"
     assert app.notes_form['text'] == want
     with open(os.path.join(root, rid, 'notes.md'), encoding='utf-8') as f:
         assert f.read() == want + '\n'                   # saved as typed, LF, trailing newline
     assert app.status.startswith("Notes saved")
-    # clicks outside the window reach the live controls, never the lab buttons
+    # the bench window keeps its live controls while the notes window is open
     tab_b = app.tabs['B']
-    assert app.press((tab_b[0] + 3, tab_b[1] + 3), 1) == 'tab:B' and app.mode == 'notes'
-    assert app.press((app.lab_buttons['catalog'][0] + 3, app.lab_buttons['catalog'][1] + 3), 1) is None
-    assert app.mode == 'notes'
+    assert app.press((tab_b[0] + 3, tab_b[1] + 3), 1) == 'tab:B' and app.mode == 'live'
+    app.sync_notes()
+    assert app.notes_window is not None and app.notes_window.alive
+    assert app.key('r') == 'reset'                            # the bench hotkeys stay the bench's
+    assert app.notes_form['text'] == want
     import time as _t
     _t.sleep(0.3)
     assert app.engine.snapshot()['selected'] == 'B'
-    assert app.key('escape') == 'notes:close' and app.mode == 'live'
+    assert app.notes_key('escape') == 'notes:close' and app.mode == 'live' and app.notes_window is None
     # the catalog: Notes for the selected record, the row is tagged, text persists
     app.open_catalog()
     r = app._catalog_rects()
     app.cat['sel'] = None                                     # no record selected: no button
     assert app.press((r['notes'][0] + 3, r['notes'][1] + 3), 1) is None and app.mode == 'catalog'
     app.select_record([i for i, (rr, _e) in enumerate(app.cat['entries']) if rr and rr.id == rid][0])
-    assert app.press((r['notes'][0] + 3, r['notes'][1] + 3), 1) == 'notes' and app.mode == 'notes'
-    assert app.notes_form['text'] == want
-    app.text_input(" +")
-    assert app.key('escape') == 'notes:close' and app.mode == 'catalog'
+    assert app.press((r['notes'][0] + 3, r['notes'][1] + 3), 1) == 'notes' and app.mode == 'catalog'
+    assert app.notes_window is not None and app.notes_form['text'] == want
+    app.notes_text(" +")
+    assert app.notes_key('escape') == 'notes:close' and app.mode == 'catalog' and app.notes_window is None
     assert cat.load(rid).has_notes and cat.load(rid).notes == want + " +\n"
-    # a frame renders in both places
-    import pygame
-    pygame.init()
+    # a frame renders in both windows
     screen = pygame.Surface((app.width, app.height))
     font = pygame.font.SysFont(db.FONT_NAMES, 17)
     small = pygame.font.SysFont(db.FONT_NAMES, 14)
     app.press((r['notes'][0] + 3, r['notes'][1] + 3), 1)
     app.draw(screen, font, small)
-    app.key('escape')
+    app.draw_notes(font, small)
+    app.notes_key('escape')
     app.draw(screen, font, small)
     eng.stop()
     # the record itself is untouched; empty notes remove the file
