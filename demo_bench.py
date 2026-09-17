@@ -2391,7 +2391,9 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
                 if app.notes_owns(ev):             # the notes window: its own form
                     app.notes_event(ev)
                     continue
-                if ev.type == pygame.QUIT:
+                if ev.type == pygame.QUIT or ev.type == pygame.WINDOWCLOSE:
+                    # with the notes window open SDL reports the bench window's close
+                    # button as WINDOWCLOSE (no QUIT until the last window goes)
                     alive = False
                 elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE \
                         and app.mode == 'live' and app.drag_pat is None:
