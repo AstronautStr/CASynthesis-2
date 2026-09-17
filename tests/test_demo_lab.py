@@ -1343,9 +1343,14 @@ def test_notes_in_a_window_of_their_own():
     written = []
     app.catalog = types.SimpleNamespace(
         load=lambda rid: types.SimpleNamespace(id=rid, title='T ' + rid, notes='one'),
-        write_notes=lambda rid, text: written.append((rid, text)))
+        write_notes=lambda rid, text: written.append((rid, text)), list=lambda: [])
     app.session_record = 'r1'
     try:
+        assert app.open_notes() and app.mode == 'live' and app.notes_window is not None
+        app.open_catalog()                                            # leaving the field closes its notes
+        assert app.mode == 'catalog' and app.notes_window is None
+        app.close_catalog()
+        assert app.mode == 'live'
         assert app.open_notes() and app.mode == 'live' and app.notes_window is not None
         w = app.notes_window
         assert w.alive and w.rid == 'r1' and w.size[0] >= 320

@@ -1446,6 +1446,7 @@ class BenchApp:
         if snap['running'] and not snap['paused']:
             self._post('pause', on=True)
         self.engine.muted = True
+        self.close_notes()                 # the field's experiment is left: its notes window goes with it
         self.mode = 'catalog'
         self.refresh_catalog()
 
