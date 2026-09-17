@@ -620,7 +620,7 @@ def test_registry_overlay_display_and_headless_draw():
     eng = LiveEngine(runner, sink=lambda m, b: None)
     pygame.init()
     app = db.BenchApp(scene, eng)
-    assert 'gutter_field' in app.engine_btns and app.engine_rows == 5
+    assert 'gutter_field' in app.engine_btns and app.engine_rows == 4   # 4 engines per row since 2026-09-17
     data = app._overlay_runs('gutter_field', DEFAULTS)
     assert len(data['lines']) == 4 and len(data['labels']) == 8 and data['runs'] == []
     screen = pygame.Surface((app.width, app.height))

@@ -1,0 +1,559 @@
+{
+ "snapshot_file_version": 1,
+ "state": {
+  "version": 1,
+  "scene": {
+   "format": 2,
+   "id": "oes_m1",
+   "title": "M1 - Общий удар / место рождения: Excitation Uniform / Birth position (Jam p3)",
+   "grid": {
+    "rows": 32,
+    "cols": 32
+   },
+   "cells": [
+    [
+     7,
+     10
+    ],
+    [
+     7,
+     11
+    ],
+    [
+     8,
+     9
+    ],
+    [
+     8,
+     12
+    ],
+    [
+     9,
+     7
+    ],
+    [
+     9,
+     10
+    ],
+    [
+     9,
+     12
+    ],
+    [
+     10,
+     7
+    ],
+    [
+     10,
+     11
+    ],
+    [
+     11,
+     7
+    ],
+    [
+     12,
+     10
+    ],
+    [
+     13,
+     8
+    ],
+    [
+     13,
+     9
+    ]
+   ],
+   "rule": "B3/S23",
+   "boundary": "torus",
+   "rate_hz": 6.0,
+   "audio": {
+    "f0_hz": 110.0,
+    "level": 1.0,
+    "side_gain": {
+     "A": 1.0,
+     "B": 0.93
+    }
+   },
+   "variants": {
+    "A": {
+     "engine_id": "ca_object_resonators",
+     "engine_params": {
+      "detector": 0,
+      "radius_mul": 1.0,
+      "spectrum": 1,
+      "events": 1,
+      "excitation": 0,
+      "frequency_scale": 220.0,
+      "decay_s": 1.39,
+      "attack_ms": 4.0,
+      "n": 3,
+      "spread": 1.0,
+      "alpha": 0.0,
+      "shape": 0.0,
+      "harm": 0.87,
+      "fullshape": 1,
+      "dyn": 0.0
+     }
+    },
+    "B": {
+     "engine_id": "ca_object_resonators",
+     "engine_params": {
+      "detector": 0,
+      "radius_mul": 1.0,
+      "spectrum": 1,
+      "events": 1,
+      "excitation": 1,
+      "frequency_scale": 220.0,
+      "decay_s": 1.39,
+      "attack_ms": 4.0,
+      "n": 3,
+      "spread": 1.0,
+      "alpha": 0.0,
+      "shape": 0.0,
+      "harm": 0.87,
+      "fullshape": 1,
+      "dyn": 0.0
+     }
+    }
+   },
+   "initial_side": "A",
+   "listen": "1 / 2: А — Objects / Laplace, Events Births, Excitation Uniform / Б — Objects / Laplace, Events Births, Excitation Birth position. Notes: hypothesis and your listening result. Events / Excitation are the buttons of the Objects panel."
+  },
+  "ctx": {
+   "sr": 44100,
+   "block": 352,
+   "channels": 2,
+   "f0": 110.0,
+   "level": 1.0,
+   "rate_hz": 6.0
+  },
+  "grid": {
+   "__array__": "grid"
+  },
+  "exc": {
+   "__array__": "exc"
+  },
+  "gen": 71,
+  "out_samples": 529408,
+  "t_samples": 529408,
+  "ca_samples": 529408,
+  "running": true,
+  "paused": false,
+  "vol": 0.7,
+  "selected": "A",
+  "xfade_from": null,
+  "xfade_pos": 0,
+  "seq": 1,
+  "pending": [],
+  "memory": {
+   "A": {
+    "ca_object_resonators": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "ca_object_resonators": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 1,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "ranges": {},
+  "sides": {
+   "A": {
+    "engine_id": "ca_object_resonators",
+    "params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    },
+    "peak": 0.005391391232244197,
+    "clip_blocks": 0,
+    "engine_state_version": 4,
+    "engine": {
+     "version": 4,
+     "engine_id": "ca_object_resonators",
+     "model_version": "ca_object_resonators_n4_v4",
+     "params": {
+      "detector": 0,
+      "radius_mul": 1.0,
+      "spectrum": 1,
+      "events": 1,
+      "excitation": 0,
+      "frequency_scale": 220.0,
+      "decay_s": 1.39,
+      "attack_ms": 4.0,
+      "n": 3,
+      "spread": 1.0,
+      "alpha": 0.0,
+      "shape": 0.0,
+      "harm": 0.87,
+      "fullshape": 1,
+      "dyn": 0.0
+     },
+     "sr": 44100,
+     "block": 352,
+     "out_scale": 0.5,
+     "laplace_gain": 0.7,
+     "f0": 110.0,
+     "slots": {
+      "active": 24,
+      "tails": 96,
+      "fading": 24,
+      "bank": 24
+     },
+     "next_id": 121,
+     "fig_ids": {
+      "__array__": "sides.A.engine.fig_ids"
+     },
+     "fig_slots": {
+      "__array__": "sides.A.engine.fig_slots"
+     },
+     "fig_centres": {
+      "__array__": "sides.A.engine.fig_centres"
+     },
+     "fig_radii": {
+      "__array__": "sides.A.engine.fig_radii"
+     },
+     "fig_cells": {
+      "__array__": "sides.A.engine.fig_cells"
+     },
+     "fig_offsets": {
+      "__array__": "sides.A.engine.fig_offsets"
+     },
+     "grid_pending": {
+      "__array__": "sides.A.engine.grid_pending"
+     },
+     "grid_prev": {
+      "__array__": "sides.A.engine.grid_prev"
+     },
+     "exc_pending": {
+      "__array__": "sides.A.engine.exc_pending"
+     },
+     "exc_prev": {
+      "__array__": "sides.A.engine.exc_prev"
+     },
+     "role": {
+      "__array__": "sides.A.engine.role"
+     },
+     "slot_id": {
+      "__array__": "sides.A.engine.slot_id"
+     },
+     "smode": {
+      "__array__": "sides.A.engine.smode"
+     },
+     "ndrive": {
+      "__array__": "sides.A.engine.ndrive"
+     },
+     "npulse": {
+      "__array__": "sides.A.engine.npulse"
+     },
+     "nlive": {
+      "__array__": "sides.A.engine.nlive"
+     },
+     "zre": {
+      "__array__": "sides.A.engine.zre"
+     },
+     "zim": {
+      "__array__": "sides.A.engine.zim"
+     },
+     "sqrtlam": {
+      "__array__": "sides.A.engine.sqrtlam"
+     },
+     "ffreq": {
+      "__array__": "sides.A.engine.ffreq"
+     },
+     "wcur": {
+      "__array__": "sides.A.engine.wcur"
+     },
+     "winc": {
+      "__array__": "sides.A.engine.winc"
+     },
+     "wtgt": {
+      "__array__": "sides.A.engine.wtgt"
+     },
+     "wleft": {
+      "__array__": "sides.A.engine.wleft"
+     },
+     "zf": {
+      "__array__": "sides.A.engine.zf"
+     },
+     "zs": {
+      "__array__": "sides.A.engine.zs"
+     },
+     "zu": {
+      "__array__": "sides.A.engine.zu"
+     },
+     "zfm": {
+      "__array__": "sides.A.engine.zfm"
+     },
+     "zsm": {
+      "__array__": "sides.A.engine.zsm"
+     },
+     "zum": {
+      "__array__": "sides.A.engine.zum"
+     },
+     "pan": {
+      "__array__": "sides.A.engine.pan"
+     },
+     "pleft": {
+      "__array__": "sides.A.engine.pleft"
+     },
+     "rr": {
+      "__array__": "sides.A.engine.rr"
+     },
+     "gg": {
+      "__array__": "sides.A.engine.gg"
+     },
+     "qq": {
+      "__array__": "sides.A.engine.qq"
+     },
+     "ints": {
+      "__array__": "sides.A.engine.ints"
+     },
+     "hp": {
+      "__array__": "sides.A.engine.hp"
+     },
+     "level": {
+      "__array__": "sides.A.engine.level"
+     },
+     "last_e": {
+      "__array__": "sides.A.engine.last_e"
+     },
+     "last_a": {
+      "__array__": "sides.A.engine.last_a"
+     },
+     "last_b": {
+      "__array__": "sides.A.engine.last_b"
+     },
+     "counters": {
+      "__array__": "sides.A.engine.counters"
+     }
+    }
+   },
+   "B": {
+    "engine_id": "ca_object_resonators",
+    "params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 1,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    },
+    "peak": 0.005960328205336237,
+    "clip_blocks": 0,
+    "engine_state_version": 4,
+    "engine": {
+     "version": 4,
+     "engine_id": "ca_object_resonators",
+     "model_version": "ca_object_resonators_n4_v4",
+     "params": {
+      "detector": 0,
+      "radius_mul": 1.0,
+      "spectrum": 1,
+      "events": 1,
+      "excitation": 1,
+      "frequency_scale": 220.0,
+      "decay_s": 1.39,
+      "attack_ms": 4.0,
+      "n": 3,
+      "spread": 1.0,
+      "alpha": 0.0,
+      "shape": 0.0,
+      "harm": 0.87,
+      "fullshape": 1,
+      "dyn": 0.0
+     },
+     "sr": 44100,
+     "block": 352,
+     "out_scale": 0.5,
+     "laplace_gain": 0.7,
+     "f0": 110.0,
+     "slots": {
+      "active": 24,
+      "tails": 96,
+      "fading": 24,
+      "bank": 24
+     },
+     "next_id": 121,
+     "fig_ids": {
+      "__array__": "sides.B.engine.fig_ids"
+     },
+     "fig_slots": {
+      "__array__": "sides.B.engine.fig_slots"
+     },
+     "fig_centres": {
+      "__array__": "sides.B.engine.fig_centres"
+     },
+     "fig_radii": {
+      "__array__": "sides.B.engine.fig_radii"
+     },
+     "fig_cells": {
+      "__array__": "sides.B.engine.fig_cells"
+     },
+     "fig_offsets": {
+      "__array__": "sides.B.engine.fig_offsets"
+     },
+     "grid_pending": {
+      "__array__": "sides.B.engine.grid_pending"
+     },
+     "grid_prev": {
+      "__array__": "sides.B.engine.grid_prev"
+     },
+     "exc_pending": {
+      "__array__": "sides.B.engine.exc_pending"
+     },
+     "exc_prev": {
+      "__array__": "sides.B.engine.exc_prev"
+     },
+     "role": {
+      "__array__": "sides.B.engine.role"
+     },
+     "slot_id": {
+      "__array__": "sides.B.engine.slot_id"
+     },
+     "smode": {
+      "__array__": "sides.B.engine.smode"
+     },
+     "ndrive": {
+      "__array__": "sides.B.engine.ndrive"
+     },
+     "npulse": {
+      "__array__": "sides.B.engine.npulse"
+     },
+     "nlive": {
+      "__array__": "sides.B.engine.nlive"
+     },
+     "zre": {
+      "__array__": "sides.B.engine.zre"
+     },
+     "zim": {
+      "__array__": "sides.B.engine.zim"
+     },
+     "sqrtlam": {
+      "__array__": "sides.B.engine.sqrtlam"
+     },
+     "ffreq": {
+      "__array__": "sides.B.engine.ffreq"
+     },
+     "wcur": {
+      "__array__": "sides.B.engine.wcur"
+     },
+     "winc": {
+      "__array__": "sides.B.engine.winc"
+     },
+     "wtgt": {
+      "__array__": "sides.B.engine.wtgt"
+     },
+     "wleft": {
+      "__array__": "sides.B.engine.wleft"
+     },
+     "zf": {
+      "__array__": "sides.B.engine.zf"
+     },
+     "zs": {
+      "__array__": "sides.B.engine.zs"
+     },
+     "zu": {
+      "__array__": "sides.B.engine.zu"
+     },
+     "zfm": {
+      "__array__": "sides.B.engine.zfm"
+     },
+     "zsm": {
+      "__array__": "sides.B.engine.zsm"
+     },
+     "zum": {
+      "__array__": "sides.B.engine.zum"
+     },
+     "pan": {
+      "__array__": "sides.B.engine.pan"
+     },
+     "pleft": {
+      "__array__": "sides.B.engine.pleft"
+     },
+     "rr": {
+      "__array__": "sides.B.engine.rr"
+     },
+     "gg": {
+      "__array__": "sides.B.engine.gg"
+     },
+     "qq": {
+      "__array__": "sides.B.engine.qq"
+     },
+     "ints": {
+      "__array__": "sides.B.engine.ints"
+     },
+     "hp": {
+      "__array__": "sides.B.engine.hp"
+     },
+     "level": {
+      "__array__": "sides.B.engine.level"
+     },
+     "last_e": {
+      "__array__": "sides.B.engine.last_e"
+     },
+     "last_a": {
+      "__array__": "sides.B.engine.last_a"
+     },
+     "last_b": {
+      "__array__": "sides.B.engine.last_b"
+     },
+     "counters": {
+      "__array__": "sides.B.engine.counters"
+     }
+    }
+   }
+  }
+ }
+}

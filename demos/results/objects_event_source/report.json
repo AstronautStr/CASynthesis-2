@@ -1,0 +1,639 @@
+{
+ "generated": "2026-09-17 23:35",
+ "commit": "a3efc67cbff6bc7e1ec5fd4f619e32ce99931a87",
+ "numba": true,
+ "e1": {
+  "transitions": 72,
+  "period": 5,
+  "runs": {
+   "Births": {
+    "start_packet": 16.0,
+    "bank_ids": [
+     1
+    ],
+    "one_bank": true,
+    "packet_mismatches": 0,
+    "first_two_periods": [
+     8.0,
+     16.0,
+     0.0,
+     8.0,
+     8.0,
+     8.0,
+     16.0,
+     0.0,
+     8.0,
+     8.0
+    ],
+    "period_sequence": [
+     8.0,
+     16.0,
+     0.0,
+     8.0,
+     8.0
+    ],
+    "periodic": true,
+    "packets_total": 58,
+    "tails": 0,
+    "tails_fed": 0,
+    "unsupported": 0,
+    "per_mode_states_nonzero": 0
+   },
+   "Deaths": {
+    "start_packet": 0.0,
+    "bank_ids": [
+     1
+    ],
+    "one_bank": true,
+    "packet_mismatches": 0,
+    "first_two_periods": [
+     0.0,
+     16.0,
+     8.0,
+     0.0,
+     16.0,
+     0.0,
+     16.0,
+     8.0,
+     0.0,
+     16.0
+    ],
+    "period_sequence": [
+     0.0,
+     16.0,
+     8.0,
+     0.0,
+     16.0
+    ],
+    "periodic": true,
+    "packets_total": 43,
+    "tails": 0,
+    "tails_fed": 0,
+    "unsupported": 0,
+    "per_mode_states_nonzero": 0
+   },
+   "Both": {
+    "start_packet": 16.0,
+    "bank_ids": [
+     1
+    ],
+    "one_bank": true,
+    "packet_mismatches": 0,
+    "first_two_periods": [
+     8.0,
+     32.0,
+     8.0,
+     8.0,
+     24.0,
+     8.0,
+     32.0,
+     8.0,
+     8.0,
+     24.0
+    ],
+    "period_sequence": [
+     8.0,
+     32.0,
+     8.0,
+     8.0,
+     24.0
+    ],
+    "periodic": true,
+    "packets_total": 72,
+    "tails": 0,
+    "tails_fed": 0,
+    "unsupported": 0,
+    "per_mode_states_nonzero": 0
+   }
+  },
+  "both_equals_births_plus_deaths": true
+ },
+ "manual": {
+  "Births": {
+   "start_packet": 4.0,
+   "manual_birth_then_death_packets": [
+    1.0,
+    0.0
+   ],
+   "vanished_tail": {
+    "zf": 0.0,
+    "npulse": 0,
+    "fed": 0
+   },
+   "tail_feeds_blocks": 0,
+   "tail_pulse_monotone": true,
+   "tail_peak_first_block": 0.08929554273478711,
+   "tail_peak_block_30": 0.028535254770398713
+  },
+  "Deaths": {
+   "start_packet": 0.0,
+   "manual_birth_then_death_packets": [
+    0.0,
+    1.0
+   ],
+   "vanished_tail": {
+    "zf": 0.6666666666666712,
+    "npulse": 3,
+    "fed": 1
+   },
+   "tail_feeds_blocks": 4,
+   "tail_pulse_monotone": true,
+   "tail_peak_first_block": 0.10062612582569018,
+   "tail_peak_block_30": 0.035259541995914405
+  },
+  "Both": {
+   "start_packet": 4.0,
+   "manual_birth_then_death_packets": [
+    1.0,
+    1.0
+   ],
+   "vanished_tail": {
+    "zf": 0.0,
+    "npulse": 0,
+    "fed": 0
+   },
+   "tail_feeds_blocks": 0,
+   "tail_pulse_monotone": true,
+   "tail_peak_first_block": 0.08338036251967576,
+   "tail_peak_block_30": 0.026606758694403394
+  }
+ },
+ "m1": {
+  "transitions": 72,
+  "equal": {
+   "frequencies": true,
+   "weights": true,
+   "packet_moments": true,
+   "a": true,
+   "tracker": true
+  },
+  "packets_with_events": 123,
+  "max_norm_error": 4.440892098500626e-16,
+  "preflight_phases": {
+   "gen1_11c_3b": {
+    "preflight": [
+     1.288909862637116,
+     9.725155800435819e-16,
+     1.1570269512836644
+    ],
+    "measured": [
+     1.2889098626371158,
+     9.725155800435817e-16,
+     1.1570269512836644
+    ],
+    "frequencies_preflight": [
+     110.0,
+     434.6637083188775,
+     551.0100925759691
+    ],
+    "frequencies": [
+     110.0,
+     434.6637083188775,
+     551.0100925759691
+    ],
+    "max_abs_diff": 2.220446049250313e-16
+   },
+   "gen1_3c_2b": {
+    "preflight": [
+     1.0,
+     1.0
+    ],
+    "measured": [
+     1.0,
+     1.0
+    ],
+    "frequencies_preflight": [
+     110.0,
+     110.0
+    ],
+    "frequencies": [
+     110.0,
+     110.0
+    ],
+    "max_abs_diff": 0.0
+   },
+   "gen2_16c_3b": {
+    "preflight": [
+     0.7814996203212149,
+     0.7037460155649663,
+     1.3762266851846143
+    ],
+    "measured": [
+     0.7814996203212148,
+     0.7037460155649663,
+     1.376226685184614
+    ],
+    "frequencies_preflight": [
+     110.0,
+     544.9830804582175,
+     659.7521924241601
+    ],
+    "frequencies": [
+     110.0,
+     544.9830804582176,
+     659.7521924241601
+    ],
+    "max_abs_diff": 2.220446049250313e-16
+   },
+   "gen3_3c_2b": {
+    "preflight": [
+     1.2247448713915892,
+     0.7071067811865478
+    ],
+    "measured": [
+     1.224744871391589,
+     0.7071067811865477
+    ],
+    "frequencies_preflight": [
+     110.0,
+     216.16832654823494
+    ],
+    "frequencies": [
+     110.0,
+     216.16832654823494
+    ],
+    "max_abs_diff": 2.220446049250313e-16
+   },
+   "gen3_3c_1b": {
+    "preflight": [
+     1.2247448713915892,
+     0.7071067811865476
+    ],
+    "measured": [
+     1.2247448713915892,
+     0.7071067811865476
+    ],
+    "frequencies_preflight": [
+     110.0,
+     216.16832654823494
+    ],
+    "frequencies": [
+     110.0,
+     216.16832654823494
+    ],
+    "max_abs_diff": 0.0
+   }
+  },
+  "zero_participation": 0,
+  "unsupported": 0,
+  "b_sample": {
+   "gen0_7c_7b": {
+    "b": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "a": 0.7777777777777778,
+    "freqs": [
+     110.0,
+     217.16770962200917,
+     223.53180833315977
+    ]
+   },
+   "gen0_3c_3b": {
+    "b": [
+     0.9999999999999998,
+     1.0000000000000002
+    ],
+    "a": 0.6,
+    "freqs": [
+     110.0,
+     216.16832654823494
+    ]
+   },
+   "gen1_3c_2b": {
+    "b": [
+     1.0,
+     1.0
+    ],
+    "a": 0.5,
+    "freqs": [
+     110.0,
+     110.0
+    ]
+   },
+   "gen1_11c_3b": {
+    "b": [
+     1.2889098626371158,
+     9.725155800435817e-16,
+     1.1570269512836644
+    ],
+    "a": 0.6,
+    "freqs": [
+     110.0,
+     434.6637083188775,
+     551.0100925759691
+    ]
+   },
+   "gen2_16c_3b": {
+    "b": [
+     0.7814996203212148,
+     0.7037460155649663,
+     1.376226685184614
+    ],
+    "a": 0.6,
+    "freqs": [
+     110.0,
+     544.9830804582176,
+     659.7521924241601
+    ]
+   },
+   "gen3_3c_2b": {
+    "b": [
+     1.224744871391589,
+     0.7071067811865477
+    ],
+    "a": 0.5,
+    "freqs": [
+     110.0,
+     216.16832654823494
+    ]
+   },
+   "gen3_3c_1b": {
+    "b": [
+     1.2247448713915892,
+     0.7071067811865476
+    ],
+    "a": 0.3333333333333333,
+    "freqs": [
+     110.0,
+     216.16832654823494
+    ]
+   }
+  }
+ },
+ "law": {
+  "single_birth": {
+   "cells": [
+    [
+     8,
+     9
+    ],
+    [
+     8,
+     12
+    ]
+   ],
+   "measured": [
+    [
+     0.04659308525408147,
+     9.312439674019663e-16,
+     1.7314240048025515
+    ],
+    [
+     1.0647038694945063,
+     1.363245747575996,
+     0.08925638352179012
+    ]
+   ],
+   "preflight": [
+    [
+     0.04659308525408147,
+     9.312439674019663e-16,
+     1.7314240048025515
+    ],
+    [
+     1.0647038694945063,
+     1.363245747575996,
+     0.08925638352179012
+    ]
+   ],
+   "profile_distance": 2.3646782093243894,
+   "preflight_distance": 2.3646782093243894,
+   "max_abs_diff": 0.0
+  },
+  "zero_participation": {
+   "b": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "total": 0.0,
+   "packet": false
+  },
+  "whole_figure_birth": {
+   "b": [
+    0.9999999999999998,
+    1.0000000000000002,
+    1.0
+   ],
+   "max_abs_diff_from_one": 2.220446049250313e-16
+  },
+  "degenerate": {
+   "ranks": [
+    2,
+    8,
+    1
+   ],
+   "preflight_ranks": [
+    2,
+    8,
+    1
+   ],
+   "sign_flip_max_error": 0.0,
+   "basis_rotation_max_error": 2.220446049250313e-16,
+   "preflight_sign": 0.0,
+   "preflight_rotation": 5.551115123125783e-17
+  },
+  "translation_max_error": {
+   "20,25": 0.0,
+   "-9,13": 0.0,
+   "28,0": 0.0
+  },
+  "rotation_max_error": 2.018191043257578e-15
+ },
+ "excitation": {
+  "superposition_max_error": 2.636779683484747e-16,
+  "weights_after_strikes": [
+   0.7,
+   0.35,
+   0.2
+  ],
+  "weights_set": [
+   0.7,
+   0.35,
+   0.2
+  ],
+  "attack_0": {
+   "first_sample": 0.5087133453248526,
+   "response_rms": 0.8536137599859777,
+   "peak": 4.076004196587232
+  },
+  "attack_4": {
+   "first_sample": 0.00629719347521928,
+   "response_rms": 0.5147492844620489,
+   "peak": 2.390024914188973
+  },
+  "attack_4_vs_0_rms_db": -4.393313111464226
+ },
+ "scenes": [
+  {
+   "id": "oes_e1",
+   "side_gain": {
+    "A": 1.0,
+    "B": 0.93
+   },
+   "events": {
+    "A": 1,
+    "B": 2
+   },
+   "excitation": {
+    "A": 0,
+    "B": 0
+   },
+   "seconds": 12.0,
+   "block_ms": {
+    "p50": 0.23809995036572218,
+    "p99": 2.4266840144991897,
+    "max": 3.6702000070363283,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -39.73412507967604,
+    "steady_rms_db": -39.775525623719446,
+    "peak": 0.05126814675489565,
+    "clip_blocks": 0,
+    "finite": true,
+    "figures": 1,
+    "sounding": 1,
+    "tails": 0,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0,
+    "events": "Births",
+    "excitation": "Uniform",
+    "position_supported": true,
+    "unsupported": 0,
+    "zero_participation": 0
+   },
+   "B": {
+    "rms_db": -39.9789787587754,
+    "steady_rms_db": -39.81926828882187,
+    "peak": 0.050871440886168524,
+    "clip_blocks": 0,
+    "finite": true,
+    "figures": 1,
+    "sounding": 1,
+    "tails": 0,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0,
+    "events": "Deaths",
+    "excitation": "Uniform",
+    "position_supported": false,
+    "unsupported": 0,
+    "zero_participation": 0
+   },
+   "a_minus_b_db": 0.24485367909935718,
+   "steady_a_minus_b_db": 0.043742665102421086,
+   "within_1db": true,
+   "steady_a_minus_b_db_at_unit_side_gain": -0.5872760391493017,
+   "continue": {
+    "exact": true,
+    "field_changed": true,
+    "from_seconds": 6.0,
+    "blocks": 200
+   }
+  },
+  {
+   "id": "oes_m1",
+   "side_gain": {
+    "A": 1.0,
+    "B": 0.93
+   },
+   "events": {
+    "A": 1,
+    "B": 1
+   },
+   "excitation": {
+    "A": 0,
+    "B": 1
+   },
+   "seconds": 12.0,
+   "block_ms": {
+    "p50": 0.6726999999955297,
+    "p99": 3.3295119937974964,
+    "max": 6.633899989537895,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -36.5972805223161,
+    "steady_rms_db": -36.84994076147174,
+    "peak": 0.13390141392185687,
+    "clip_blocks": 0,
+    "finite": true,
+    "figures": 1,
+    "sounding": 1,
+    "tails": 26,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0,
+    "events": "Births",
+    "excitation": "Uniform",
+    "position_supported": true,
+    "unsupported": 0,
+    "zero_participation": 0
+   },
+   "B": {
+    "rms_db": -36.66402093495613,
+    "steady_rms_db": -36.87732969592083,
+    "peak": 0.12452831494732715,
+    "clip_blocks": 0,
+    "finite": true,
+    "figures": 1,
+    "sounding": 1,
+    "tails": 26,
+    "evictions": 0,
+    "inplace_fades": 0,
+    "drops": 0,
+    "events": "Births",
+    "excitation": "Birth position",
+    "position_supported": true,
+    "unsupported": 0,
+    "zero_participation": 0
+   },
+   "a_minus_b_db": 0.06674041264002994,
+   "steady_a_minus_b_db": 0.02738893444908541,
+   "within_1db": true,
+   "steady_a_minus_b_db_at_unit_side_gain": -0.60342379654697,
+   "continue": {
+    "exact": true,
+    "field_changed": true,
+    "from_seconds": 6.0,
+    "blocks": 200
+   }
+  }
+ ],
+ "catalog": {
+  "root": "C:\\Users\\Astro\\Documents\\Projects\\CASynth-2\\lab_catalog\\objects_event_source_modal_2026_09_17",
+  "present": true,
+  "records": {
+   "20260917-233513-cab7d1": {
+    "title": "E1 - Рождения / смерти: Events Births / Deaths (Octagon II p5)",
+    "status": "match",
+    "reason": "",
+    "pinned": "pinned",
+    "commit": "a3efc67cbff6bc7e1ec5fd4f619e32ce99931a87",
+    "has_notes": true,
+    "side_gain": {
+     "A": 1.0,
+     "B": 0.93
+    }
+   },
+   "20260917-233512-1edfef": {
+    "title": "M1 - Общий удар / место рождения: Excitation Uniform / Birth position (Jam p3)",
+    "status": "match",
+    "reason": "",
+    "pinned": "pinned",
+    "commit": "a3efc67cbff6bc7e1ec5fd4f619e32ce99931a87",
+    "has_notes": true,
+    "side_gain": {
+     "A": 1.0,
+     "B": 0.93
+    }
+   }
+  }
+ }
+}
