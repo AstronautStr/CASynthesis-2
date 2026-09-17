@@ -1322,6 +1322,65 @@ def test_pattern_library_drag_drop():
         eng.stop()
 
 
+def test_notes_in_a_window_of_their_own():
+    """2026-09-17 (user's request): the listening notes open in a SEPARATE OS window
+    (tkinter, pumped from the bench loop) so the field stays in control; every edit
+    is written at once; the window belongs to one record and closes when the notes
+    would go to another record, when the record is left and with the bench.  Headless
+    (dummy video) benches keep the in-window form; the test forces the window."""
+    import types
+    import pygame
+    import demo_bench as db
+    from casynth_lab import notes_window as nw
+    try:
+        import tkinter as tk
+        probe = tk.Tk()
+        probe.destroy()
+    except Exception:                                    # noqa: BLE001 -- no display for Tk here
+        print("    (skipped: no Tk display)")
+        return
+    assert not nw.available()                            # dummy video driver: the form by default
+    # the window alone: text -> on_change at once, close is final
+    log = []
+    w = nw.NotesWindow('rec', 'Title', 'hello', on_change=lambda t: log.append(t))
+    assert w.alive and w.pump()
+    w.widget.insert('end', ' world')
+    w.pump()
+    assert log == ['hello world'], log
+    w.close()
+    assert not w.alive and not w.pump()
+    # the bench: open -> window (no in-window form), record change -> closed
+    scene = load_scene(os.path.join(ROOT, 'demos', 'laplace_ab.json'))
+    runner = DemoRunner(scene)
+    eng = LiveEngine(runner, sink=lambda m, b: None)
+    pygame.init()
+    app = db.BenchApp(scene, eng)
+    written = []
+    app.catalog = types.SimpleNamespace(
+        load=lambda rid: types.SimpleNamespace(id=rid, title='T ' + rid, notes='one\n'),
+        write_notes=lambda rid, text: written.append((rid, text)))
+    app.session_record = 'r1'
+    nw.available = lambda: True
+    try:
+        assert app.open_notes() and app.mode == 'live' and app.notes_form is None
+        w = app.notes_window
+        assert w is not None and w.alive and w.rid == 'r1'
+        w.widget.insert('end', ' two')
+        app.pump_notes()
+        assert written[-1] == ('r1', 'one two'), written
+        assert app.open_notes() and app.notes_window is w         # the same record: focus, not a second window
+        app.session_record = 'r2'                                 # the notes would go elsewhere now
+        app.pump_notes()
+        assert app.notes_window is None and not w.alive
+        assert app.open_notes() and app.notes_window.rid == 'r2'
+        app.close_notes_window()
+        assert app.notes_window is None
+    finally:
+        nw.available = lambda: os.environ.get('SDL_VIDEODRIVER', '').lower() != 'dummy'
+        app.close_notes_window()
+        eng.stop()
+
+
 def _run():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

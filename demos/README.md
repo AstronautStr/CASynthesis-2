@@ -172,12 +172,19 @@ version 1 (`casynth_lab/snapshot.py`: JSON + npz, no pickle).
 selected record) opens the free-text notes of the record the session belongs
 to -- the record you continued / opened, or the last one you saved in this
 session (a fresh session has none yet: Continue a record or Save first).
-Text is saved as you type into `<record>/notes.md` (UTF-8; Enter = new line,
-Ctrl+Backspace = erase a word, Esc closes); while the window is open the
-sound goes on and clicks outside it still work (A/B tabs, transport, knobs,
-painting).  The Save description (`note` in record.json) stays what it was;
-WAVs, snapshots and record.json are never touched.  Records with notes carry
-a "notes" tag in the catalog list.
+Text is saved as you type into `<record>/notes.md` (UTF-8).  **Since 2026-09-17
+the notes open in a window of their own** (`casynth_lab/notes_window.py`, tkinter,
+pumped from the bench loop): drag it next to the bench, type, click back into the
+bench to play and paint, click back to write; Ctrl+A/Z/X/C/V of the system.  The
+window belongs to one record: it closes when the notes would go to another record
+(another record selected in the catalog, Back to the catalog, Continue / Save of
+another one) and with the bench; "Notes (open)" marks it in the catalog panel.
+Headless benches (dummy video) keep the old in-window form (Esc closes; Enter =
+new line).  Two different things, two names: **Description** = the text typed at
+Save (`note` in record.json, never edited later, shown in the catalog panel);
+**Notes** = `<record>/notes.md`, the living listening journal.  WAVs, snapshots
+and record.json are never touched by Notes.  Records with notes carry a "notes"
+tag in the catalog list.
 
 The pipeline: listen -> write the impression right there -> the agent reads
 it back with

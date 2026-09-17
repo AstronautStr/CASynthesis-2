@@ -38,6 +38,7 @@ import numpy as np
 
 from casynth_config import SR
 from . import provenance as prov
+from .catalog import replace_retry
 from .catalog import Catalog, CatalogError, read_wav, _pcm_to_wav
 from .runner import BLOCK, CHANNELS, OUTPUTS
 
@@ -146,7 +147,7 @@ def _write_json(path, doc):
     tmp = path + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(doc, f, ensure_ascii=False, indent=1)
-    os.replace(tmp, path)
+    replace_retry(tmp, path)                      # Windows: a transient lock is retried
 
 
 def _read_json(path):

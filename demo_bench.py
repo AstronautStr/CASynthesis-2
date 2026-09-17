@@ -38,6 +38,7 @@ from casynth_lab.catalog import Catalog, CatalogError, bench_scene     # noqa: E
 from casynth_lab import provenance as prov                             # noqa: E402
 from casynth_lab.textedit import TextEdit                              # noqa: E402
 from casynth_lab.versions import VersionError                          # noqa: E402
+from casynth_lab import notes_window as _notes_win                     # noqa: E402
 from patterns import PATTERNS                                          # noqa: E402
 from casynth_lab import verify as verify_mod                           # noqa: E402
 from casynth_lab.verify import (Verifier, VerifyError, TRACK_EXACT, TRACK_DIFFERS,   # noqa: E402
@@ -139,7 +140,8 @@ class BenchApp:
         # listening notes (2026-09-14): the record this session belongs to --
         # the record continued / opened, or the last one saved here
         self.session_record = None
-        self.notes_form = None            # {'rid', 'title', 'text', 'from'} while editing
+        self.notes_form = None            # {'rid', 'title', 'text', 'from'} while editing (in-window form)
+        self.notes_window = None          # NotesWindow of one record (separate OS window, 2026-09-17)
         # text fields (2026-09-16): ONE model for every input (casynth_lab.textedit):
         # caret, click / arrows / Shift selection, Ctrl+A/X/C/V, word rules
         self.save_edits = None            # {'title': TextEdit, 'note': TextEdit} with the form
@@ -705,11 +707,66 @@ class BenchApp:
         text = rec.notes
         if text.endswith('\n'):
             text = text[:-1]                  # the file's final newline is added on write
+        if _notes_win.available():
+            # a window of its own next to the bench: the field stays in control
+            if self.notes_window is not None and self.notes_window.alive and self.notes_window.rid == rid:
+                self.notes_window.focus()
+                return True
+            self.close_notes_window()
+            try:
+                self.notes_window = _notes_win.NotesWindow(
+                    rid, rec.title, text,
+                    on_change=lambda t, rid=rid, title=rec.title: self._notes_write(rid, title, t),
+                    on_close=lambda: setattr(self, 'status', "Notes window closed"),
+                    position=self._notes_window_position())
+                self.status = f"Notes window: {rec.title[:40]}"
+                return True
+            except Exception as e:                # noqa: BLE001 -- no Tk display: the in-window form
+                self.status = f"Notes window unavailable ({e}); in-window form"
         self.notes_form = dict(rid=rid, title=rec.title, text=text, from_mode=self.mode)
         self.notes_edit = TextEdit(text, multiline=True)
         self.mode = 'notes'
         self.status = ""
         return True
+
+    def _notes_window_position(self):
+        """Right of the bench window when its position is known."""
+        try:
+            import pygame
+            x, y = pygame.display.get_window_position()
+            return (x + self.width + 12, y)
+        except Exception:                          # noqa: BLE001
+            return None
+
+    def _notes_write(self, rid, title, text):
+        try:
+            self.catalog.write_notes(rid, text)
+            self.status = f"Notes saved: {title[:40]}"
+        except CatalogError as e:
+            self.status = f"Notes NOT saved: {e}"
+            raise
+
+    def pump_notes(self):
+        """Once per frame from the main loop: drive the notes window and close it
+        when the record the notes would go to is no longer its record (another
+        record selected, Back to the catalog, Continue / Save of another one)."""
+        w = self.notes_window
+        if w is None:
+            return
+        if not w.alive:
+            self.notes_window = None
+            return
+        rid, _why = self.notes_target()
+        if rid != w.rid:
+            self.close_notes_window()
+            return
+        if not w.pump():
+            self.notes_window = None
+
+    def close_notes_window(self):
+        if self.notes_window is not None:
+            self.notes_window.close()
+            self.notes_window = None
 
     def close_notes(self):
         f, self.notes_form = self.notes_form, None
@@ -1340,7 +1397,7 @@ class BenchApp:
         screen.blit(font.render(f"Save experiment  (last {f['cut'].seconds:.1f} s since "
                                 f"Start/Restart, window {f['cut'].window_seconds:.0f} s)",
                                 True, C_TXT), (bx + 20, by + 10))
-        for field, label in (('title', 'Title'), ('note', 'Note')):
+        for field, label in (('title', 'Title'), ('note', 'Description')):
             rect = r[field]
             screen.blit(small.render(label, True, C_DIM), (bx + 20, rect[1] + 5))
             self._draw_edit(screen, small, rect, self.save_edits[field], f['field'] == field)
@@ -1790,7 +1847,9 @@ class BenchApp:
                 screen.blit(t, (rect[0], rect[1]))
                 continue
             if key == 'notes':
-                labels[key] = 'Notes' + ('  *' if rec.has_notes else '')
+                open_here = (self.notes_window is not None and self.notes_window.alive
+                             and self.notes_window.rid == rec.id)
+                labels[key] = 'Notes' + ('  (open)' if open_here else ('  *' if rec.has_notes else ''))
             if key == 'pin':
                 if rec.status == 'pinned':
                     continue
@@ -1819,7 +1878,7 @@ class BenchApp:
                                      True, C_WARN), (MARGIN, self.height - 30))
         if rec is not None:
             y = r['pin'][1] + 30
-            screen.blit(small.render("Note:", True, C_DIM), (px, y))
+            screen.blit(small.render("Description:", True, C_DIM), (px, y))
             for j, line in enumerate(_wrap(rec.note, small, PANEL_W)[:6]):
                 screen.blit(small.render(line, True, C_TXT), (px, y + 18 + j * 17))
             y2 = y + 130
@@ -2324,8 +2383,10 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
                     app.release()
             app.draw(screen, font, small)
             pygame.display.flip()
+            app.pump_notes()
             clock.tick(60)
     finally:
+        app.close_notes_window()
         engine.stop()
         pygame.quit()
         if app.child is not None:

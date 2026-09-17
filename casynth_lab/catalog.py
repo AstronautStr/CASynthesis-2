@@ -119,8 +119,8 @@ def _effective_scene(scene_doc, state):
     return d
 
 
-def _replace_dir(src, dst, attempts=20):
-    """os.replace for a directory; Windows may refuse transiently (indexer /
+def replace_retry(src, dst, attempts=20):
+    """os.replace (file or directory); Windows may refuse transiently (indexer /
     antivirus holding a handle) -> retry briefly before giving up."""
     for i in range(attempts):
         try:
@@ -130,6 +130,9 @@ def _replace_dir(src, dst, attempts=20):
             if i == attempts - 1:
                 raise
             time.sleep(0.05 * (i + 1))
+
+
+_replace_dir = replace_retry
 
 
 class Record:
@@ -438,7 +441,7 @@ class Catalog:
                 return
             with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
                 f.write(text if text.endswith('\n') else text + '\n')
-            os.replace(tmp, path)
+            replace_retry(tmp, path)
         except OSError as e:
             try:
                 os.remove(tmp)
@@ -464,7 +467,7 @@ class Catalog:
         try:
             with open(tmp, 'w', encoding='utf-8') as f:
                 json.dump(meta, f, ensure_ascii=False, indent=1)
-            os.replace(tmp, path)
+            replace_retry(tmp, path)
         except OSError as e:
             try:
                 os.remove(tmp)
