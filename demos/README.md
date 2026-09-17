@@ -620,6 +620,33 @@ scenes, catalog check).  The bench panel: `ROW_H` 20 (16 rows), the 'Birth posit
 92 px wide, a third header line of the Objects display shows events / excitation (`FIGURE_HEAD_H`
 48).
 
+### Birth strength (REQ section 5, 2026-09-18)
+
+Objects v5 (`ca_object_resonators_n4_v5`, `STATE_VERSION` 5; a v4 snapshot imports as Birth
+strength 1, bit for bit the v4 sound): the knob **Birth strength** (`birth_strength`, 0..4,
+default 1, absent = 1) reshapes the distribution of the NEXT Birth position packets only: s = 0
+takes the Uniform path itself (no participation needed, the combination is still required),
+0 < s < 1 blends `(1 - s) + s b` and 1 < s <= 4 raises `b ** s`, both renormalised to
+`sum c^2 = m`; s = 1 is b itself (no arithmetic).  Zero participation at s > 0 still makes no
+packet; an exact zero stays zero for s >= 1.  A change of s never makes a packet and never
+touches the pulse states of either path.  With Uniform the knob is stored and shown inactive
+(`"1.00  Birth position only"`); the fourth header line of the Objects display gives its
+meaning (`FIGURE_HEAD_H` 62; `ROW_H` 18 so the 17 rows fit a 960 px desktop).
+
+Entry: **`run_objects_birth_strength.bat`** opens the bench on the CATALOG screen of
+`lab_catalog/objects_birth_strength_2026_09_18/` (build once with
+`python demos/build_objects_birth_strength.py`).  **M2** `obs_m2`: the M1 field (Jam p3), both
+sides Births + Birth position with the M1 settings, A Birth strength 1 / B 4; side gain B 0.92
+(A - B after 2 s at unit gains -0.73 dB); the knob moves freely in the live window (a manual
+change may change the loudness: the factor is constant).  Gates:
+`tests/test_objects_birth_strength.py` (1p).  Measurements:
+`python demos/objects_birth_strength_report.py` -> `demos/results/objects_birth_strength/report.{json,md}`
+(the law against the preflight, five engines side by side on M1, the PCM path: s = 0 == Uniform,
+the pinned 2026-09-17 records against the current code, still-field changes, a knob sequence,
+Continue, v4 import; levels at the five s, timing with the knob moved, catalog check).  Every
+older Objects scene (`n4_*`, `ol_*`, `ora_*`, `oes_*`) carries `birth_strength: 1.0` (same sound;
+their records stay pinned to their own commits).
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B

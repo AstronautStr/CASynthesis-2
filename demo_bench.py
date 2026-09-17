@@ -63,11 +63,14 @@ PANEL_W = 270
 TAB_W, TAB_H = 96, 30
 ARROW_W = 28
 ENG_W, ENG_H = 62, 24        # 4 engine buttons per row (74 / 3 per row until 2026-09-17)
-ROW_H = 20                   # 26 until 2026-09-17, 22 until Events / Excitation: Objects has 15 knobs + a range row; the window must fit a 960 px desktop
+ROW_H = 18                   # 26 until 2026-09-17, 22 until Events / Excitation, 20 until Birth strength (2026-09-18): Objects has 16 knobs + a range row; the window must fit a 960 px desktop
+CHOICE_H = 16                # word button of a named-choice knob (18 until 2026-09-18)
+RANGE_FIELD_H = 18           # Min / Max field of a ranged knob (20 until 2026-09-18)
 ENG_PER_ROW = 4
 FIGURE_ROWS_MAX = 8          # figure rows of the Objects display reserved below the knobs (fewer on a low desktop)
 FIGURE_ROWS_MIN = 3
-FIGURE_HEAD_H = 48           # header lines of the Objects display above its figure rows (3 x 14 + gap; 34 until 2026-09-17)
+FIGURE_HEAD_H = 62           # header lines of the Objects display above its figure rows (4 x 14 + gap; 34 until 2026-09-17, 48 until Birth strength 2026-09-18)
+BIRTH_STRENGTH_LINE = "0 Uniform, 1 original, >1 stronger selection"   # meaning of the Birth strength knob (fits the panel)
 DISPLAY_ROW_H = 14           # one bar row of an engine display (W links / node u)
 SLIDER_W = 120
 RANGE_FIELD_W = 54           # Min / Max field of a ranged knob (2026-09-17)
@@ -277,8 +280,8 @@ class BenchApp:
         for spec, (sx, sy, _w, _h) in self._param_rows(eid):
             if spec[0] in e.ranges:
                 y = sy - 6 + ROW_H
-                out[spec[0]] = dict(min=(sx, y + 1, RANGE_FIELD_W, 20),
-                                    max=(sx + RANGE_FIELD_W + 14, y + 1, RANGE_FIELD_W, 20), y=y)
+                out[spec[0]] = dict(min=(sx, y, RANGE_FIELD_W, RANGE_FIELD_H),
+                                    max=(sx + RANGE_FIELD_W + 14, y, RANGE_FIELD_W, RANGE_FIELD_H), y=y)
         return out
 
     def _range_of(self, snap, side, name):
@@ -302,7 +305,7 @@ class BenchApp:
         n = max(1, len(names))
         cap = 60 if max((len(t) for t in names), default=0) <= 8 else 92      # 'Birth position' (2026-09-17)
         w = min(cap, (PANEL_W - 82 - 4 * (n - 1)) // n)
-        return [(v, (self.slider_x + v * (w + 4), sy - 4, w, 18)) for v in range(len(names))]
+        return [(v, (self.slider_x + v * (w + 4), sy - 3, w, CHOICE_H)) for v in range(len(names))]
 
     @staticmethod
     def _inactive(eid, params):
@@ -823,7 +826,7 @@ class BenchApp:
                                 (rr['max'][0] + RANGE_FIELD_W + 6, rr['y'] + 2))
             screen.blit(small.render(label, True, C_DIM), (px, sy - 4))
             if name in inactive:
-                screen.blit(small.render(inactive[name], True, C_DIM), (sx, sy - 4))
+                screen.blit(small.render(inactive[name], True, C_DIM), (sx + 6, sy - 4))   # a gap after a long label
             elif name in choices:
                 for value, rect in self._choice_rects(eid, name, sy):
                     on = (value == v)
@@ -1276,6 +1279,14 @@ class BenchApp:
                 if disp.get('unsupported_packets') or disp.get('zero_participation'):
                     line += f"   refused {disp.get('unsupported_packets', 0)} zero {disp.get('zero_participation', 0)}"
                 screen.blit(small.render(line, True, col), (x, y + 28))
+            # v5 (2026-09-18): the meaning of Birth strength (its value sits on the knob row
+            # while it acts; stored and shown on the inactive row with Uniform)
+            if 'birth_strength' in disp:
+                if int(disp.get('excitation', 0)) == 1:
+                    line4 = BIRTH_STRENGTH_LINE
+                else:
+                    line4 = f"Birth strength {float(disp['birth_strength']):.2f} stored (Birth position only)"
+                screen.blit(small.render(line4, True, C_DIM), (x, y + 42))
             bar_x, bar_w = x + 98, 76
             shown = [f for f in disp['figures'] if f['slot'] >= 0][:self.figure_rows]
             for k, f in enumerate(shown):

@@ -88,6 +88,21 @@ change, a Restore add nothing):
         b_j = sqrt(m p_j / sum_l p_l)       (sum_j b_j^2 = m, like Uniform's b = 1)
         delta_j = a b_j  -> added to the pulse states OF MODE j (zfm / zsm)
     sum_l p_l <= 1e-12: no mode gets the packet (counted `zero_participation`).
+    `birth_strength` (v5, 2026-09-18, REQ section 5) = s in 0..4 (default 1)
+    reshapes the distribution of the NEXT packets only (Birth position only;
+    stored but inactive with Uniform):
+        s = 0      : the Uniform path itself (a into the slot's pulse states; no
+                     spatial participation needed -- but the combination above
+                     is still required, s = 0 does not bypass it)
+        0 < s < 1  : v_j = (1 - s) + s b_j ;  c_j = sqrt(m) v_j / sqrt(sum v^2)
+        s = 1      : c_j = b_j  (the original b, no arithmetic on it)
+        1 < s <= 4 : v_j = b_j ** s ;         c_j = sqrt(m) v_j / sqrt(sum v^2)
+        delta_j = a c_j  (sum c^2 = m for every packet that exists)
+    with s > 0 a zero participation (sum p <= 1e-12) still makes no packet (the
+    blend is never applied to a packet that does not exist); an exact zero b_j
+    stays zero for s >= 1 and appears from the Uniform share for 0 < s < 1;
+    equal b stay equal, one mode gives c = 1.  A change of s never makes a
+    packet and never touches the accumulated pulse states of either path.
     The per-mode pulse states keep every past packet with its own coefficients
     (a new mode of a retune starts with none, a vanished mode's states leave
     with it); the output weights are untouched -- a packet never recolours a
@@ -164,12 +179,15 @@ Figure law only: retunes every Figure-tuned slot at once, states kept),
 0..20 ms, default 0 = the previous pulse exactly; q ramp 20 ms; absent from an
 older parameter set / snapshot = 0), `events` ("Events", Both / Births / Deaths,
 default Both; absent = Both), `excitation` ("Excitation", Uniform / Birth
-position, default Uniform; absent = Uniform), and the seven Laplace settings
-(Laplace law only; absent from an older snapshot = their defaults).
-Only SR 44100 / block 352 / stereo.  Own model_version / STATE_VERSION (v4 = the
-per-mode pulse states `zfm` / `zsm` / `zum`, `npulse`, `last_b`, two more
-counters; a v3 snapshot of model v3 is accepted with those at zero, a v2 snapshot of model v2 additionally as Attack 0 --
-bit for bit the older sound); the snapshot holds every slot array, the tracker
+position, default Uniform; absent = Uniform), `birth_strength` ("Birth strength",
+0..4, default 1; absent = 1 = the v4 Birth position exactly), and the seven
+Laplace settings (Laplace law only; absent from an older snapshot = their defaults).
+Only SR 44100 / block 352 / stereo.  Own model_version / STATE_VERSION (v5 = the
+`birth_strength` parameter, no new arrays; v4 = the per-mode pulse states `zfm` /
+`zsm` / `zum`, `npulse`, `last_b`, two more counters; a v4 snapshot of model v4 is
+accepted as Birth strength 1, a v3 snapshot of model v3 with the v4 arrays at zero,
+a v2 snapshot of model v2 additionally as Attack 0 -- bit for bit the older
+sound); the snapshot holds every slot array, the tracker
 (ids, slots, cells, centres, radii), the id counter, both fields and both
 excitations, the ramps, the DC filters and the gain.
 """
@@ -204,11 +222,15 @@ PARAMS = [('detector', 'Detector', 0, 1, True, 1),
           ('spectrum', 'Spectrum', 0, 1, True, 1),
           ('events', 'Events', 0, 2, True, 0),
           ('excitation', 'Excitation', 0, 1, True, 0),
+          ('birth_strength', 'Birth strength', 0.0, 4.0, False, 1.0),
           ('frequency_scale', 'Freq scale', 55.0, 880.0, False, 220.0),
           ('decay_s', 'Decay', 0.20, 1.50, False, 0.80),
           ('attack_ms', 'Attack', 0.0, 20.0, False, 0.0)] + list(LAPLACE_PARAMS)
 # absent from older snapshots / parameter sets: the bit-exact v1 behaviour (Figure law)
-OPTIONAL_PARAMS = {'radius_mul': 1.0, 'spectrum': 0, 'attack_ms': 0.0, 'events': 0, 'excitation': 0}
+OPTIONAL_PARAMS = {'radius_mul': 1.0, 'spectrum': 0, 'attack_ms': 0.0, 'events': 0, 'excitation': 0,
+                   'birth_strength': 1.0}
+BIRTH_STRENGTH_RANGE = (0.0, 4.0)      # Birth strength: finite, inside this closed range
+BIRTH_STRENGTH_HINT = '0 = Uniform; 1 = original; >1 = stronger selection'
 OPTIONAL_PARAMS.update({p[0]: p[5] for p in LAPLACE_PARAMS})
 CHOICES = {'detector': ('Own', 'Disk'), 'spectrum': ('Figure', 'Laplace'),
            'events': ('Both', 'Births', 'Deaths'), 'excitation': ('Uniform', 'Birth position')}
@@ -217,13 +239,15 @@ SPEC_FIGURE, SPEC_LAPLACE = 0, 1
 EV_BOTH, EV_BIRTHS, EV_DEATHS = 0, 1, 2
 EXC_UNIFORM, EXC_POSITION = 0, 1
 POSITION_CONDITION = 'needs Births / Own / Laplace / full'      # the combination Birth position is defined for
-MODEL_VERSION = 'ca_object_resonators_n4_v4'
-STATE_VERSION = 4
+MODEL_VERSION = 'ca_object_resonators_n4_v5'
+STATE_VERSION = 5
 # older snapshots this engine restores (state version -> model version): the v2 state
 # (no Attack) is the v3 state with zu / qq / the attack ramp counter at zero; the v3
 # state (no Events / Excitation) is the v4 state with the per-mode pulse states at
-# zero, npulse = ndrive of the active slots and the two new counters at zero
-COMPATIBLE_STATES = {2: 'ca_object_resonators_n4_v2', 3: 'ca_object_resonators_n4_v3'}
+# zero, npulse = ndrive of the active slots and the two new counters at zero; the v4
+# state (no Birth strength) is the v5 state with birth_strength = 1 (same arrays)
+COMPATIBLE_STATES = {2: 'ca_object_resonators_n4_v2', 3: 'ca_object_resonators_n4_v3',
+                     4: 'ca_object_resonators_n4_v4'}
 DEGEN_TOL = 1e-8                       # Birth position: |lambda_k - lambda_j| <= DEGEN_TOL max(1, |lambda_j|) = one group
 ZERO_PART = 1e-12                      # Birth position: sum of participations at or below this -> no packet
 ATTACK_LN9 = math.log(9.0)             # 10 -> 90 % of a one-pole step response takes ln 9 time constants
@@ -361,6 +385,37 @@ def birth_position_weights(L, idx, born):
     if total <= ZERO_PART:
         return np.zeros(m), total
     return np.sqrt(m * p / total), total
+
+
+def valid_birth_strength(value):
+    """True for a finite number inside BIRTH_STRENGTH_RANGE (bool excluded)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating)):
+        return False
+    v = float(value)
+    return math.isfinite(v) and BIRTH_STRENGTH_RANGE[0] <= v <= BIRTH_STRENGTH_RANGE[1]
+
+
+def birth_strength_profile(b, strength):
+    """The Birth strength law of the module docstring on an EXISTING spatial packet
+    b (m,) (sum b^2 = m, no all-zero b here): s = 1 returns b itself (no arithmetic),
+    0 < s < 1 blends (1 - s) + s b and 1 < s <= 4 raises b ** s, both renormalised
+    to sum c^2 = m; s = 0 is not a case of this function (the caller takes the
+    Uniform path).  Raises ValueError outside 0 < s <= 4."""
+    s = float(strength)
+    if not (0.0 < s <= BIRTH_STRENGTH_RANGE[1]):
+        raise ValueError(f"engine {ENGINE_ID}: birth_strength_profile needs 0 < s <= "
+                         f"{BIRTH_STRENGTH_RANGE[1]}, got {strength!r}")
+    if s == 1.0:
+        return b
+    b = np.asarray(b, np.float64)
+    m = int(len(b))
+    if m == 0:
+        return b
+    v = (1.0 - s) + s * b if s < 1.0 else b ** s
+    norm = math.sqrt(float((v * v).sum()))
+    if not (norm > 0.0):                                # pragma: no cover  (b has a positive entry)
+        raise ValueError(f"engine {ENGINE_ID}: Birth strength on an all-zero packet")
+    return math.sqrt(m) * v / norm
 
 
 @_jit
@@ -916,9 +971,13 @@ class ObjectResonatorsEngine(SoundEngine):
         """Birth position is defined for Events = Births, Own, Laplace, full = 1."""
         return position_supported(self.params)
 
+    def _birth_strength(self):
+        return float(self.params.get('birth_strength', OPTIONAL_PARAMS['birth_strength']))
+
     def _packet(self, f, born, e, exc):
         """The packet of e > 0 events into the slot of figure f: uniform, or (Birth
-        position) distributed by the births `born` (bool field) inside the figure."""
+        position) distributed by the births `born` (bool field) inside the figure,
+        reshaped by Birth strength (s = 0: the uniform path itself, s = 1: b as is)."""
         s = f.slot
         if self._excitation() != EXC_POSITION:
             self._strike(s, e)
@@ -929,6 +988,10 @@ class ObjectResonatorsEngine(SoundEngine):
             self.last_a[s] = 0.0
             self.last_b[s] = 0.0
             return
+        strength = self._birth_strength()
+        if strength == 0.0:                                 # v5: the Uniform path, no participation needed
+            self._strike(s, e)
+            return
         rows, cols = self._grid.shape
         _freqs, _amps, graph = laplace_modes_of(f.cells, rows, cols, self.f0, self._settings(),
                                                 exc, with_graph=True)
@@ -938,7 +1001,9 @@ class ObjectResonatorsEngine(SoundEngine):
         if len(b) != int(self.ndrive[s]):                     # pragma: no cover  (same law, same L)
             raise RuntimeError(f"engine {ENGINE_ID}: Birth position modes {len(b)} != bank {int(self.ndrive[s])}")
         if total <= ZERO_PART:
-            self.counters[C_ZEROPART] += 1
+            self.counters[C_ZEROPART] += 1                  # no packet at any s > 0 (b = 0, never blended)
+        else:
+            b = birth_strength_profile(b, strength)         # s = 1: b itself
         self._strike(s, e, b)
 
     # -- the block boundary -------------------------------------------------------------
@@ -1064,6 +1129,10 @@ class ObjectResonatorsEngine(SoundEngine):
         super().set_params(params)
         for k, v in OPTIONAL_PARAMS.items():
             self.params.setdefault(k, v)
+        if not valid_birth_strength(self.params['birth_strength']):
+            self.params = old
+            raise ValueError(f"engine {ENGINE_ID}: birth_strength must be a finite number in "
+                             f"{list(BIRTH_STRENGTH_RANGE)}, got {params.get('birth_strength')!r}")
         if self._grid is None:
             return
         if float(self.params['frequency_scale']) != float(old['frequency_scale']):
@@ -1184,6 +1253,7 @@ class ObjectResonatorsEngine(SoundEngine):
                     excitation=ex, excitation_name=CHOICES['excitation'][ex],
                     position_supported=bool(self._position_supported()),
                     position_condition=POSITION_CONDITION,
+                    birth_strength=self._birth_strength(), birth_strength_hint=BIRTH_STRENGTH_HINT,
                     spectrum=spec, spectrum_name=CHOICES['spectrum'][spec], f0=self.f0,
                     laplace=self._settings(),
                     frequency_scale=self._scale(), decay_s=float(self.params['decay_s']),
@@ -1284,6 +1354,9 @@ class ObjectResonatorsEngine(SoundEngine):
                 params.setdefault(k, v)
         if not isinstance(params, dict) or sorted(params) != sorted(p[0] for p in PARAMS):
             raise ValueError(f"engine {ENGINE_ID}: state params do not match the registry")
+        if not valid_birth_strength(params['birth_strength']):
+            raise ValueError(f"engine {ENGINE_ID}: birth_strength of the state must be a finite number in "
+                             f"{list(BIRTH_STRENGTH_RANGE)}, got {params['birth_strength']!r}")
         if float(state.get('out_scale', OUT_SCALE)) != OUT_SCALE:
             raise ValueError(f"engine {ENGINE_ID}: out_scale of the state is not {OUT_SCALE}")
         if float(state.get('laplace_gain', LAPLACE_GAIN)) != LAPLACE_GAIN:
@@ -1432,6 +1505,9 @@ def position_supported(params):
 def inactive(params):
     """Settings that do not act for the current mode (bench: shown as text)."""
     out = {}
+    if int(params.get('excitation', EXC_UNIFORM)) != EXC_POSITION:
+        # stored, shown with its value, acts only with Birth position (v5)
+        out['birth_strength'] = f"{float(params.get('birth_strength', 1.0)):.2f}  Birth position only"
     if int(params.get('spectrum', SPEC_FIGURE)) == SPEC_LAPLACE:
         out['frequency_scale'] = 'Figure law only (f0 = scene)'
         if float(params.get('shape', 0.0)) <= 0.0:

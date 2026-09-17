@@ -351,9 +351,11 @@ class LaplaceLawTests(unittest.TestCase):
         self.assertIn('frequency_scale', inactive)
         self.assertIn('dyn', inactive)                                  # shape = 0: dyn cannot act
         self.assertNotIn('n', inactive)
-        self.assertEqual(spec.inactive(laplace_params(shape=0.5)), {'frequency_scale': inactive['frequency_scale']})
+        self.assertEqual(spec.inactive(laplace_params(shape=0.5)),
+                         {'frequency_scale': inactive['frequency_scale'],
+                          'birth_strength': inactive['birth_strength']})   # Uniform: stored, inactive (2026-09-18)
         fig = spec.inactive(laplace_params(spectrum=orz.SPEC_FIGURE))
-        self.assertEqual(sorted(fig), sorted(orz.SPECTRUM_KEYS))
+        self.assertEqual(sorted(fig), sorted(orz.SPECTRUM_KEYS + ('birth_strength',)))   # + Birth strength with Uniform
         self.assertIn('[Disk, Laplace]', spec.overlay(laplace_params(), 32, 32)['text'])
         self.assertEqual(registry.spectrum_keys('laplacian', orz.ENGINE_ID), orz.SPECTRUM_KEYS)
         self.assertEqual(registry.spectrum_keys('fft2d', orz.ENGINE_ID), ('n',))
@@ -607,7 +609,7 @@ class SideGainAndBenchTests(unittest.TestCase):
         app = db.BenchApp(scene, eng)
         # the whole Objects panel fits: 13 setting rows + the range row + the figure rows + the footer
         n_rows = len(registry.get(orz.ENGINE_ID).params) + len(registry.get(orz.ENGINE_ID).ranges)
-        self.assertEqual(n_rows, 16)                                    # 14 until Events / Excitation (2026-09-17)
+        self.assertEqual(n_rows, 17)                                    # 14 until Events / Excitation, 16 until Birth strength
         self.assertGreaterEqual(app.footer_y, app.params_y + n_rows * db.ROW_H + 6 + db.FIGURE_HEAD_H + app.figure_rows * db.DISPLAY_ROW_H)
         self.assertGreaterEqual(app.height, app.footer_y + 40 + db.MARGIN)
         self.assertLessEqual(app.height, 1000)
@@ -636,7 +638,7 @@ class SideGainAndBenchTests(unittest.TestCase):
             self.assertTrue(self._wait(eng, lambda s: s['sides']['B'][1]['spectrum'] == orz.SPEC_FIGURE))
             app.draw(screen, font, small)
             inactive = app._inactive(orz.ENGINE_ID, eng.snapshot()['sides']['B'][1])
-            self.assertEqual(sorted(inactive), sorted(orz.SPECTRUM_KEYS))
+            self.assertEqual(sorted(inactive), sorted(orz.SPECTRUM_KEYS + ('birth_strength',)))   # + Birth strength with Uniform
             # copy spectrum buttons: B -> A puts the seven onto the Laplace side, A -> B back
             rect = app.spec_btns[('B', 'A')]
             self.assertEqual(app.press((rect[0] + 3, rect[1] + 3), 1), 'spectrum:BA')

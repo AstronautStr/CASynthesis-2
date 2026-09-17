@@ -158,8 +158,8 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(names[:5], ['detector', 'radius_mul', 'spectrum', 'events', 'excitation'])
         e = registry.create(EID, CTX, dict(detector=1, frequency_scale=220.0, decay_s=0.8))
         self.assertEqual((e.params['events'], e.params['excitation']), (0, 0))
-        self.assertEqual(orz.MODEL_VERSION, 'ca_object_resonators_n4_v4')
-        self.assertEqual(orz.STATE_VERSION, 4)
+        self.assertEqual(orz.MODEL_VERSION, 'ca_object_resonators_n4_v5')     # v4 until Birth strength (2026-09-18)
+        self.assertEqual(orz.STATE_VERSION, 5)
         for name in ('n4_spectrum', 'n4_neighbor', 'ol_glider', 'ol_galaxy', 'ol_neighbor', 'ora_r1', 'ora_r2',
                      'ora_a1', 'ora_user034', 'oes_e1', 'oes_m1'):
             sc = load_scene(os.path.join(ROOT, 'demos', name + '.json'))
@@ -717,7 +717,7 @@ class StateTests(unittest.TestCase):
         e.render_float(GAIN)                                       # mid-pulse with per-mode states
         self.assertGreater(float(np.abs(e.zfm).max()), 0.0)
         st = e.export_state()
-        self.assertEqual(st['version'], 4)
+        self.assertEqual(st['version'], 5)
         self.assertEqual(st['model_version'], orz.MODEL_VERSION)
         for name in ('zfm', 'zsm', 'zum', 'npulse', 'last_b'):
             self.assertIn(name, st)
@@ -828,7 +828,7 @@ class SceneTests(unittest.TestCase):
         pygame.init()
         app = db.BenchApp(scene, eng)
         n_rows = len(registry.get(EID).params) + len(registry.get(EID).ranges)
-        self.assertEqual(n_rows, 16)
+        self.assertEqual(n_rows, 17)                                    # 16 until Birth strength (2026-09-18)
         self.assertEqual(app._params_height(EID), n_rows * db.ROW_H)
         self.assertLessEqual(app.height, 1000)
         low = db.BenchApp(scene, eng, max_height=880)
@@ -864,7 +864,7 @@ class SceneTests(unittest.TestCase):
                 return bool(((band[..., 0] > 120) & (band[..., 0] > band[..., 1] + 40)).any())
             self.assertTrue(reddish(y0 + 26, y0 + 44))               # the status line
             self.assertFalse(reddish(y0, y0 + 14))                   # the first line is plain
-            self.assertEqual(db.FIGURE_HEAD_H, 48)
+            self.assertEqual(db.FIGURE_HEAD_H, 62)                   # 4 header lines since Birth strength
         finally:
             eng.stop()
             pygame.quit()

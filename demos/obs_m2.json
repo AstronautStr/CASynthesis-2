@@ -1,7 +1,7 @@
 {
  "format": 2,
- "id": "oes_e1",
- "title": "E1 - Рождения / смерти: Events Births / Deaths (Octagon II p5)",
+ "id": "obs_m2",
+ "title": "M2 - Сила места рождения: Birth strength 1 / 4 (Jam p3)",
  "grid": {
   "rows": 32,
   "cols": 32
@@ -25,11 +25,15 @@
   ],
   [
    9,
-   8
+   7
   ],
   [
    9,
-   13
+   10
+  ],
+  [
+   9,
+   12
   ],
   [
    10,
@@ -37,39 +41,23 @@
   ],
   [
    10,
-   14
+   11
   ],
   [
    11,
    7
-  ],
-  [
-   11,
-   14
   ],
   [
    12,
+   10
+  ],
+  [
+   13,
    8
-  ],
-  [
-   12,
-   13
   ],
   [
    13,
    9
-  ],
-  [
-   13,
-   12
-  ],
-  [
-   14,
-   10
-  ],
-  [
-   14,
-   11
   ]
  ],
  "rule": "B3/S23",
@@ -80,7 +68,7 @@
   "level": 1.0,
   "side_gain": {
    "A": 1.0,
-   "B": 0.93
+   "B": 0.92
   }
  },
  "variants": {
@@ -91,7 +79,7 @@
     "radius_mul": 1.0,
     "spectrum": 1,
     "events": 1,
-    "excitation": 0,
+    "excitation": 1,
     "birth_strength": 1.0,
     "frequency_scale": 220.0,
     "decay_s": 1.39,
@@ -111,9 +99,9 @@
     "detector": 0,
     "radius_mul": 1.0,
     "spectrum": 1,
-    "events": 2,
-    "excitation": 0,
-    "birth_strength": 1.0,
+    "events": 1,
+    "excitation": 1,
+    "birth_strength": 4.0,
     "frequency_scale": 220.0,
     "decay_s": 1.39,
     "attack_ms": 4.0,
@@ -128,5 +116,5 @@
   }
  },
  "initial_side": "A",
- "listen": "1 / 2: А — Objects / Laplace, Events Births, Excitation Uniform / Б — Objects / Laplace, Events Deaths, Excitation Uniform. Notes: hypothesis and your listening result. Events / Excitation are the buttons of the Objects panel."
+ "listen": "1 / 2: А — Objects / Laplace, Births, Birth position, Birth strength 1 / Б — Objects / Laplace, Births, Birth position, Birth strength 4. Notes: hypothesis and your listening result. Birth strength is the knob under Excitation on the Objects panel (0 = uniform strike, 1 = original, >1 = stronger selection); a manual change of it may change the loudness."
 }

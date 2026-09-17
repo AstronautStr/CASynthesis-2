@@ -106,8 +106,6 @@
     "detector": 1,
     "radius_mul": 1.0,
     "spectrum": 1,
-    "events": 0,
-    "excitation": 0,
     "frequency_scale": 220.0,
     "decay_s": 1.39,
     "attack_ms": 0.0,
@@ -117,7 +115,10 @@
     "shape": 0.95,
     "harm": 0.87,
     "fullshape": 1,
-    "dyn": 0.87
+    "dyn": 0.87,
+    "events": 0,
+    "excitation": 0,
+    "birth_strength": 1.0
    }
   },
   "B": {
@@ -126,8 +127,6 @@
     "detector": 1,
     "radius_mul": 2.0,
     "spectrum": 1,
-    "events": 0,
-    "excitation": 0,
     "frequency_scale": 220.0,
     "decay_s": 1.39,
     "attack_ms": 0.0,
@@ -137,7 +136,10 @@
     "shape": 0.95,
     "harm": 0.87,
     "fullshape": 1,
-    "dyn": 0.87
+    "dyn": 0.87,
+    "events": 0,
+    "excitation": 0,
+    "birth_strength": 1.0
    }
   }
  },

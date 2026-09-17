@@ -71,7 +71,7 @@ def laplace_side():
 
 def objects_side(radius_mul):
     return (ENGINE_ID, dict(detector=DET_DISK, radius_mul=float(radius_mul), spectrum=SPEC_LAPLACE,
-                            frequency_scale=SCALE_HZ, decay_s=DECAY_S, attack_ms=0.0, events=0, excitation=0, **SPECTRUM))
+                            frequency_scale=SCALE_HZ, decay_s=DECAY_S, attack_ms=0.0, events=0, excitation=0, birth_strength=1.0, **SPECTRUM))
 
 
 def preflight_cells(case):
