@@ -648,7 +648,7 @@ def test_registry_ui_hints_and_scene_validation():
     app = db.BenchApp(scene, eng)
     assert app.engine_rows == 4 and len(app.engine_btns) == 15     # N4 added ca_object_resonators; 4 per row since 2026-09-17
     ys = sorted({r[1] for r in app.engine_btns.values()})
-    assert len(ys) == 5 and app.params_y > ys[-1] + db.ENG_H
+    assert len(ys) == 4 and app.params_y > ys[-1] + db.ENG_H
     assert app.footer_y >= app.params_y + 7 * db.ROW_H
     rows = dict((s[0], r) for s, r in app._param_rows('scan_surface'))
     rects = app._choice_rects('scan_surface', 'path', rows['path'][1])
