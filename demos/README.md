@@ -582,6 +582,44 @@ the galaxy, levels / continuation / timing of the scenes, no packet from setting
 Restore, L3 events at x1 / x1.5 and the live lever, L2 voices and the mode-return rule,
 stress probes and the cost of the Laplace law by size, catalog check).
 
+## Objects -- event source and modal excitation (2026-09-17)
+
+REQ `memory/req-objects-event-source-modal-2026-09-17.md`.  The Objects engine (v4,
+`ca_object_resonators_n4_v4`, snapshot 4; v3 / v2 snapshots restore as Both / Uniform)
+has two more word-button settings: **Events** Both / Births / Deaths selects the source of
+new packets (Both = the previous path bit for bit; Births `e = |births & K_cur|`; Deaths
+`e = |deaths & K_prev|`, a new bank gets no packet, a bank that loses its identity takes ONE
+last packet of the deaths inside its previous mask into its tail slot -- the tail feeds its
+modes until that pulse is below 1e-7, never again); **Excitation** Uniform / Birth position
+distributes one packet between the driven modes: Uniform adds `a` to every mode (the previous
+path), Birth position is defined for Births + Own + Laplace + full and gives mode j
+`delta_j = a b_j`, `b_j = sqrt(m p_j / sum p)`, `p_j` = the born cells' summed squared
+eigenvector entries averaged over the degenerate group of the mode (sign- and basis-invariant);
+`sum b_j^2 = m` like Uniform.  The packet enters the pulse states OF THE MODE (per-mode pulse /
+Attack states `zfm / zsm / zum`), never the output weights: a strike never recolours a ringing
+tail.  Outside its combination Birth position makes NO packet (the panel says so in red,
+`unsupported_packets` counts; never a uniform strike instead).  Switching either setting never
+makes a packet.
+
+Entry: **`run_objects_event_source_modal.bat`** opens the bench on the CATALOG screen of
+`lab_catalog/objects_event_source_modal_2026_09_17/` (build once with
+`python demos/build_objects_event_source.py`; refuses a catalog that holds records or an
+uncommitted sound set).  Both records: 32 x 32 torus, B3/S23, 6 gen/s, 12 s, f0 110 Hz, cells =
+the preflight `memory/research/objects-event-source-modal-preflight-2026-09-17.json`, both
+sides Objects / Laplace with the preflight settings (Own, full, part 3, spread 1, harm 0.87,
+Decay 1.39, Attack 4 ms, shape / alpha / dyn 0): **E1** `oes_e1` Octagon II p5, A Events Births
+/ B Events Deaths (Uniform both); **M1** `oes_m1` Jam p3, Births both, A Uniform / B Birth
+position.  Side gain B 0.93 on both: the integral RMS after the first 2 s of A and B within
+0.1 dB (the start fills the field and is measured apart).  Gates: `tests/test_objects_event_source.py`
+(1o).  Measurements: `python demos/objects_event_source_report.py` ->
+`demos/results/objects_event_source/report.{json,md}` (E1 packets against independent masks,
+manual events and the vanished figure's tail, M1 side-by-side equality and the preflight
+coefficients, the single-birth transfer / zero participation / degenerate groups / translation /
+rotation, superposition and Attack on per-mode packets, levels / continuation / timing of the
+scenes, catalog check).  The bench panel: `ROW_H` 20 (16 rows), the 'Birth position' button is
+92 px wide, a third header line of the Objects display shows events / excitation (`FIGURE_HEAD_H`
+48).
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B

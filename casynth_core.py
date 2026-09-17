@@ -243,7 +243,7 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=
 
 
 def laplacian_modes(L, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.0,
-                    harm=0.0, dyn=0.0, e_ev=None):
+                    harm=0.0, dyn=0.0, e_ev=None, return_index=False):
     """The spectral part of map_laplacian on a READY Laplacian matrix (2026-09-17,
     REQ memory/req-objects-laplace-comparison-2026-09-17.md): eigen-decomposition,
     normalisation of the lowest mode to f0, anti-alias guard, mode selection
@@ -257,42 +257,45 @@ def laplacian_modes(L, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.
            edges gives zeros).
     e_ev : per-node dynamic excitation (N,) in the node order of L, or None; used
            only when shape > 0 and dyn > 0 (map_laplacian passes exc[patch > 0]).
-    Returns (freqs, amps), each (n,), zero-padded."""
+    return_index : also return the eigen-order indices (ascending eigenvalues of
+           L, the zero mode included in the numbering) of the selected modes --
+           int64 (num,), num = the non-zero prefix of `freqs` (2026-09-17, REQ
+           memory/req-objects-event-source-modal-2026-09-17.md: the bench's Objects
+           engine needs the eigenvectors of exactly these modes).  The numbers of
+           the two returned arrays never depend on the flag.
+    Returns (freqs, amps), each (n,), zero-padded [, idx]."""
     L = np.asarray(L, dtype=float)
     # sqrt(lambda) is proportional to resonant mode frequency (membrane analogy).
     # shape>0 needs eigenvectors; shape==0 uses the faster eigvalsh-only path.
     if shape > 0.0:
         eigs, vecs = np.linalg.eigh(L)
-        nonzero_mask = eigs > 1e-6
-        nonzero_idx = np.where(nonzero_mask)[0]
-        nonzero_sq = np.sqrt(np.maximum(eigs[nonzero_mask], 0.0))
     else:
         eigs = np.linalg.eigvalsh(L)
-        nonzero_sq = np.sqrt(np.maximum(eigs[eigs > 1e-6], 0.0))
+    nonzero_mask = eigs > 1e-6
+    nonzero_idx = np.where(nonzero_mask)[0]
+    nonzero_sq = np.sqrt(np.maximum(eigs[nonzero_mask], 0.0))
 
     if len(nonzero_sq) == 0:
-        return np.zeros(n), np.zeros(n)
+        return (np.zeros(n), np.zeros(n), np.zeros(0, np.int64)) if return_index else (np.zeros(n), np.zeros(n))
 
     # Normalize: lowest mode -> f0; others proportionally higher
     scale = f0 / nonzero_sq[0]
     mode_freqs = nonzero_sq * scale
 
-    # Anti-alias guard -- track column indices when eigenvectors are needed
-    if shape > 0.0:
-        guard_mask = mode_freqs < _GUARD
-        survived_idx = nonzero_idx[guard_mask]
-        mode_freqs = mode_freqs[guard_mask]
-    else:
-        mode_freqs = mode_freqs[mode_freqs < _GUARD]
+    # Anti-alias guard (the column indices are tracked for the eigenvectors)
+    guard_mask = mode_freqs < _GUARD
+    survived_idx = nonzero_idx[guard_mask]
+    mode_freqs = mode_freqs[guard_mask]
 
     if len(mode_freqs) == 0:
-        return np.zeros(n), np.zeros(n)
+        return (np.zeros(n), np.zeros(n), np.zeros(0, np.int64)) if return_index else (np.zeros(n), np.zeros(n))
 
     # Choose which modes sound (spread spans low->whole-spectrum); index 0 stays f0
     sel = _select_modes(len(mode_freqs), n, spread)
     num = len(sel)
     freqs = np.zeros(n)
     freqs[:num] = mode_freqs[sel]
+    final_idx = np.asarray(survived_idx[sel], np.int64)
 
     # Harmonic quantisation: pull frequency ratios toward nearest integer multiple
     # of f0.  harm=0 -> no change (bit-for-bit); harm=1 -> fully quantised.
@@ -329,7 +332,6 @@ def laplacian_modes(L, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.
                     e = (1.0 - dyn) * e_hat_deg + dyn * e_hat_ev
 
             # Columns of vecs that survived both masks and the mode selection
-            final_idx = survived_idx[sel]
             proj = np.array([abs(float(np.dot(e, vecs[:, j]))) for j in final_idx])
             mx_proj = proj.max()
             if mx_proj > 1e-9:
@@ -343,6 +345,8 @@ def laplacian_modes(L, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.
             amps[:num] = blended
         else:
             amps[:num] = rolloff
+    if return_index:
+        return freqs, amps, final_idx
     return freqs, amps
 
 

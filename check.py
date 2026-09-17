@@ -21,6 +21,7 @@ Gates (any FAIL -> exit 1):
   1l. objects N4       python tests/test_n4_object_resonators.py (figure banks, circular detectors)
   1m. objects/Laplace  python tests/test_objects_laplace.py       (Laplace law in Objects, tail rules, side gain)
   1n. objects radius/attack python tests/test_objects_radius_attack.py (radius range, full masks, attack)
+  1o. objects events/modal python tests/test_objects_event_source.py (Births / Deaths, Birth position)
   2. golden master     python tests/golden/golden_master.py       (audio, byte-exact)
   3. ui frame + smoke  CASYNTH_DUMPFRAME render of gol_synth.py   (pixel-exact vs
                        tests/golden/ui_frame.png; doubles as the import/init smoke)
@@ -151,6 +152,12 @@ def main():
 
     results.append(("objects radius / attack (radius range, full masks, attack)",
                     _run("Objects radius / attack tests", [py, os.path.join("tests", "test_objects_radius_attack.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"},
+                         timeout=900)))
+
+    results.append(("objects events / modal excitation (Births / Deaths, Birth position)",
+                    _run("Objects event-source tests", [py, os.path.join("tests", "test_objects_event_source.py")],
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"},
                          timeout=900)))

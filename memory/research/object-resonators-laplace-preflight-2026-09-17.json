@@ -670,12 +670,11 @@
         0,
         1,
         2,
-        3,
         4,
         5,
-        6,
-        7
-      ]
+        6
+      ],
+      "comparison_note": "Corrected 2026-09-17: compare nonzero modes, not lengths of zero-padded arrays. Generations 3 and 7 have only 3 positive modes per component, so n=4 and n=12 are equivalent."
     },
     "spread": {
       "value": 1.0,

@@ -530,7 +530,7 @@ class BenchTests(unittest.TestCase):
         app = db.BenchApp(scene, eng)
         n_rows = len(registry.get(EID).params) + len(registry.get(EID).ranges)
         self.assertEqual(app._params_height(EID), n_rows * db.ROW_H)
-        self.assertGreaterEqual(app.footer_y, app.params_y + n_rows * db.ROW_H + 6 + 34 + app.figure_rows * db.DISPLAY_ROW_H)
+        self.assertGreaterEqual(app.footer_y, app.params_y + n_rows * db.ROW_H + 6 + db.FIGURE_HEAD_H + app.figure_rows * db.DISPLAY_ROW_H)
         self.assertLessEqual(app.height, 1000)
         self.assertEqual(app.figure_rows, db.FIGURE_ROWS_MAX)
         # a low desktop (960 px, 2026-09-17): the figure rows give way, the window fits
@@ -761,7 +761,7 @@ class AttackTests(unittest.TestCase):
         spec = registry.get(EID).spec_of('attack_ms')
         self.assertEqual(spec, ('attack_ms', 'Attack', 0.0, 20.0, False, 0.0))
         self.assertEqual(orz.OPTIONAL_PARAMS['attack_ms'], 0.0)
-        self.assertEqual((orz.MODEL_VERSION, orz.STATE_VERSION), ('ca_object_resonators_n4_v3', 3))
+        self.assertEqual((orz.MODEL_VERSION, orz.STATE_VERSION), ('ca_object_resonators_n4_v4', 4))   # v3 until Events / Excitation
 
     def test_attack_zero_is_the_previous_path_bit_for_bit(self):
         """The v1/v2 scalar reference of the N4 gate (no attack in its formulas) equals the
@@ -874,7 +874,7 @@ class AttackTests(unittest.TestCase):
         self.assertGreater(int(e.ints[orz.I_Q_LEFT]), 0)
         self.assertNotEqual(float(e.zu[0]), 0.0)
         st = e.export_state()
-        self.assertEqual(st['version'], 3)
+        self.assertEqual(st['version'], 4)
         for name in ('zu', 'qq'):
             self.assertIn(name, st)
         twin = registry.create(EID, CTX, dict(e.params))

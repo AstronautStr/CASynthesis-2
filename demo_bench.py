@@ -63,10 +63,11 @@ PANEL_W = 270
 TAB_W, TAB_H = 96, 30
 ARROW_W = 28
 ENG_W, ENG_H = 62, 24        # 4 engine buttons per row (74 / 3 per row until 2026-09-17)
-ROW_H = 22                   # 26 until 2026-09-17: Objects has 13 knobs + a range row; the window must fit a 960 px desktop
+ROW_H = 20                   # 26 until 2026-09-17, 22 until Events / Excitation: Objects has 15 knobs + a range row; the window must fit a 960 px desktop
 ENG_PER_ROW = 4
 FIGURE_ROWS_MAX = 8          # figure rows of the Objects display reserved below the knobs (fewer on a low desktop)
 FIGURE_ROWS_MIN = 3
+FIGURE_HEAD_H = 48           # header lines of the Objects display above its figure rows (3 x 14 + gap; 34 until 2026-09-17)
 DISPLAY_ROW_H = 14           # one bar row of an engine display (W links / node u)
 SLIDER_W = 120
 RANGE_FIELD_W = 54           # Min / Max field of a ranged knob (2026-09-17)
@@ -202,7 +203,7 @@ class BenchApp:
             self.footer_y = max(self.params_y + self.param_rows_max * ROW_H + 8,
                                 self.params_y + 4 * ROW_H + 6 + 18 + 8 * DISPLAY_ROW_H + 8,
                                 # N4 Objects: the parameter rows + the figure rows of its display
-                                self.params_y + self.param_rows_max * ROW_H + 6 + 34
+                                self.params_y + self.param_rows_max * ROW_H + 6 + FIGURE_HEAD_H
                                 + self.figure_rows * DISPLAY_ROW_H + 8)
             self.height = max(base_height, self.footer_y + 44 + MARGIN)
             if max_height is None or self.height <= max_height or self.figure_rows <= FIGURE_ROWS_MIN:
@@ -299,7 +300,8 @@ class BenchApp:
         would sit at y = sy: [(value, rect)]."""
         names = registry.get(eid).choices.get(name, ())
         n = max(1, len(names))
-        w = min(60, (PANEL_W - 82 - 4 * (n - 1)) // n)
+        cap = 60 if max((len(t) for t in names), default=0) <= 8 else 92      # 'Birth position' (2026-09-17)
+        w = min(cap, (PANEL_W - 82 - 4 * (n - 1)) // n)
         return [(v, (self.slider_x + v * (w + 4), sy - 4, w, 18)) for v in range(len(names))]
 
     @staticmethod
@@ -1263,10 +1265,21 @@ class BenchApp:
             screen.blit(small.render(f"R x{float(disp.get('radius_mul', 1.0)):.3f}   {law}   decay "
                                      f"{float(disp['decay_s']):.2f} s{ramp}   a | level", True, C_DIM),
                         (x, y + 14))
+            # v4 (2026-09-17): the event source and the packet distribution; Birth position
+            # outside its combination makes NO packets -- said here, never a uniform strike
+            if 'events_name' in disp:
+                ex_pos = int(disp.get('excitation', 0)) == 1
+                if ex_pos and not disp.get('position_supported', True):
+                    line, col = f"no packets: {disp.get('position_condition', '')}", C_ERR
+                else:
+                    line, col = f"events {disp['events_name']}   excitation {disp.get('excitation_name', '?')}", C_DIM
+                if disp.get('unsupported_packets') or disp.get('zero_participation'):
+                    line += f"   refused {disp.get('unsupported_packets', 0)} zero {disp.get('zero_participation', 0)}"
+                screen.blit(small.render(line, True, col), (x, y + 28))
             bar_x, bar_w = x + 98, 76
             shown = [f for f in disp['figures'] if f['slot'] >= 0][:self.figure_rows]
             for k, f in enumerate(shown):
-                ry = y + 34 + k * DISPLAY_ROW_H
+                ry = y + FIGURE_HEAD_H + k * DISPLAY_ROW_H
                 col = C_FIGURES[int(f['color']) % len(C_FIGURES)]
                 _pg.draw.rect(screen, col, (x, ry, 8, 8))
                 screen.blit(small.render(f"#{f['id']} {f['n']}c {f['modes']}m", True, C_DIM), (x + 12, ry - 2))

@@ -461,7 +461,7 @@ class BenchTests(unittest.TestCase):
         eng = LiveEngine(runner, sink=lambda m, b: None)
         pygame.init()
         app = db.BenchApp(scene, eng)
-        self.assertEqual(app.engine_rows, 5)
+        self.assertEqual(app.engine_rows, 4)          # 4 engines per row since 2026-09-17
         self.assertIn(en.ENGINE_ID, app.engine_btns)
         self.assertIn(gp.ENGINE_ID, app.engine_btns)
         self.assertGreater(app.height - app.footer_y, 40)

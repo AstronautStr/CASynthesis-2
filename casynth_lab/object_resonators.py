@@ -53,12 +53,45 @@ change, a Restore add nothing):
     then centre displacement <= 1.5 cells; split / merge -> old figures to tails,
     new identities)
     births = G & ~G_prev ;  deaths = G_prev & ~G
-    continuing figure : e = sum(births * K_cur) + sum(deaths * K_prev)
-    new figure        : e = sum(births * K_cur)
+    `events` (v4, 2026-09-17, REQ memory/req-objects-event-source-modal-2026-09-17.md)
+    = Both / Births / Deaths selects the SOURCE of new packets (both kinds stay
+    positive events; a death is never a negative pulse):
+    continuing figure : Both   e = sum(births * K_cur) + sum(deaths * K_prev)
+                        Births e = sum(births * K_cur)
+                        Deaths e = sum(deaths * K_prev)
+    new figure        : Both / Births e = sum(births * K_cur);  Deaths: no packet
+                        (the appearance of a bank is not an event)
+    figure that lost its identity (left the field, split, merge):
+                        Both / Births: no packet, its bank rings out as a tail
+                        (the previous life cycle);  Deaths: ONE last packet
+                        e = sum(deaths * K_prev) on its previous resonances -- the
+                        bank goes to its tail slot WITH its pulse states and the
+                        strike, the tail feeds the modes it drove (`npulse`) until
+                        that pulse has decayed below TAIL_FLOOR, never again
     a = e / (e + 2)  -> added to BOTH pulse states of the figure's slot
     (K_prev = the detector of the figure's previous geometry in the CURRENT mode).
-    A fresh init compares the initial field with zeros once (one starting packet);
-    a figure that left the field gets no packet any more and rings out as a tail.
+    A fresh init compares the initial field with zeros once (one starting packet
+    for Both / Births -- every cell is a birth; none for Deaths); a switch of
+    `events` never makes a packet.  Both is bit for bit the previous path.
+    `excitation` (v4) = Uniform / Birth position distributes ONE packet between
+    the driven modes: Uniform adds a to the slot's pulse states (every mode gets
+    the same pulse -- the previous path); Birth position is defined for the
+    combination Events = Births, Detector = Own, Spectrum = Laplace, full = on
+    (registry hint `inactive` shows the condition otherwise; a parameter set that
+    still holds it outside the condition makes NO packet -- counted `unsupported`,
+    never replaced by a uniform strike).  For the set B of births inside the
+    figure (its new cells), the normalised eigenvectors phi of its full torus
+    Laplacian in the node order of the graph, the m selected modes j and the
+    degenerate group Q(j) = {k : |lambda_k - lambda_j| <= 1e-8 max(1, |lambda_j|)}
+    of the WHOLE spectrum (before the part / spread selection):
+        p_j = sum_{i in B} sum_{k in Q(j)} phi_k(i)^2 / |Q(j)|
+        b_j = sqrt(m p_j / sum_l p_l)       (sum_j b_j^2 = m, like Uniform's b = 1)
+        delta_j = a b_j  -> added to the pulse states OF MODE j (zfm / zsm)
+    sum_l p_l <= 1e-12: no mode gets the packet (counted `zero_participation`).
+    The per-mode pulse states keep every past packet with its own coefficients
+    (a new mode of a retune starts with none, a vanished mode's states leave
+    with it); the output weights are untouched -- a packet never recolours a
+    ringing tail.
     A continuing figure keeps its id, colour, pulse and resonator states; its
     frequencies are updated (mode j -> mode j, ascending frequency), NEW modes start
     from zero, modes that VANISHED leave the bank: they ring on undriven at their
@@ -74,9 +107,14 @@ tails, fading tails):
     u_s   = q u_s + (1 - q) p_s                                     Attack (v3, 2026-09-17):
                                                                    one causal pole on the
                                                                    pulse before the bank
+    for the modes j < n_pulse of the slot (v4): the same pulse + smoothing on the
+        per-mode states (zfm, zsm, zum)[s, j] -> u_sj  (exactly 0 while they are 0)
     for the modes j < n_live of the slot:
-        z_j' = r e^{i theta_j} z_j  (+ u_s if j < n_driven)         theta_j = 2 pi f_j / SR
+        z_j' = r e^{i theta_j} z_j  (+ (u_s + u_sj) if j < n_pulse)  theta_j = 2 pi f_j / SR
         b_s += w_j Re z_j'                                           w_j = ramped weight
+    n_pulse = n_driven for an active slot; for a tail `npulse` = 0 -- except a
+    tail that took the last Deaths packet with it (its old n_driven until the
+    pulse states are below TAIL_FLOOR at a block boundary).
     L += panL_s b_s ;  R += panR_s b_s                             p = cx / (cols - 1),
                                                                    L / R = cos / sin(pi p / 2)
     hp[k] = h (hp[k-1] + mix[k] - mix[k-1])  per channel, h = exp(-2 pi 20 / SR)
@@ -124,14 +162,16 @@ snapshot / parameter set = Figure), `frequency_scale` (55..880 Hz, default 220;
 Figure law only: retunes every Figure-tuned slot at once, states kept),
 `decay_s` (0.20..1.50 s, default 0.80; r ramp 20 ms), `attack_ms` ("Attack",
 0..20 ms, default 0 = the previous pulse exactly; q ramp 20 ms; absent from an
-older parameter set / snapshot = 0), and the seven Laplace settings (Laplace law
-only; absent from an older snapshot = their defaults).
-Only SR 44100 / block 352 / stereo.  Own model_version / STATE_VERSION (v3 = the
-Attack state: `zu`, `qq`, a fourth counter; a v2 snapshot of model v2 is accepted
-as Attack 0 with those at zero -- bit for bit the v2 sound); the snapshot holds
-every slot array, the tracker (ids, slots, cells, centres, radii), the id
-counter, both fields and both excitations, the ramps, the DC filters and the
-gain.
+older parameter set / snapshot = 0), `events` ("Events", Both / Births / Deaths,
+default Both; absent = Both), `excitation` ("Excitation", Uniform / Birth
+position, default Uniform; absent = Uniform), and the seven Laplace settings
+(Laplace law only; absent from an older snapshot = their defaults).
+Only SR 44100 / block 352 / stereo.  Own model_version / STATE_VERSION (v4 = the
+per-mode pulse states `zfm` / `zsm` / `zum`, `npulse`, `last_b`, two more
+counters; a v3 snapshot of model v3 is accepted with those at zero, a v2 snapshot of model v2 additionally as Attack 0 --
+bit for bit the older sound); the snapshot holds every slot array, the tracker
+(ids, slots, cells, centres, radii), the id counter, both fields and both
+excitations, the ramps, the DC filters and the gain.
 """
 import math
 
@@ -162,20 +202,30 @@ RADIUS_RANGE = (0.25, 4.0)             # default slider range of Radius x (the v
 PARAMS = [('detector', 'Detector', 0, 1, True, 1),
           ('radius_mul', 'Radius x', 0.0, math.inf, False, 1.0),
           ('spectrum', 'Spectrum', 0, 1, True, 1),
+          ('events', 'Events', 0, 2, True, 0),
+          ('excitation', 'Excitation', 0, 1, True, 0),
           ('frequency_scale', 'Freq scale', 55.0, 880.0, False, 220.0),
           ('decay_s', 'Decay', 0.20, 1.50, False, 0.80),
           ('attack_ms', 'Attack', 0.0, 20.0, False, 0.0)] + list(LAPLACE_PARAMS)
 # absent from older snapshots / parameter sets: the bit-exact v1 behaviour (Figure law)
-OPTIONAL_PARAMS = {'radius_mul': 1.0, 'spectrum': 0, 'attack_ms': 0.0}
+OPTIONAL_PARAMS = {'radius_mul': 1.0, 'spectrum': 0, 'attack_ms': 0.0, 'events': 0, 'excitation': 0}
 OPTIONAL_PARAMS.update({p[0]: p[5] for p in LAPLACE_PARAMS})
-CHOICES = {'detector': ('Own', 'Disk'), 'spectrum': ('Figure', 'Laplace')}
+CHOICES = {'detector': ('Own', 'Disk'), 'spectrum': ('Figure', 'Laplace'),
+           'events': ('Both', 'Births', 'Deaths'), 'excitation': ('Uniform', 'Birth position')}
 DET_OWN, DET_DISK = 0, 1
 SPEC_FIGURE, SPEC_LAPLACE = 0, 1
-MODEL_VERSION = 'ca_object_resonators_n4_v3'
-STATE_VERSION = 3
+EV_BOTH, EV_BIRTHS, EV_DEATHS = 0, 1, 2
+EXC_UNIFORM, EXC_POSITION = 0, 1
+POSITION_CONDITION = 'needs Births / Own / Laplace / full'      # the combination Birth position is defined for
+MODEL_VERSION = 'ca_object_resonators_n4_v4'
+STATE_VERSION = 4
 # older snapshots this engine restores (state version -> model version): the v2 state
-# (no Attack) is the v3 state with zu / qq / the attack ramp counter at zero
-COMPATIBLE_STATES = {2: 'ca_object_resonators_n4_v2'}
+# (no Attack) is the v3 state with zu / qq / the attack ramp counter at zero; the v3
+# state (no Events / Excitation) is the v4 state with the per-mode pulse states at
+# zero, npulse = ndrive of the active slots and the two new counters at zero
+COMPATIBLE_STATES = {2: 'ca_object_resonators_n4_v2', 3: 'ca_object_resonators_n4_v3'}
+DEGEN_TOL = 1e-8                       # Birth position: |lambda_k - lambda_j| <= DEGEN_TOL max(1, |lambda_j|) = one group
+ZERO_PART = 1e-12                      # Birth position: sum of participations at or below this -> no packet
 ATTACK_LN9 = math.log(9.0)             # 10 -> 90 % of a one-pole step response takes ln 9 time constants
 SR_REQUIRED = en.SR_REQUIRED
 BLOCK_REQUIRED = en.BLOCK_REQUIRED
@@ -200,7 +250,8 @@ I_K, I_R_LEFT, I_G_LEFT, I_Q_LEFT = range(4)
 R_CUR, R_TGT, R_INC = range(3)
 P_LCUR, P_LINC, P_LTGT, P_RCUR, P_RINC, P_RTGT = range(6)
 H_PREV, H_MIX = range(2)
-C_EVICT, C_DROP, C_UNVOICED, C_CHANGES, C_INPLACE = range(5)
+C_EVICT, C_DROP, C_UNVOICED, C_CHANGES, C_INPLACE, C_ZEROPART, C_UNSUPPORTED = range(7)
+N_COUNTERS = 7
 
 
 def decay_r(t60_s, sr=SR_REQUIRED):
@@ -237,12 +288,16 @@ def laplace_settings(params):
     return {k: params.get(k, OPTIONAL_PARAMS[k]) for k in SPECTRUM_KEYS}
 
 
-def laplace_modes_of(cells, rows, cols, f0, settings, exc=None):
+def laplace_modes_of(cells, rows, cols, f0, settings, exc=None, with_graph=False):
     """(freqs, amps) of the old Laplace law on ONE component: `cells` (N, 2) of the
     field (any placement, across the seam too), `settings` the seven keys, `exc`
     the events field of the transition (rows, cols) or None.  amps are the
     map_laplacian amplitudes (before LAPLACE_GAIN); both arrays hold only the
-    selected modes (no zero padding)."""
+    selected modes (no zero padding).  with_graph (full = 1 only): also the graph
+    of the law -- dict(L, order, idx): the Laplacian of the canonical placement,
+    the permutation of `cells` into its node order (node k = cells[order[k]]) and
+    the eigen-order indices of the selected modes (casynth_core.laplacian_modes
+    return_index) -- None for full = 0 (the 8 x 8 window law has no such graph)."""
     cells = np.asarray(cells, np.int64)
     n = int(settings['n'])
     spread, alpha = float(settings['spread']), float(settings['alpha'])
@@ -251,9 +306,15 @@ def laplace_modes_of(cells, rows, cols, f0, settings, exc=None):
     e_nodes = None
     if exc is not None and shape > 0.0 and dyn > 0.0:
         e_nodes = np.asarray(exc, dtype=float)[cells[order, 0], cells[order, 1]].astype(float)
+    graph = None
     if int(settings['fullshape']):
         L = fg.laplacian_matrix(canon, rows, cols)
-        freqs, amps = laplacian_modes(L, float(f0), n, spread, alpha, shape, harm, dyn, e_nodes)
+        if with_graph:
+            freqs, amps, idx = laplacian_modes(L, float(f0), n, spread, alpha, shape, harm, dyn, e_nodes,
+                                               return_index=True)
+            graph = dict(L=L, order=order, idx=idx)
+        else:
+            freqs, amps = laplacian_modes(L, float(f0), n, spread, alpha, shape, harm, dyn, e_nodes)
     else:
         h, w = int(canon[:, 0].max()) + 1, int(canon[:, 1].max()) + 1
         sub = np.zeros((h, w), np.uint8)
@@ -266,12 +327,45 @@ def laplace_modes_of(cells, rows, cols, f0, settings, exc=None):
             exc_patch = _crop_like_extract(esub, sub, PATCH_SIZE)
         freqs, amps = map_laplacian(patch, float(f0), n, spread, alpha, shape, harm, False, dyn, exc_patch)
     num = int(np.count_nonzero(freqs))                    # the selected modes are the non-zero prefix
+    if with_graph:
+        return freqs[:num].copy(), amps[:num].copy(), graph
     return freqs[:num].copy(), amps[:num].copy()
 
 
+def degenerate_groups(lam, idx, tol=DEGEN_TOL):
+    """[int64 array] for every eigen index in `idx`: the indices k of the WHOLE
+    spectrum `lam` (ascending) with |lam_k - lam_j| <= tol max(1, |lam_j|)."""
+    lam = np.asarray(lam, np.float64)
+    return [np.nonzero(np.abs(lam - lam[j]) <= tol * max(1.0, abs(float(lam[j]))))[0] for j in idx]
+
+
+def birth_position_weights(L, idx, born):
+    """(b, total): the Birth position coefficients of the module docstring for the
+    selected modes `idx` (eigen-order indices of L) and the births `born` (bool (N,)
+    in the node order of L): p_j = the mean over the degenerate group of j of the
+    summed squared eigenvector entries at the born nodes (invariant to the sign and
+    to a rotation of the basis inside the group), b_j = sqrt(m p_j / sum p); with
+    sum p <= ZERO_PART (no born node takes part in any selected mode) b = 0 and
+    the caller makes no packet.  total = sum p."""
+    idx = np.asarray(idx, np.int64)
+    m = int(len(idx))
+    if m == 0:
+        return np.zeros(0), 0.0
+    lam, vecs = np.linalg.eigh(np.asarray(L, np.float64))
+    born = np.asarray(born, bool)
+    part = (vecs[born, :] ** 2).sum(axis=0) if born.any() else np.zeros(len(lam))
+    p = np.empty(m)
+    for t, group in enumerate(degenerate_groups(lam, idx)):
+        p[t] = float(part[group].sum()) / len(group)
+    total = float(p.sum())
+    if total <= ZERO_PART:
+        return np.zeros(m), total
+    return np.sqrt(m * p / total), total
+
+
 @_jit
-def _render(n, out, role, ndrive, nlive, zre, zim, cth, sth, wcur, winc, wtgt, wleft,
-            zf, zs, zu, pan, pleft, rr, gg, qq, ints, cst, hp_h, hp, out_scale, level):
+def _render(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth, wcur, winc, wtgt, wleft,
+            zf, zs, zu, zfm, zsm, zum, pan, pleft, rr, gg, qq, ints, cst, hp_h, hp, out_scale, level):
     """`n` samples into out (n, 2) = the formulas of the module docstring INCLUDING
     OUT_SCALE and the ramped gain.  level[s] = max |b_s| over the block (display)."""
     S = role.shape[0]
@@ -339,7 +433,9 @@ def _render(n, out, role, ndrive, nlive, zre, zim, cth, sth, wcur, winc, wtgt, w
             u = q * zu[s] + (1.0 - q) * p        # Attack: q = 0 gives exactly p
             zu[s] = u
             p = u
-            nd = ndrive[s]
+            # the fed modes: an active slot drives n_driven, a tail only what its last
+            # packet (Deaths) left it -- npulse (0 for an ordinary tail)
+            nd = ndrive[s] if role[s] == ROLE_ACTIVE else npulse[s]
             acc = 0.0
             for j in range(nl):
                 re = zre[s, j]
@@ -347,7 +443,15 @@ def _render(n, out, role, ndrive, nlive, zre, zim, cth, sth, wcur, winc, wtgt, w
                 c = cth[s, j]
                 sn = sth[s, j]
                 if j < nd:
-                    nre = r * (c * re - sn * im) + p
+                    # the per-mode packet states (Birth position): the same pulse and
+                    # smoothing; exactly 0.0 while the states are 0, so a uniform packet
+                    # reaches the mode as p + 0.0 = p
+                    pm = strength * ((1.0 - qf) * zfm[s, j] - (1.0 - qs) * zsm[s, j]) / (qs - qf)
+                    zfm[s, j] = zfm[s, j] * qf
+                    zsm[s, j] = zsm[s, j] * qs
+                    um = q * zum[s, j] + (1.0 - q) * pm
+                    zum[s, j] = um
+                    nre = r * (c * re - sn * im) + (p + um)
                 else:
                     nre = r * (c * re - sn * im)
                 nim = r * (sn * re + c * im)
@@ -415,6 +519,7 @@ class ObjectResonatorsEngine(SoundEngine):
         self.slot_id = np.zeros(S, np.int64)
         self.smode = np.zeros(S, np.int64)
         self.ndrive = np.zeros(S, np.int64)
+        self.npulse = np.zeros(S, np.int64)
         self.nlive = np.zeros(S, np.int64)
         self.zre = np.zeros((S, M))
         self.zim = np.zeros((S, M))
@@ -429,6 +534,9 @@ class ObjectResonatorsEngine(SoundEngine):
         self.zf = np.zeros(S)
         self.zs = np.zeros(S)
         self.zu = np.zeros(S)
+        self.zfm = np.zeros((S, M))
+        self.zsm = np.zeros((S, M))
+        self.zum = np.zeros((S, M))
         self.pan = np.zeros((S, 6))
         self.pleft = np.zeros(S, np.int64)
         r = decay_r(self.params['decay_s'], self.sr)
@@ -441,17 +549,20 @@ class ObjectResonatorsEngine(SoundEngine):
         self.level = np.zeros(S)
         self.last_e = np.zeros(S)
         self.last_a = np.zeros(S)
-        # evictions (tail -> fading), hard drops, unvoiced blocks, changes, in-place fades
-        self.counters = np.zeros(5, np.int64)
+        self.last_b = np.zeros((S, M))             # coefficients of the last packet (display)
+        # evictions (tail -> fading), hard drops, unvoiced blocks, changes, in-place fades,
+        # Birth position packets with zero participation, packets refused (unsupported combination)
+        self.counters = np.zeros(N_COUNTERS, np.int64)
         self.figures = {}                          # id -> Figure
         self.next_id = 1
         self.G_prev = None
         self.E_prev = None
 
     def _kernel(self, n, out):
-        _render(n, out, self.role, self.ndrive, self.nlive, self.zre, self.zim, self.cth, self.sth,
-                self.wcur, self.winc, self.wtgt, self.wleft, self.zf, self.zs, self.zu, self.pan, self.pleft,
-                self.rr, self.gg, self.qq, self.ints, self.consts, self.hp_h, self.hp, OUT_SCALE, self.level)
+        _render(n, out, self.role, self.ndrive, self.npulse, self.nlive, self.zre, self.zim, self.cth, self.sth,
+                self.wcur, self.winc, self.wtgt, self.wleft, self.zf, self.zs, self.zu, self.zfm, self.zsm,
+                self.zum, self.pan, self.pleft, self.rr, self.gg, self.qq, self.ints, self.consts, self.hp_h,
+                self.hp, OUT_SCALE, self.level)
 
     # -- geometry helpers -------------------------------------------------------------
     def _radius_mul(self):
@@ -508,6 +619,7 @@ class ObjectResonatorsEngine(SoundEngine):
         self.slot_id[s] = 0
         self.smode[s] = 0
         self.ndrive[s] = 0
+        self.npulse[s] = 0
         self.nlive[s] = 0
         self.zre[s] = 0.0
         self.zim[s] = 0.0
@@ -519,18 +631,36 @@ class ObjectResonatorsEngine(SoundEngine):
         self.winc[s] = 0.0
         self.wtgt[s] = 0.0
         self.wleft[s] = 0
-        self.zf[s] = 0.0
-        self.zs[s] = 0.0
-        self.zu[s] = 0.0
+        self._zero_pulse(s)
         self.pan[s] = 0.0
         self.pleft[s] = 0
         self.level[s] = 0.0
         self.last_e[s] = 0.0
         self.last_a[s] = 0.0
+        self.last_b[s] = 0.0
 
-    _SLOT_FIELDS = ('role', 'slot_id', 'smode', 'ndrive', 'nlive', 'zre', 'zim', 'sqrtlam', 'ffreq',
-                    'cth', 'sth', 'wcur', 'winc', 'wtgt', 'wleft', 'zf', 'zs', 'zu', 'pan', 'pleft', 'level',
-                    'last_e', 'last_a')
+    def _zero_pulse(self, s):
+        """No excitation left in slot s: the slot and the per-mode pulse states."""
+        self.zf[s] = 0.0
+        self.zs[s] = 0.0
+        self.zu[s] = 0.0
+        self.zfm[s] = 0.0
+        self.zsm[s] = 0.0
+        self.zum[s] = 0.0
+        self.npulse[s] = 0
+
+    def _pulse_quiet(self, s):
+        """True when every pulse state of slot s is below TAIL_FLOOR (the last
+        packet of a tail has finished)."""
+        nd = int(self.npulse[s])
+        return (max(abs(float(self.zf[s])), abs(float(self.zs[s])), abs(float(self.zu[s]))) < TAIL_FLOOR
+                and (nd == 0 or float(np.max(np.abs(self.zfm[s, :nd]))) < TAIL_FLOOR
+                     and float(np.max(np.abs(self.zsm[s, :nd]))) < TAIL_FLOOR
+                     and float(np.max(np.abs(self.zum[s, :nd]))) < TAIL_FLOOR))
+
+    _SLOT_FIELDS = ('role', 'slot_id', 'smode', 'ndrive', 'npulse', 'nlive', 'zre', 'zim', 'sqrtlam', 'ffreq',
+                    'cth', 'sth', 'wcur', 'winc', 'wtgt', 'wleft', 'zf', 'zs', 'zu', 'zfm', 'zsm', 'zum', 'pan',
+                    'pleft', 'level', 'last_e', 'last_a', 'last_b')
 
     def _move_slot(self, src, dst):
         for name in self._SLOT_FIELDS:
@@ -550,16 +680,23 @@ class ObjectResonatorsEngine(SoundEngine):
         self.wcur[s, idx] = 0.0
         self.winc[s, idx] = 0.0
         self.wtgt[s, idx] = 0.0
+        self.zfm[s, idx] = 0.0
+        self.zsm[s, idx] = 0.0
+        self.zum[s, idx] = 0.0
+        self.last_b[s, idx] = 0.0
 
     def _release_quiet(self):
         """Block boundary: silent tails freed, finished fades freed, quiet / faded
-        undriven modes zeroed, n_live recomputed."""
+        undriven modes zeroed, n_live recomputed; a tail whose last packet has
+        decayed stops feeding its modes (npulse -> 0)."""
         for s in range(N_SLOTS):
             role = self.role[s]
             if role == ROLE_FREE:
                 continue
             nd = int(self.ndrive[s])
             nl = int(self.nlive[s])
+            if role != ROLE_ACTIVE and self.npulse[s] > 0 and self._pulse_quiet(s):
+                self._zero_pulse(s)
             if nl > nd:
                 mag = np.hypot(self.zre[s, nd:nl], self.zim[s, nd:nl])
                 quiet = mag < TAIL_FLOOR
@@ -605,19 +742,26 @@ class ObjectResonatorsEngine(SoundEngine):
         self.counters[C_EVICT] += 1
         return q
 
-    def _to_tail(self, s):
+    def _to_tail(self, s, last_e=0.0):
         """Active slot s -> a tail slot (the figure left / lost its identity); with
-        every tail / fading slot busy the bank fades out in place (counted)."""
-        self.ndrive[s] = 0
-        self.slot_id[s] = 0
-        self.zf[s] = 0.0
-        self.zs[s] = 0.0
-        self.zu[s] = 0.0                                          # a tail gets no excitation
-        self.last_e[s] = 0.0
-        self.last_a[s] = 0.0
+        every tail / fading slot busy the bank fades out in place (counted).
+        `last_e` > 0 (Deaths): the bank takes ONE last uniform packet of the
+        deaths inside its previous mask with it -- its pulse states and npulse
+        stay, the strike is added now, and the tail never gets another packet."""
         if self.nlive[s] == 0:
             self._clear_slot(s)
             return
+        self.slot_id[s] = 0
+        if last_e > 0.0:
+            self._strike(s, last_e)                               # while still active: every driven mode
+            self.npulse[s] = self.ndrive[s]                       # ... and the tail keeps feeding them
+            self.ndrive[s] = 0
+        else:
+            self.ndrive[s] = 0
+            self._zero_pulse(s)                                   # a tail gets no excitation
+            self.last_e[s] = 0.0
+            self.last_a[s] = 0.0
+            self.last_b[s] = 0.0
         dst = self._tail_slot()
         if dst < 0:
             self._fade_slot(s)
@@ -678,6 +822,9 @@ class ObjectResonatorsEngine(SoundEngine):
             self._split_tail(s, n, n_old)
         self.smode[s] = int(mode)
         self.ndrive[s] = n
+        self.zfm[s, n:] = 0.0                                     # only fed modes hold packet states
+        self.zsm[s, n:] = 0.0
+        self.zum[s, n:] = 0.0
         self.sqrtlam[s, :n] = sq
         self.ffreq[s, :n] = freqs
         c, sn = trig_of(freqs, self.sr)
@@ -737,29 +884,84 @@ class ObjectResonatorsEngine(SoundEngine):
             self.pan[s] = (L, 0.0, L, R, 0.0, R)
             self.pleft[s] = 0
 
-    def _strike(self, s, e):
+    def _fed(self, s):
+        """The number of modes the pulse of slot s reaches (kernel rule)."""
+        return int(self.ndrive[s]) if self.role[s] == ROLE_ACTIVE else int(self.npulse[s])
+
+    def _strike(self, s, e, b=None):
+        """The packet of e events into slot s: uniform (b None: a into the slot's
+        pulse states, every fed mode gets it) or distributed (b (m,): a b_j into the
+        pulse states of mode j; an all-zero b is a packet nobody takes)."""
         a = e / (e + en.EVENT_SAT)
         self.last_e[s] = e
         self.last_a[s] = a
-        self.zf[s] += a
-        self.zs[s] += a
+        self.last_b[s] = 0.0
+        if b is None:
+            self.zf[s] += a
+            self.zs[s] += a
+            self.last_b[s, :self._fed(s)] = 1.0
+        else:
+            m = len(b)
+            self.zfm[s, :m] += a * b
+            self.zsm[s, :m] += a * b
+            self.last_b[s, :m] = b
+
+    def _events(self):
+        return int(self.params.get('events', OPTIONAL_PARAMS['events']))
+
+    def _excitation(self):
+        return int(self.params.get('excitation', OPTIONAL_PARAMS['excitation']))
+
+    def _position_supported(self):
+        """Birth position is defined for Events = Births, Own, Laplace, full = 1."""
+        return position_supported(self.params)
+
+    def _packet(self, f, born, e, exc):
+        """The packet of e > 0 events into the slot of figure f: uniform, or (Birth
+        position) distributed by the births `born` (bool field) inside the figure."""
+        s = f.slot
+        if self._excitation() != EXC_POSITION:
+            self._strike(s, e)
+            return
+        if not self._position_supported():
+            self.counters[C_UNSUPPORTED] += 1               # never a uniform strike instead
+            self.last_e[s] = 0.0
+            self.last_a[s] = 0.0
+            self.last_b[s] = 0.0
+            return
+        rows, cols = self._grid.shape
+        _freqs, _amps, graph = laplace_modes_of(f.cells, rows, cols, self.f0, self._settings(),
+                                                exc, with_graph=True)
+        cells = f.cells
+        born_nodes = np.asarray(born, bool)[cells[graph['order'], 0], cells[graph['order'], 1]]
+        b, total = birth_position_weights(graph['L'], graph['idx'], born_nodes)
+        if len(b) != int(self.ndrive[s]):                     # pragma: no cover  (same law, same L)
+            raise RuntimeError(f"engine {ENGINE_ID}: Birth position modes {len(b)} != bank {int(self.ndrive[s])}")
+        if total <= ZERO_PART:
+            self.counters[C_ZEROPART] += 1
+        self._strike(s, e, b)
 
     # -- the block boundary -------------------------------------------------------------
     def _track(self, G_prev, G, exc):
         rows, cols = G.shape
         births = (G != 0) & (G_prev == 0)
         deaths = (G_prev != 0) & (G == 0)
+        events = self._events()
         comps = fg.components(G)
         old_ids = sorted(self.figures)
         old = [self.figures[i] for i in old_ids]
         continued, tails, new = fg.match([f.cells for f in old], [f.centre for f in old],
                                          comps, rows, cols)
         figures = {}
-        # figures that lost their identity: their banks become tails
+        # figures that lost their identity: their banks become tails (Deaths: with
+        # one last packet of the deaths inside their previous mask)
         for p in tails:
             f = old[p]
             if f.slot >= 0:
-                self._to_tail(f.slot)
+                last = 0.0
+                if events == EV_DEATHS:
+                    last = float(np.count_nonzero(deaths & self._mask(f)))
+                self._to_tail(f.slot, last)
         # continuing figures: geometry, packet, retune
         for c in sorted(continued):
             f = old[continued[c]]
@@ -769,15 +971,18 @@ class ObjectResonatorsEngine(SoundEngine):
             radius = fg.radius_of(cells, centre, rows, cols)
             nf = Figure(f.id, f.slot, cells, centre, radius)
             K_cur = self._mask(nf)
-            e = float(np.count_nonzero(births & K_cur) + np.count_nonzero(deaths & K_prev))
+            e_b = int(np.count_nonzero(births & K_cur))
+            e_d = int(np.count_nonzero(deaths & K_prev))
+            e = float(e_b + e_d if events == EV_BOTH else e_b if events == EV_BIRTHS else e_d)
             if nf.slot >= 0:
                 self._tune_figure(nf, exc, ramp=True)
                 self._set_pan(nf.slot, centre[1], ramp=True)
                 if e > 0.0:
-                    self._strike(nf.slot, e)
+                    self._packet(nf, births & K_cur, e, exc)
                 else:
                     self.last_e[nf.slot] = 0.0
                     self.last_a[nf.slot] = 0.0
+                    self.last_b[nf.slot] = 0.0
             figures[nf.id] = nf
         # new figures: identities in a deterministic order, slots largest first
         new_figs = []
@@ -793,11 +998,13 @@ class ObjectResonatorsEngine(SoundEngine):
             figures[f.id] = f
         self.figures = figures
         self._allocate(exc)
-        for f in new_figs:
-            if f.slot >= 0:
-                e = float(np.count_nonzero(births & self._mask(f)))
-                if e > 0.0:
-                    self._strike(f.slot, e)
+        if events != EV_DEATHS:                        # Deaths: the appearance of a bank is no event
+            for f in new_figs:
+                if f.slot >= 0:
+                    K_cur = self._mask(f)
+                    e = float(np.count_nonzero(births & K_cur))
+                    if e > 0.0:
+                        self._packet(f, births & K_cur, e, exc)
         self.counters[C_CHANGES] += 1
 
     def _waiting(self):
@@ -927,6 +1134,13 @@ class ObjectResonatorsEngine(SoundEngine):
         self.zf[slot] += float(a)
         self.zs[slot] += float(a)
 
+    def inject_modes(self, slot, deltas):
+        """Test hook: add per-mode packet values delta_j to the pulse states of the
+        first len(deltas) modes of a slot (no field)."""
+        d = np.asarray(deltas, np.float64)
+        self.zfm[slot, :len(d)] += d
+        self.zsm[slot, :len(d)] += d
+
     def reset(self, gain=0.0):
         self.init(self._grid, self._exc, gain)
 
@@ -934,6 +1148,7 @@ class ObjectResonatorsEngine(SoundEngine):
         rows, cols = (self._grid.shape if self._grid is not None else (0, 0))
         det = int(self.params['detector'])
         spec = self._spectrum()
+        ev, ex = self._events(), self._excitation()
         figs = []
         for fid in sorted(self.figures):
             f = self.figures[fid]
@@ -949,17 +1164,26 @@ class ObjectResonatorsEngine(SoundEngine):
                              w_max=(float(self.wtgt[s, :nd].max()) if s >= 0 and nd > 0 else 0.0),
                              e=(float(self.last_e[s]) if s >= 0 else 0.0),
                              a=(float(self.last_a[s]) if s >= 0 else 0.0),
+                             b=(self.last_b[s, :nd].tolist() if s >= 0 else []),
                              level=(float(self.level[s]) if s >= 0 else 0.0)))
         n_tail = int(np.count_nonzero(self.role == ROLE_TAIL))
         n_fade = int(np.count_nonzero(self.role == ROLE_FADING))
+        n_tail_fed = int(np.count_nonzero((self.role != ROLE_ACTIVE) & (self.role != ROLE_FREE) & (self.npulse > 0)))
         return dict(figures=figs, n_figures=len(figs),
                     n_sounding=sum(1 for f in figs if f['slot'] >= 0),
                     n_single=sum(1 for f in figs if f['n'] < 2),
-                    n_tails=n_tail, n_fading=n_fade, evictions=int(self.counters[C_EVICT]),
+                    n_tails=n_tail, n_fading=n_fade, n_tails_fed=n_tail_fed,
+                    evictions=int(self.counters[C_EVICT]),
                     drops=int(self.counters[C_DROP]), unvoiced_blocks=int(self.counters[C_UNVOICED]),
                     changes=int(self.counters[C_CHANGES]), inplace_fades=int(self.counters[C_INPLACE]),
+                    zero_participation=int(self.counters[C_ZEROPART]),
+                    unsupported_packets=int(self.counters[C_UNSUPPORTED]),
                     detector=det, detector_name=CHOICES['detector'][det], rows=rows, cols=cols,
                     radius_mul=self._radius_mul(),
+                    events=ev, events_name=CHOICES['events'][ev],
+                    excitation=ex, excitation_name=CHOICES['excitation'][ex],
+                    position_supported=bool(self._position_supported()),
+                    position_condition=POSITION_CONDITION,
                     spectrum=spec, spectrum_name=CHOICES['spectrum'][spec], f0=self.f0,
                     laplace=self._settings(),
                     frequency_scale=self._scale(), decay_s=float(self.params['decay_s']),
@@ -970,23 +1194,24 @@ class ObjectResonatorsEngine(SoundEngine):
                     model=self.model_version)
 
     # -- snapshot ---------------------------------------------------------------------
-    _ARRAYS = ('role', 'slot_id', 'smode', 'ndrive', 'nlive', 'zre', 'zim', 'sqrtlam', 'ffreq', 'wcur',
-               'winc', 'wtgt', 'wleft', 'zf', 'zs', 'zu', 'pan', 'pleft', 'rr', 'gg', 'qq', 'ints', 'hp',
-               'level', 'last_e', 'last_a', 'counters')
+    _ARRAYS = ('role', 'slot_id', 'smode', 'ndrive', 'npulse', 'nlive', 'zre', 'zim', 'sqrtlam', 'ffreq', 'wcur',
+               'winc', 'wtgt', 'wleft', 'zf', 'zs', 'zu', 'zfm', 'zsm', 'zum', 'pan', 'pleft', 'rr', 'gg', 'qq',
+               'ints', 'hp', 'level', 'last_e', 'last_a', 'last_b', 'counters')
 
     def _fresh_arrays(self):
         S, M = N_SLOTS, N_BANK
         return dict(role=np.zeros(S, np.int64), slot_id=np.zeros(S, np.int64),
                     smode=np.zeros(S, np.int64),
-                    ndrive=np.zeros(S, np.int64), nlive=np.zeros(S, np.int64),
+                    ndrive=np.zeros(S, np.int64), npulse=np.zeros(S, np.int64), nlive=np.zeros(S, np.int64),
                     zre=np.zeros((S, M)), zim=np.zeros((S, M)), sqrtlam=np.zeros((S, M)),
                     ffreq=np.zeros((S, M)), wcur=np.zeros((S, M)), winc=np.zeros((S, M)),
                     wtgt=np.zeros((S, M)), wleft=np.zeros(S, np.int64), zf=np.zeros(S),
-                    zs=np.zeros(S), zu=np.zeros(S), pan=np.zeros((S, 6)), pleft=np.zeros(S, np.int64),
+                    zs=np.zeros(S), zu=np.zeros(S), zfm=np.zeros((S, M)), zsm=np.zeros((S, M)),
+                    zum=np.zeros((S, M)), pan=np.zeros((S, 6)), pleft=np.zeros(S, np.int64),
                     rr=np.zeros(3), gg=np.zeros(3), qq=np.zeros(3), ints=np.zeros(4, np.int64),
                     hp=np.zeros((2, 2)),
-                    level=np.zeros(S), last_e=np.zeros(S), last_a=np.zeros(S),
-                    counters=np.zeros(5, np.int64))
+                    level=np.zeros(S), last_e=np.zeros(S), last_a=np.zeros(S), last_b=np.zeros((S, M)),
+                    counters=np.zeros(N_COUNTERS, np.int64))
 
     def export_state(self):
         if self._grid is None:
@@ -1033,14 +1258,23 @@ class ObjectResonatorsEngine(SoundEngine):
             raise ValueError(f"engine {ENGINE_ID}: model version {state.get('model_version')!r}"
                              f" != {want_model!r}")
         if version != self.STATE_VERSION:
-            # an older state without Attack: the same sound with the attack state at zero
             state = dict(state)
-            S = N_SLOTS
-            state.setdefault('zu', np.zeros(S))
-            state.setdefault('qq', np.zeros(3))
-            ints = state.get('ints')
-            if isinstance(ints, np.ndarray) and ints.shape == (3,):
-                state['ints'] = np.concatenate([ints, np.zeros(1, ints.dtype)])
+            S, M = N_SLOTS, N_BANK
+            if version == 2:
+                # an older state without Attack: the same sound with the attack state at zero
+                state.setdefault('zu', np.zeros(S))
+                state.setdefault('qq', np.zeros(3))
+                ints = state.get('ints')
+                if isinstance(ints, np.ndarray) and ints.shape == (3,):
+                    state['ints'] = np.concatenate([ints, np.zeros(1, ints.dtype)])
+            # a state without Events / Excitation (v2, v3): the same sound with the
+            # per-mode packet states at zero and no fed tails
+            for name in ('zfm', 'zsm', 'zum', 'last_b'):
+                state.setdefault(name, np.zeros((S, M)))
+            state.setdefault('npulse', np.zeros(S, np.int64))
+            cnt = state.get('counters')
+            if isinstance(cnt, np.ndarray) and cnt.shape == (5,):
+                state['counters'] = np.concatenate([cnt, np.zeros(N_COUNTERS - 5, cnt.dtype)])
         if int(state.get('sr', -1)) != int(self.sr) or int(state.get('block', -1)) != self._out.shape[0]:
             raise ValueError(f"engine {ENGINE_ID}: state sr / block do not match the context")
         params = state.get('params')
@@ -1079,6 +1313,10 @@ class ObjectResonatorsEngine(SoundEngine):
         if ((arrays['ndrive'] < 0).any() or (arrays['ndrive'] > N_BANK).any()
                 or (arrays['nlive'] < arrays['ndrive']).any() or (arrays['nlive'] > N_BANK).any()):
             raise ValueError(f"engine {ENGINE_ID}: mode counts of the state out of range")
+        tails = (arrays['role'] == ROLE_TAIL) | (arrays['role'] == ROLE_FADING)
+        if ((arrays['npulse'] < 0).any() or (arrays['npulse'] > arrays['nlive']).any()
+                or (arrays['npulse'][~tails] != 0).any()):
+            raise ValueError(f"engine {ENGINE_ID}: fed mode counts of the tails in the state are inconsistent")
         g = np.asarray(grid, np.uint8)
         gp = state.get('grid_pending')
         gv = state.get('grid_prev')
@@ -1182,6 +1420,15 @@ class ObjectResonatorsEngine(SoundEngine):
         self.E_prev = np.array(ev, np.float64, copy=True)
 
 
+def position_supported(params):
+    """Birth position is defined for Events = Births, Own, Laplace, full = 1 (the
+    engine makes no packet outside this combination; the bench shows the condition)."""
+    return (int(params.get('events', EV_BOTH)) == EV_BIRTHS
+            and int(params.get('detector', DET_DISK)) == DET_OWN
+            and int(params.get('spectrum', SPEC_FIGURE)) == SPEC_LAPLACE
+            and int(params.get('fullshape', 1)) == 1)
+
+
 def inactive(params):
     """Settings that do not act for the current mode (bench: shown as text)."""
     out = {}
@@ -1199,7 +1446,9 @@ def overlay(params, rows, cols):
     """Static part of the overlay: the caption only (figures come from display())."""
     det = CHOICES['detector'][int(params.get('detector', DET_DISK))]
     spec = CHOICES['spectrum'][int(params.get('spectrum', SPEC_FIGURE))]
-    return dict(text=f"{OVERLAY_TEXT} [{det}, {spec}]")
+    ev = CHOICES['events'][int(params.get('events', EV_BOTH))]
+    ex = CHOICES['excitation'][int(params.get('excitation', EXC_UNIFORM))]
+    return dict(text=f"{OVERLAY_TEXT} [{det}, {spec}] [{ev}, {ex}]")
 
 
 register(EngineSpec(ENGINE_ID, LABEL, PARAMS, lambda ctx, params: ObjectResonatorsEngine(ctx, params),

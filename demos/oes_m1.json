@@ -1,0 +1,118 @@
+{
+ "format": 2,
+ "id": "oes_m1",
+ "title": "M1 - Общий удар / место рождения: Excitation Uniform / Birth position (Jam p3)",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   7,
+   10
+  ],
+  [
+   7,
+   11
+  ],
+  [
+   8,
+   9
+  ],
+  [
+   8,
+   12
+  ],
+  [
+   9,
+   7
+  ],
+  [
+   9,
+   10
+  ],
+  [
+   9,
+   12
+  ],
+  [
+   10,
+   7
+  ],
+  [
+   10,
+   11
+  ],
+  [
+   11,
+   7
+  ],
+  [
+   12,
+   10
+  ],
+  [
+   13,
+   8
+  ],
+  [
+   13,
+   9
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 6.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0,
+  "side_gain": {
+   "A": 1.0,
+   "B": 0.93
+  }
+ },
+ "variants": {
+  "A": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 0,
+    "radius_mul": 1.0,
+    "spectrum": 1,
+    "events": 1,
+    "excitation": 0,
+    "frequency_scale": 220.0,
+    "decay_s": 1.39,
+    "attack_ms": 4.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.87,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  },
+  "B": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 0,
+    "radius_mul": 1.0,
+    "spectrum": 1,
+    "events": 1,
+    "excitation": 1,
+    "frequency_scale": 220.0,
+    "decay_s": 1.39,
+    "attack_ms": 4.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.87,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: А — Objects / Laplace, Events Births, Excitation Uniform / Б — Objects / Laplace, Events Births, Excitation Birth position. Notes: hypothesis and your listening result. Events / Excitation are the buttons of the Objects panel."
+}

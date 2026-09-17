@@ -48,9 +48,9 @@ RADIUS_MUL = 1.0
 # there and stay at their defaults; the Objects / Laplace comparison is
 # demos/build_objects_laplace.py)
 N4_OWN = dict(detector=DET_OWN, radius_mul=RADIUS_MUL, spectrum=SPEC_FIGURE, frequency_scale=SCALE_HZ,
-              decay_s=DECAY_S, attack_ms=0.0, **laplace_settings({}))
+              decay_s=DECAY_S, attack_ms=0.0, events=0, excitation=0, **laplace_settings({}))
 N4_DISK = dict(detector=DET_DISK, radius_mul=RADIUS_MUL, spectrum=SPEC_FIGURE, frequency_scale=SCALE_HZ,
-               decay_s=DECAY_S, attack_ms=0.0, **laplace_settings({}))
+               decay_s=DECAY_S, attack_ms=0.0, events=0, excitation=0, **laplace_settings({}))
 N3_FIELD = dict(field_tuning=1, decay_s=DECAY_S)
 
 
