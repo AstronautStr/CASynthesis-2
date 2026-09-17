@@ -62,13 +62,18 @@ VOL_W = 140
 PANEL_W = 270
 TAB_W, TAB_H = 96, 30
 ARROW_W = 28
-ENG_W, ENG_H = 74, 24
-ROW_H = 24                   # 26 until 2026-09-17: Objects has 13 knobs + a range row, the window stays < 1000 px
+ENG_W, ENG_H = 62, 24        # 4 engine buttons per row (74 / 3 per row until 2026-09-17)
+ROW_H = 22                   # 26 until 2026-09-17: Objects has 13 knobs + a range row; the window must fit a 960 px desktop
+ENG_PER_ROW = 4
+FIGURE_ROWS_MAX = 8          # figure rows of the Objects display reserved below the knobs (fewer on a low desktop)
+FIGURE_ROWS_MIN = 3
 DISPLAY_ROW_H = 14           # one bar row of an engine display (W links / node u)
 SLIDER_W = 120
 RANGE_FIELD_W = 54           # Min / Max field of a ranged knob (2026-09-17)
 RANGE_DECIMALS = 3           # slider rounding / value text of a ranged knob (steps of 0.001)
 FONT_NAMES = "segoeui,arial,dejavusans,freesans"
+DESKTOP_MARGIN_H = 80        # title bar + taskbar the window height must leave free on the desktop
+WINDOW_TOP_MIN = 30          # the window's client area starts at least this far down (title bar on screen)
 C_ALIVE = (111, 208, 224)
 C_ALIVE_PAUSED = (200, 180, 90)
 C_BTN_ON = (48, 92, 104)
@@ -103,7 +108,10 @@ class BenchApp:
     """Pure UI state machine over a LiveEngine -- drivable without a display
     (tests call press/drag/release/draw with SDL_VIDEODRIVER=dummy)."""
 
-    def __init__(self, scene, engine, catalog=None):
+    def __init__(self, scene, engine, catalog=None, max_height=None):
+        """`max_height`: the tallest window the desktop allows (run_ui passes the
+        desktop height minus the frame / taskbar); the figure rows reserved under
+        the Objects knobs shrink first (FIGURE_ROWS_MAX -> FIGURE_ROWS_MIN)."""
         self.scene = scene
         self.engine = engine
         self.catalog = catalog            # Catalog or None (S4 disabled)
@@ -180,19 +188,26 @@ class BenchApp:
         ey = sy + 26
         specs = registry.specs()
         for i, e in enumerate(specs):
-            col, row = i % 3, i // 3
+            col, row = i % ENG_PER_ROW, i // ENG_PER_ROW
             self.engine_btns[e.id] = (px + col * (ENG_W + 6), ey + row * (ENG_H + 6),
                                          ENG_W, ENG_H)
-        self.engine_rows = (len(specs) + 2) // 3
+        self.engine_rows = (len(specs) + ENG_PER_ROW - 1) // ENG_PER_ROW
         self.params_y = ey + self.engine_rows * (ENG_H + 6) + 12
         self.param_rows_max = max([len(e.params) + len(e.ranges) for e in specs] + [1])
-        # peak / message line: below the longest parameter list AND below the tallest
-        # engine display (gutter_field: 4 parameter rows + a header + 8 node bars)
-        self.footer_y = max(self.params_y + self.param_rows_max * ROW_H + 8,
-                            self.params_y + 4 * ROW_H + 6 + 18 + 8 * DISPLAY_ROW_H + 8,
-                            # N4 Objects: 12 parameter rows + the figure rows of its display
-                            self.params_y + self.param_rows_max * ROW_H + 6 + 34 + 8 * DISPLAY_ROW_H + 8)
-        self.height = max(self.height, self.footer_y + 44 + MARGIN)
+        base_height = self.height
+        self.figure_rows = FIGURE_ROWS_MAX
+        while True:
+            # peak / message line: below the longest parameter list AND below the tallest
+            # engine display (gutter_field: 4 parameter rows + a header + 8 node bars)
+            self.footer_y = max(self.params_y + self.param_rows_max * ROW_H + 8,
+                                self.params_y + 4 * ROW_H + 6 + 18 + 8 * DISPLAY_ROW_H + 8,
+                                # N4 Objects: the parameter rows + the figure rows of its display
+                                self.params_y + self.param_rows_max * ROW_H + 6 + 34
+                                + self.figure_rows * DISPLAY_ROW_H + 8)
+            self.height = max(base_height, self.footer_y + 44 + MARGIN)
+            if max_height is None or self.height <= max_height or self.figure_rows <= FIGURE_ROWS_MIN:
+                break
+            self.figure_rows -= 1
         self.slider_x = px + 82
         # pattern library (2026-09-16): the synth's Lib sidebar -- a column
         # right of the panel; an item is dragged onto the field and dropped
@@ -893,11 +908,16 @@ class BenchApp:
         return True
 
     def _notes_window_position(self):
-        """Right of the bench window when its position is known."""
+        """Right of the bench window when its position is known, kept on the
+        desktop (its title bar reachable: y >= 0, the window inside the width)."""
         try:
             import pygame
             x, y = pygame.display.get_window_position()
-            return (x + self.width + 12, y)
+            w, h = _notes_win.DEFAULT_SIZE
+            dw, dh = pygame.display.get_desktop_sizes()[0]
+            nx = min(x + self.width + 12, max(0, dw - w - 8))
+            ny = min(max(y, 0), max(0, dh - h - 80))
+            return (nx, ny)
         except Exception:                          # noqa: BLE001
             return None
 
@@ -1244,7 +1264,7 @@ class BenchApp:
                                      f"{float(disp['decay_s']):.2f} s{ramp}   a | level", True, C_DIM),
                         (x, y + 14))
             bar_x, bar_w = x + 98, 76
-            shown = [f for f in disp['figures'] if f['slot'] >= 0][:8]
+            shown = [f for f in disp['figures'] if f['slot'] >= 0][:self.figure_rows]
             for k, f in enumerate(shown):
                 ry = y + 34 + k * DISPLAY_ROW_H
                 col = C_FIGURES[int(f['color']) % len(C_FIGURES)]
@@ -2565,7 +2585,18 @@ def run_ui(scene, vol, catalog=None, runner=None, origin_snapshot=None, parent_r
     print(f"[audio] {engine.status_text()}", flush=True)     # (a parent bench reads the pipe)
     pygame.init()
     pygame.key.set_repeat(400, 35)     # held keys repeat (Backspace, arrows in text fields)
-    app = BenchApp(runner.scene, engine, catalog=catalog)
+    # the window must fit the desktop with its title bar reachable (2026-09-17: a 960 px
+    # desktop): the Objects figure rows give way first, and the window is placed
+    # explicitly (SDL would centre a too-tall window with its title bar above the screen)
+    try:
+        desk_w, desk_h = pygame.display.get_desktop_sizes()[0]
+    except Exception:                  # noqa: BLE001
+        desk_w, desk_h = (1920, 1080)
+    app = BenchApp(runner.scene, engine, catalog=catalog, max_height=max(600, desk_h - DESKTOP_MARGIN_H))
+    if 'SDL_VIDEO_WINDOW_POS' not in os.environ:
+        wx = max(0, (desk_w - app.width) // 2)
+        wy = max(WINDOW_TOP_MIN, (desk_h - DESKTOP_MARGIN_H - app.height) // 2)
+        os.environ['SDL_VIDEO_WINDOW_POS'] = f"{wx},{wy}"
     app.vol = runner.vol
     app.session_record = parent_record_id
     if origin_snapshot is not None:

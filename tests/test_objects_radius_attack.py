@@ -530,8 +530,15 @@ class BenchTests(unittest.TestCase):
         app = db.BenchApp(scene, eng)
         n_rows = len(registry.get(EID).params) + len(registry.get(EID).ranges)
         self.assertEqual(app._params_height(EID), n_rows * db.ROW_H)
-        self.assertGreaterEqual(app.footer_y, app.params_y + n_rows * db.ROW_H + 6 + 34 + 8 * db.DISPLAY_ROW_H)
+        self.assertGreaterEqual(app.footer_y, app.params_y + n_rows * db.ROW_H + 6 + 34 + app.figure_rows * db.DISPLAY_ROW_H)
         self.assertLessEqual(app.height, 1000)
+        self.assertEqual(app.figure_rows, db.FIGURE_ROWS_MAX)
+        # a low desktop (960 px, 2026-09-17): the figure rows give way, the window fits
+        low = db.BenchApp(scene, eng, max_height=880)
+        self.assertLessEqual(low.height, 880)
+        self.assertGreaterEqual(low.figure_rows, db.FIGURE_ROWS_MIN)
+        self.assertLess(low.figure_rows, app.figure_rows)
+        self.assertEqual(low.width, app.width)
         rows = {spec[0]: rect for spec, rect in app._param_rows(EID)}
         rr = app._range_rects(EID)['radius_mul']
         self.assertEqual(rows['spectrum'][1] - rows['radius_mul'][1], 2 * db.ROW_H)   # the extra row

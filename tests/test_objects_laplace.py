@@ -608,7 +608,7 @@ class SideGainAndBenchTests(unittest.TestCase):
         # the whole Objects panel fits: 13 setting rows + the range row + the figure rows + the footer
         n_rows = len(registry.get(orz.ENGINE_ID).params) + len(registry.get(orz.ENGINE_ID).ranges)
         self.assertEqual(n_rows, 14)
-        self.assertGreaterEqual(app.footer_y, app.params_y + n_rows * db.ROW_H + 6 + 34 + 8 * db.DISPLAY_ROW_H)
+        self.assertGreaterEqual(app.footer_y, app.params_y + n_rows * db.ROW_H + 6 + 34 + app.figure_rows * db.DISPLAY_ROW_H)
         self.assertGreaterEqual(app.height, app.footer_y + 40 + db.MARGIN)
         self.assertLessEqual(app.height, 1000)
         screen = pygame.Surface((app.width, app.height))
