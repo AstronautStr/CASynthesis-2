@@ -1,0 +1,1001 @@
+{
+ "snapshot_file_version": 1,
+ "state": {
+  "version": 1,
+  "scene": {
+   "format": 2,
+   "id": "ol_galaxy@20260917-022450-ba7355",
+   "title": "Laplace Objects 2",
+   "grid": {
+    "rows": 32,
+    "cols": 32
+   },
+   "cells": [
+    [
+     2,
+     4
+    ],
+    [
+     2,
+     7
+    ],
+    [
+     2,
+     23
+    ],
+    [
+     2,
+     24
+    ],
+    [
+     2,
+     26
+    ],
+    [
+     2,
+     27
+    ],
+    [
+     3,
+     4
+    ],
+    [
+     3,
+     7
+    ],
+    [
+     4,
+     2
+    ],
+    [
+     4,
+     3
+    ],
+    [
+     4,
+     5
+    ],
+    [
+     4,
+     6
+    ],
+    [
+     4,
+     8
+    ],
+    [
+     4,
+     9
+    ],
+    [
+     4,
+     24
+    ],
+    [
+     4,
+     26
+    ],
+    [
+     5,
+     4
+    ],
+    [
+     5,
+     7
+    ],
+    [
+     5,
+     24
+    ],
+    [
+     5,
+     26
+    ],
+    [
+     6,
+     4
+    ],
+    [
+     6,
+     7
+    ],
+    [
+     6,
+     21
+    ],
+    [
+     6,
+     22
+    ],
+    [
+     6,
+     24
+    ],
+    [
+     6,
+     26
+    ],
+    [
+     6,
+     28
+    ],
+    [
+     6,
+     29
+    ],
+    [
+     7,
+     2
+    ],
+    [
+     7,
+     3
+    ],
+    [
+     7,
+     5
+    ],
+    [
+     7,
+     6
+    ],
+    [
+     7,
+     8
+    ],
+    [
+     7,
+     9
+    ],
+    [
+     7,
+     22
+    ],
+    [
+     7,
+     23
+    ],
+    [
+     7,
+     27
+    ],
+    [
+     7,
+     28
+    ],
+    [
+     8,
+     4
+    ],
+    [
+     8,
+     7
+    ],
+    [
+     9,
+     4
+    ],
+    [
+     9,
+     7
+    ],
+    [
+     14,
+     13
+    ],
+    [
+     14,
+     14
+    ],
+    [
+     15,
+     12
+    ],
+    [
+     15,
+     13
+    ],
+    [
+     15,
+     14
+    ],
+    [
+     15,
+     15
+    ],
+    [
+     16,
+     11
+    ],
+    [
+     16,
+     13
+    ],
+    [
+     16,
+     14
+    ],
+    [
+     16,
+     16
+    ],
+    [
+     16,
+     17
+    ],
+    [
+     16,
+     19
+    ],
+    [
+     17,
+     16
+    ],
+    [
+     17,
+     17
+    ],
+    [
+     17,
+     20
+    ],
+    [
+     18,
+     11
+    ],
+    [
+     18,
+     12
+    ],
+    [
+     18,
+     15
+    ],
+    [
+     18,
+     16
+    ],
+    [
+     18,
+     19
+    ],
+    [
+     18,
+     20
+    ],
+    [
+     18,
+     21
+    ],
+    [
+     19,
+     11
+    ],
+    [
+     19,
+     12
+    ],
+    [
+     19,
+     13
+    ],
+    [
+     19,
+     14
+    ],
+    [
+     19,
+     16
+    ],
+    [
+     19,
+     19
+    ],
+    [
+     19,
+     20
+    ],
+    [
+     19,
+     21
+    ],
+    [
+     20,
+     10
+    ],
+    [
+     20,
+     13
+    ],
+    [
+     20,
+     17
+    ],
+    [
+     20,
+     20
+    ],
+    [
+     21,
+     9
+    ],
+    [
+     21,
+     10
+    ],
+    [
+     21,
+     11
+    ],
+    [
+     21,
+     14
+    ],
+    [
+     21,
+     16
+    ],
+    [
+     21,
+     17
+    ],
+    [
+     21,
+     18
+    ],
+    [
+     21,
+     19
+    ],
+    [
+     22,
+     9
+    ],
+    [
+     22,
+     10
+    ],
+    [
+     22,
+     11
+    ],
+    [
+     22,
+     14
+    ],
+    [
+     22,
+     15
+    ],
+    [
+     22,
+     18
+    ],
+    [
+     22,
+     19
+    ],
+    [
+     23,
+     10
+    ],
+    [
+     23,
+     13
+    ],
+    [
+     23,
+     14
+    ],
+    [
+     24,
+     11
+    ],
+    [
+     24,
+     13
+    ],
+    [
+     24,
+     14
+    ],
+    [
+     24,
+     16
+    ],
+    [
+     24,
+     17
+    ],
+    [
+     24,
+     19
+    ],
+    [
+     25,
+     15
+    ],
+    [
+     25,
+     16
+    ],
+    [
+     25,
+     17
+    ],
+    [
+     25,
+     18
+    ],
+    [
+     26,
+     16
+    ],
+    [
+     26,
+     17
+    ]
+   ],
+   "rule": "B3/S23",
+   "boundary": "torus",
+   "rate_hz": 6.0,
+   "audio": {
+    "f0_hz": 110.0,
+    "level": 1.0,
+    "side_gain": {
+     "A": 1.0,
+     "B": 0.74
+    }
+   },
+   "variants": {
+    "A": {
+     "engine_id": "laplacian",
+     "engine_params": {
+      "n": 20,
+      "spread": 0.0,
+      "alpha": 1.0,
+      "shape": 1.0,
+      "harm": 0.9,
+      "fullshape": 1,
+      "dyn": 0.0
+     }
+    },
+    "B": {
+     "engine_id": "ca_object_resonators",
+     "engine_params": {
+      "detector": 1,
+      "radius_mul": 0.594,
+      "spectrum": 1,
+      "frequency_scale": 680.625,
+      "decay_s": 1.392,
+      "n": 3,
+      "spread": 1.0,
+      "alpha": 1.817,
+      "shape": 0.95,
+      "harm": 0.917,
+      "fullshape": 1,
+      "dyn": 0.867
+     }
+    }
+   },
+   "initial_side": "B",
+   "listen": "1 / 2: А — существующий Laplace (n 12, spread 0, alpha 1, shape 0, harm 0, full 1, dyn 0) / Б — Objects / Laplace, те же семь настроек, Disk, Radius x 1, Decay 0.8. Notes: hypothesis and your listening result. The seven spectrum settings are shared: \"spectrum A to B\" copies them.",
+   "factory_variants": {
+    "A": {
+     "engine_id": "laplacian",
+     "engine_params": {
+      "n": 12,
+      "spread": 0.0,
+      "alpha": 1.0,
+      "shape": 0.0,
+      "harm": 0.0,
+      "fullshape": 1,
+      "dyn": 0.0
+     }
+    },
+    "B": {
+     "engine_id": "ca_object_resonators",
+     "engine_params": {
+      "detector": 1,
+      "radius_mul": 1.0,
+      "spectrum": 1,
+      "frequency_scale": 220.0,
+      "decay_s": 0.8,
+      "n": 12,
+      "spread": 0.0,
+      "alpha": 1.0,
+      "shape": 0.0,
+      "harm": 0.0,
+      "fullshape": 1,
+      "dyn": 0.0
+     }
+    }
+   },
+   "param_memory": {
+    "A": {
+     "laplacian": {
+      "n": 20,
+      "spread": 0.0,
+      "alpha": 1.0,
+      "shape": 1.0,
+      "harm": 0.9,
+      "fullshape": 1,
+      "dyn": 0.0
+     },
+     "ca_object_resonators": {
+      "detector": 1,
+      "radius_mul": 2.219,
+      "spectrum": 1,
+      "frequency_scale": 220.0,
+      "decay_s": 0.8,
+      "n": 20,
+      "spread": 0.0,
+      "alpha": 1.0,
+      "shape": 1.0,
+      "harm": 0.9,
+      "fullshape": 1,
+      "dyn": 0.0
+     }
+    },
+    "B": {
+     "ca_object_resonators": {
+      "detector": 1,
+      "radius_mul": 0.594,
+      "spectrum": 1,
+      "frequency_scale": 680.625,
+      "decay_s": 1.392,
+      "n": 3,
+      "spread": 1.0,
+      "alpha": 1.817,
+      "shape": 0.95,
+      "harm": 0.917,
+      "fullshape": 1,
+      "dyn": 0.867
+     },
+     "walsh": {
+      "n": 16
+     },
+     "fft2d": {
+      "n": 16
+     },
+     "random": {
+      "n": 16
+     },
+     "laplacian": {
+      "n": 12,
+      "spread": 0.0,
+      "alpha": 1.0,
+      "shape": 0.0,
+      "harm": 0.0,
+      "fullshape": 1,
+      "dyn": 0.0
+     },
+     "granulo": {
+      "n": 16
+     },
+     "scan_surface": {
+      "surface": 0,
+      "width": 1.5,
+      "path": 2,
+      "radius_x": 0.8,
+      "radius_y": 0.8,
+      "trim_db": 6.0
+     },
+     "gutter_field_n0r": {
+      "scale": 1.0,
+      "depth": 1.0,
+      "interaction": 127,
+      "freeze_ca": 0
+     },
+     "gutter_field": {
+      "scale": 1.0,
+      "depth": 1.0,
+      "interaction": 127,
+      "freeze_ca": 0
+     },
+     "pm_network": {
+      "coupling": 2.0,
+      "freeze_links": 0,
+      "trim_db": 3.0
+     },
+     "gutter_ca_damping": {
+      "scale": 1.0,
+      "depth": 1.0,
+      "interaction": 127,
+      "freeze_ca": 0
+     },
+     "gutter_ca_links": {
+      "scale": 1.0,
+      "depth": 1.0,
+      "interaction": 127,
+      "freeze_ca": 0
+     },
+     "gutter_field_periodic": {
+      "scale": 1.0,
+      "depth": 1.0,
+      "interaction": 127,
+      "freeze_ca": 0
+     },
+     "ca_event_network": {
+      "rho": 0.88
+     },
+     "ca_tuned_events": {
+      "field_tuning": 1,
+      "decay_s": 0.8
+     }
+    }
+   }
+  },
+  "ctx": {
+   "sr": 44100,
+   "block": 352,
+   "channels": 2,
+   "f0": 110.0,
+   "level": 1.0,
+   "rate_hz": 6.0
+  },
+  "grid": {
+   "__array__": "grid"
+  },
+  "exc": {
+   "__array__": "exc"
+  },
+  "gen": 428,
+  "out_samples": 3236640,
+  "t_samples": 3147936,
+  "ca_samples": 3147936,
+  "running": true,
+  "paused": false,
+  "vol": 0.7,
+  "selected": "B",
+  "xfade_from": null,
+  "xfade_pos": 0,
+  "seq": 452,
+  "pending": [],
+  "memory": {
+   "A": {
+    "laplacian": {
+     "n": 20,
+     "spread": 0.0,
+     "alpha": 1.0,
+     "shape": 1.0,
+     "harm": 0.9,
+     "fullshape": 1,
+     "dyn": 0.0
+    },
+    "ca_object_resonators": {
+     "detector": 1,
+     "radius_mul": 2.219,
+     "spectrum": 1,
+     "frequency_scale": 220.0,
+     "decay_s": 0.8,
+     "n": 20,
+     "spread": 0.0,
+     "alpha": 1.0,
+     "shape": 1.0,
+     "harm": 0.9,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "ca_object_resonators": {
+     "detector": 1,
+     "radius_mul": 2.438,
+     "spectrum": 1,
+     "frequency_scale": 680.625,
+     "decay_s": 0.579,
+     "n": 3,
+     "spread": 0.65,
+     "alpha": 0.383,
+     "shape": 0.9,
+     "harm": 0.942,
+     "fullshape": 1,
+     "dyn": 0.358
+    },
+    "walsh": {
+     "n": 16
+    },
+    "fft2d": {
+     "n": 16
+    },
+    "random": {
+     "n": 16
+    },
+    "laplacian": {
+     "n": 12,
+     "spread": 0.0,
+     "alpha": 1.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    },
+    "granulo": {
+     "n": 16
+    },
+    "scan_surface": {
+     "surface": 0,
+     "width": 1.5,
+     "path": 2,
+     "radius_x": 0.8,
+     "radius_y": 0.8,
+     "trim_db": 6.0
+    },
+    "gutter_field_n0r": {
+     "scale": 1.0,
+     "depth": 1.0,
+     "interaction": 127,
+     "freeze_ca": 0
+    },
+    "gutter_field": {
+     "scale": 1.0,
+     "depth": 1.0,
+     "interaction": 127,
+     "freeze_ca": 0
+    },
+    "pm_network": {
+     "coupling": 2.0,
+     "freeze_links": 0,
+     "trim_db": 3.0
+    },
+    "gutter_ca_damping": {
+     "scale": 1.0,
+     "depth": 1.0,
+     "interaction": 127,
+     "freeze_ca": 0
+    },
+    "gutter_ca_links": {
+     "scale": 1.0,
+     "depth": 1.0,
+     "interaction": 127,
+     "freeze_ca": 0
+    },
+    "gutter_field_periodic": {
+     "scale": 1.0,
+     "depth": 1.0,
+     "interaction": 127,
+     "freeze_ca": 0
+    },
+    "ca_event_network": {
+     "rho": 0.88
+    },
+    "ca_tuned_events": {
+     "field_tuning": 1,
+     "decay_s": 0.8
+    }
+   }
+  },
+  "sides": {
+   "A": {
+    "engine_id": "laplacian",
+    "params": {
+     "n": 20,
+     "spread": 0.0,
+     "alpha": 1.0,
+     "shape": 1.0,
+     "harm": 0.9,
+     "fullshape": 1,
+     "dyn": 0.0
+    },
+    "peak": 0.1100273086035805,
+    "clip_blocks": 0,
+    "engine_state_version": 1,
+    "engine": {
+     "version": 1,
+     "engine_id": "laplacian",
+     "params": {
+      "n": 20,
+      "spread": 0.0,
+      "alpha": 1.0,
+      "shape": 1.0,
+      "harm": 0.9,
+      "fullshape": 1,
+      "dyn": 0.0
+     },
+     "gain_prev": 0.027999999999999997,
+     "steals": 0,
+     "steal_amp_max": 0.0,
+     "slots": 2400,
+     "voices": 24,
+     "modes": 20,
+     "phase": {
+      "__array__": "sides.A.engine.phase"
+     },
+     "amp_cur": {
+      "__array__": "sides.A.engine.amp_cur"
+     },
+     "pan_cur": {
+      "__array__": "sides.A.engine.pan_cur"
+     },
+     "freq_slots": {
+      "__array__": "sides.A.engine.freq_slots"
+     },
+     "amp_tgt": {
+      "__array__": "sides.A.engine.amp_tgt"
+     },
+     "pan_tgt": {
+      "__array__": "sides.A.engine.pan_tgt"
+     },
+     "_release_cnt": {
+      "__array__": "sides.A.engine._release_cnt"
+     },
+     "_release_amp0": {
+      "__array__": "sides.A.engine._release_amp0"
+     },
+     "_release_len": {
+      "__array__": "sides.A.engine._release_len"
+     },
+     "_env_phase": {
+      "__array__": "sides.A.engine._env_phase"
+     },
+     "_env_level": {
+      "__array__": "sides.A.engine._env_level"
+     },
+     "_amp_smooth": {
+      "__array__": "sides.A.engine._amp_smooth"
+     },
+     "_freq_prev": {
+      "__array__": "sides.A.engine._freq_prev"
+     }
+    }
+   },
+   "B": {
+    "engine_id": "ca_object_resonators",
+    "params": {
+     "detector": 1,
+     "radius_mul": 2.438,
+     "spectrum": 1,
+     "frequency_scale": 680.625,
+     "decay_s": 0.579,
+     "n": 3,
+     "spread": 0.65,
+     "alpha": 0.383,
+     "shape": 0.9,
+     "harm": 0.942,
+     "fullshape": 1,
+     "dyn": 0.358
+    },
+    "peak": 0.15249654320537462,
+    "clip_blocks": 0,
+    "engine_state_version": 2,
+    "engine": {
+     "version": 2,
+     "engine_id": "ca_object_resonators",
+     "model_version": "ca_object_resonators_n4_v2",
+     "params": {
+      "detector": 1,
+      "radius_mul": 2.438,
+      "spectrum": 1,
+      "frequency_scale": 680.625,
+      "decay_s": 0.579,
+      "n": 3,
+      "spread": 0.65,
+      "alpha": 0.383,
+      "shape": 0.9,
+      "harm": 0.942,
+      "fullshape": 1,
+      "dyn": 0.358
+     },
+     "sr": 44100,
+     "block": 352,
+     "out_scale": 0.5,
+     "laplace_gain": 0.7,
+     "f0": 110.0,
+     "slots": {
+      "active": 24,
+      "tails": 96,
+      "fading": 24,
+      "bank": 24
+     },
+     "next_id": 2494,
+     "fig_ids": {
+      "__array__": "sides.B.engine.fig_ids"
+     },
+     "fig_slots": {
+      "__array__": "sides.B.engine.fig_slots"
+     },
+     "fig_centres": {
+      "__array__": "sides.B.engine.fig_centres"
+     },
+     "fig_radii": {
+      "__array__": "sides.B.engine.fig_radii"
+     },
+     "fig_cells": {
+      "__array__": "sides.B.engine.fig_cells"
+     },
+     "fig_offsets": {
+      "__array__": "sides.B.engine.fig_offsets"
+     },
+     "grid_pending": {
+      "__array__": "sides.B.engine.grid_pending"
+     },
+     "grid_prev": {
+      "__array__": "sides.B.engine.grid_prev"
+     },
+     "exc_pending": {
+      "__array__": "sides.B.engine.exc_pending"
+     },
+     "exc_prev": {
+      "__array__": "sides.B.engine.exc_prev"
+     },
+     "role": {
+      "__array__": "sides.B.engine.role"
+     },
+     "slot_id": {
+      "__array__": "sides.B.engine.slot_id"
+     },
+     "smode": {
+      "__array__": "sides.B.engine.smode"
+     },
+     "ndrive": {
+      "__array__": "sides.B.engine.ndrive"
+     },
+     "nlive": {
+      "__array__": "sides.B.engine.nlive"
+     },
+     "zre": {
+      "__array__": "sides.B.engine.zre"
+     },
+     "zim": {
+      "__array__": "sides.B.engine.zim"
+     },
+     "sqrtlam": {
+      "__array__": "sides.B.engine.sqrtlam"
+     },
+     "ffreq": {
+      "__array__": "sides.B.engine.ffreq"
+     },
+     "wcur": {
+      "__array__": "sides.B.engine.wcur"
+     },
+     "winc": {
+      "__array__": "sides.B.engine.winc"
+     },
+     "wtgt": {
+      "__array__": "sides.B.engine.wtgt"
+     },
+     "wleft": {
+      "__array__": "sides.B.engine.wleft"
+     },
+     "zf": {
+      "__array__": "sides.B.engine.zf"
+     },
+     "zs": {
+      "__array__": "sides.B.engine.zs"
+     },
+     "pan": {
+      "__array__": "sides.B.engine.pan"
+     },
+     "pleft": {
+      "__array__": "sides.B.engine.pleft"
+     },
+     "rr": {
+      "__array__": "sides.B.engine.rr"
+     },
+     "gg": {
+      "__array__": "sides.B.engine.gg"
+     },
+     "ints": {
+      "__array__": "sides.B.engine.ints"
+     },
+     "hp": {
+      "__array__": "sides.B.engine.hp"
+     },
+     "level": {
+      "__array__": "sides.B.engine.level"
+     },
+     "last_e": {
+      "__array__": "sides.B.engine.last_e"
+     },
+     "last_a": {
+      "__array__": "sides.B.engine.last_a"
+     },
+     "counters": {
+      "__array__": "sides.B.engine.counters"
+     }
+    }
+   }
+  }
+ }
+}
