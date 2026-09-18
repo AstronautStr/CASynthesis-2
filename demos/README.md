@@ -689,6 +689,33 @@ Side gains: A - B of the REQ windows at unit gains (D1 5..20 s, D2 the active pa
 without the pauses, D3 3..18 s).  Gates: `tests/test_objects_decay.py` (1q).  Measurements:
 `python demos/objects_decay_report.py` -> `demos/results/objects_decay/report.{json,md}`.
 
+### Objects decay control D4 (REQ `memory/req-objects-decay-control-2026-09-18.md`)
+
+Entry: **`run_objects_decay_control.bat`** opens the bench on the CATALOG screen of
+`lab_catalog/objects_decay_control_2026_09_18/` (build once with
+`python demos/build_objects_decay_control.py`).  No new code in the engine: the scenes are
+derived from the scene embedded in the D3 record (field = the preflight cells, the same 29);
+a condition changes only the Decay law, Decay and the constant side gain of the D3 side it
+starts from.  18 s at 6 gen/s (794112 samples, the length of D3), no scripted intervention.
+
+| condition | from D3 side | Decay law | Decay | side gain |
+|---|---|---|---|---|
+| matched Fixed | A | Fixed | 0.671529 s | 1.220467 |
+| previous Modal | B | Modal age | 1.39 s | 1.21 |
+| previous long Fixed | A | Fixed | 1.39 s | 1.0 |
+
+| scene | A | B |
+|---|---|---|
+| `od_d4_control` (D4.1) | matched Fixed | previous Modal (= B of D3 bit for bit) |
+| `od_d4_anchor` (D4.2) | matched Fixed (= A of D4.1) | previous long Fixed (= A of D3) |
+
+0.671529 s = ln 1000 / the mean APPLIED gamma of every driven mode of the active banks of
+the D3 Modal side over the samples [132300, 793800), every mode-sample weighted equally.
+Side gains: one constant per condition from the RMS of both channels over 3..18 s
+(`--calibrate` measures them at unit gains; the matched Fixed is levelled to the long
+Fixed).  Measurements: `python demos/objects_decay_control_report.py` ->
+`demos/results/objects_decay_control/report.{json,md}`.
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B

@@ -1,0 +1,186 @@
+{
+ "format": 2,
+ "id": "od_d4_anchor",
+ "title": "D4.2 - Тот же Fixed / прежний длинный Fixed (Jam p3 + Octagon II p5)",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   6,
+   7
+  ],
+  [
+   6,
+   8
+  ],
+  [
+   6,
+   23
+  ],
+  [
+   6,
+   24
+  ],
+  [
+   7,
+   6
+  ],
+  [
+   7,
+   9
+  ],
+  [
+   7,
+   22
+  ],
+  [
+   7,
+   25
+  ],
+  [
+   8,
+   4
+  ],
+  [
+   8,
+   7
+  ],
+  [
+   8,
+   9
+  ],
+  [
+   8,
+   21
+  ],
+  [
+   8,
+   26
+  ],
+  [
+   9,
+   4
+  ],
+  [
+   9,
+   8
+  ],
+  [
+   9,
+   20
+  ],
+  [
+   9,
+   27
+  ],
+  [
+   10,
+   4
+  ],
+  [
+   10,
+   20
+  ],
+  [
+   10,
+   27
+  ],
+  [
+   11,
+   7
+  ],
+  [
+   11,
+   21
+  ],
+  [
+   11,
+   26
+  ],
+  [
+   12,
+   5
+  ],
+  [
+   12,
+   6
+  ],
+  [
+   12,
+   22
+  ],
+  [
+   12,
+   25
+  ],
+  [
+   13,
+   23
+  ],
+  [
+   13,
+   24
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 6.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0,
+  "side_gain": {
+   "A": 1.220467,
+   "B": 1.0
+  }
+ },
+ "variants": {
+  "A": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 0,
+    "radius_mul": 1.0,
+    "spectrum": 1,
+    "events": 1,
+    "excitation": 0,
+    "birth_strength": 1.0,
+    "frequency_scale": 220.0,
+    "decay_s": 0.671529,
+    "decay_law": 0,
+    "attack_ms": 4.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.87,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  },
+  "B": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 0,
+    "radius_mul": 1.0,
+    "spectrum": 1,
+    "events": 1,
+    "excitation": 0,
+    "birth_strength": 1.0,
+    "frequency_scale": 220.0,
+    "decay_s": 1.39,
+    "decay_law": 0,
+    "attack_ms": 4.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.87,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: А — подобранный Fixed: Objects / Laplace, Decay law Fixed, Decay 0.671529 s, уровень стороны x1.220467 / Б — прежний длинный Fixed: Objects / Laplace, Decay law Fixed, Decay 1.39 s, уровень стороны x1.0. Notes: hypothesis and your listening result. The control Decay and the levels were computed for this scene from its start; they are not recomputed when you play."
+}

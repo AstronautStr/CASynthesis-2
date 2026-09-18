@@ -41,6 +41,13 @@ memory/req-objects-decay-2026-09-18.md section 5 "Техническая при�
     (D1: and Decay), side gains, on disk == builder, the D2 pause commands at the
     exact samples in the runner's journal, the level windows within 1 dB,
     the bench panel (18 rows, <= 880 px, the Decay law buttons, the row text)
+  - the D4 control (REQ memory/req-objects-decay-control-2026-09-18.md): the scenes
+    derive from the scene embedded in the D3 record and differ from their D3 side
+    only in the Decay law / Decay / side gain; rendered side by side with D3, the
+    A sides of D4.1 / D4.2 are equal, B of D4.1 == B of D3, B of D4.2 == A of D3 on
+    every block; ln(1000) / 0.671529 is the mean applied gamma of the driven modes
+    of the active banks of the Modal side over [132300, 793800) (closed-form block
+    sums of the 20 ms smoother) within 0.01 %, on the preflight's mode-samples
 
     python tests/test_objects_decay.py
 
@@ -82,7 +89,7 @@ ROWS = COLS = 32
 FIXED, COMMON, MODAL = orz.LAW_FIXED, orz.LAW_COMMON, orz.LAW_MODAL
 OBJECT_SCENES = ('n4_spectrum', 'n4_neighbor', 'ol_glider', 'ol_galaxy', 'ol_neighbor',
                  'ora_r1', 'ora_r2', 'ora_a1', 'ora_user034', 'oes_e1', 'oes_m1', 'obs_m2',
-                 'od_d1', 'od_d2', 'od_d3')
+                 'od_d1', 'od_d2', 'od_d3', 'od_d4_control', 'od_d4_anchor')
 PINNED = (('objects_event_source_modal_2026_09_17', 2), ('objects_birth_strength_2026_09_18', 1))
 
 
@@ -269,7 +276,8 @@ class RegistryTests(unittest.TestCase):
             for key in ('t_lo', 't_hi', 't_applied', 'adaptive'):
                 self.assertIn(key, f)
         # every Objects scene loads with the key
-        want = {('od_d1', 'B'): COMMON, ('od_d2', 'A'): COMMON, ('od_d2', 'B'): MODAL, ('od_d3', 'B'): MODAL}
+        want = {('od_d1', 'B'): COMMON, ('od_d2', 'A'): COMMON, ('od_d2', 'B'): MODAL, ('od_d3', 'B'): MODAL,
+                ('od_d4_control', 'B'): MODAL}
         for name in OBJECT_SCENES:
             sc = load_scene(os.path.join(ROOT, 'demos', name + '.json'))
             for side in ('A', 'B'):
@@ -1261,6 +1269,74 @@ class SceneTests(unittest.TestCase):
         finally:
             eng.stop()
             pygame.quit()
+
+
+class D4ControlTests(unittest.TestCase):
+    def test_d4_scenes_derive_from_the_d3_record_and_differ_only_in_the_losses_and_the_gains(self):
+        from demos import build_objects_decay_control as d4
+        pf = d4.check_against_preflight()
+        src = d4.source_scene()
+        a3, b3 = (src['variants'][s]['engine_params'] for s in ('A', 'B'))
+        want = dict(od_d4_control=(dict(a3, decay_s=0.671529), b3, dict(A=1.220467, B=1.21)),
+                    od_d4_anchor=(dict(a3, decay_s=0.671529), a3, dict(A=1.220467, B=1.0)))
+        for pair in d4.PAIRS:
+            doc = d4.scene_for(pair)
+            sc = scene_from_doc(doc)
+            pa, pb, gains = want[pair['id']]
+            self.assertEqual((sc.variants['A'][1], sc.variants['B'][1]), (pa, pb))
+            self.assertEqual(doc['audio']['side_gain'], gains)
+            self.assertEqual(sorted(map(tuple, doc['cells'])), sorted(map(tuple, src['cells'])))
+            self.assertEqual(doc['cells'], [list(c) for c in pf['cells']])
+            rest = {k: v for k, v in doc.items() if k not in ('id', 'title', 'cells', 'variants', 'audio', 'listen')}
+            self.assertEqual(rest, {k: v for k, v in src.items() if k not in ('id', 'title', 'cells', 'variants', 'audio', 'listen')})
+            self.assertEqual({k: v for k, v in doc['audio'].items() if k != 'side_gain'},
+                             {k: v for k, v in src['audio'].items() if k != 'side_gain'})
+            self.assertTrue(pair['hypothesis'].startswith('Гипотеза - '))
+            on_disk = load_scene(os.path.join(ROOT, 'demos', pair['id'] + '.json'))
+            self.assertEqual(on_disk.variants, sc.variants)
+            self.assertEqual(on_disk.side_gain, doc['audio']['side_gain'])
+
+    def test_d4_sides_equal_the_d3_sides_and_the_control_is_the_mean_applied_gamma_of_modal(self):
+        from demos import build_objects_decay_control as d4
+        from demos.build_objects_decay import CASES as D3_CASES
+        pf = d4.preflight()
+        runners = [DemoRunner(scene_from_doc(doc)) for doc in (d4.scene_for(d4.PAIRS[0]), d4.scene_for(d4.PAIRS[1]),
+                                                               scene_for(D3_CASES[2]))]
+        e = runners[0].sides['B'].engine
+        k = e.ksm
+        self.assertEqual(k, math.exp(-1.0 / (SR * 0.020)))
+        w0, w1 = d4.WINDOW
+        acc = dict(sum=0.0, n=0, clock=0)
+        kernel = e._kernel
+
+        def counting_kernel(n, out):
+            # the driven modes of the active banks, their applied gamma before the block
+            # and the target of the block; the smoother g_i = gt + (g0 - gt) k^i (i = 1..n)
+            # is summed in closed form over the block's samples inside the window
+            t0 = acc['clock']
+            i0, i1 = max(w0 - t0, 0), min(w1 - t0, n)
+            if i1 > i0:
+                for s in np.flatnonzero(e.role == orz.ROLE_ACTIVE):
+                    nd = int(e.ndrive[s])
+                    self.assertEqual(int(e.slaw[s]), 1)
+                    g0, gt = e.gam_a[s, :nd].copy(), e.gam_t[s, :nd].copy()
+                    acc['sum'] += float(np.sum((i1 - i0) * gt + (g0 - gt) * (k ** (i0 + 1) - k ** (i1 + 1)) / (1.0 - k)))
+                    acc['n'] += nd * (i1 - i0)
+            acc['clock'] = t0 + n
+            kernel(n, out)
+        e._kernel = counting_kernel
+        for r in runners:
+            r.post('start', at=0)
+        for _ in range(d4.N_SAMPLES // BLOCK):
+            c, a, d3 = (r.next_block() for r in runners)
+            self.assertTrue(np.array_equal(c.get('A'), a.get('A')))            # the same matched Fixed
+            self.assertTrue(np.array_equal(c.get('B'), d3.get('B')))           # D4.1 B == D3 B (Modal)
+            self.assertTrue(np.array_equal(a.get('B'), d3.get('A')))           # D4.2 B == D3 A (long Fixed)
+        self.assertEqual(acc['clock'], d4.N_SAMPLES)
+        self.assertEqual(acc['n'], pf['averaging']['mode_samples'])
+        mean = acc['sum'] / acc['n']
+        self.assertLess(abs(mean / pf['averaging']['mean_gamma_applied'] - 1.0), 1e-9)
+        self.assertLess(abs(orz.LN1000 / d4.CONDITIONS['matched_fixed']['decay'] / mean - 1.0), 1e-4)
 
 
 if __name__ == '__main__':
