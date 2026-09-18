@@ -1,0 +1,2072 @@
+{
+ "format": 3,
+ "id": "20260918-221023-9e3dba",
+ "provenance": {
+  "schema": 1,
+  "sound_set": 2,
+  "root": "C:\\Users\\Astro\\Documents\\Projects\\CASynth-2",
+  "manifest": {
+   "casynth_config.py": "836f3e96def1eeabe6f31116f8ec80a0109f85554ed5a0ddfd28b5ef123dcff2",
+   "casynth_core.py": "c4db326a9ebe2c8d06b1505f685782e62be4daee7dc69ef133d0ec4170b03883",
+   "casynth_engine.py": "ede4e4db4fb4181e7afeb92531a35880f49d1701b3ffe0596a26a3168fcf83f8",
+   "casynth_lab/engine_api.py": "2ab95105862e8f2644ab9ed534179e9ffea77142759125eb5fe2b49be5962d1b",
+   "casynth_lab/event_network.py": "629c264e18ea3c6d0336dab5ffe984d80c1b41251d9e0ce8874d9043ecd01668",
+   "casynth_lab/figures.py": "d3e89ff0137ecd69f57f17191c8b73cb16587c9b6fc05459a6b660808ef6d489",
+   "casynth_lab/gutter_controls.py": "f2cb31f79286ec3a9233f5e4733e207b46f87bf3f7b1d5b1a8c6922d8166fb1d",
+   "casynth_lab/gutter_field.py": "9c4e660942771ddc234ab4facb3eb88377e8e846969618727f39e9c4d20c279d",
+   "casynth_lab/gutter_field_n1_config.py": "35b1181daea7e381c8fe8a5d45af989410410bf8e026ff432b54698ceb9c4327",
+   "casynth_lab/gutter_field_periodic.py": "927d7d81cd5203ca2da6b37b7c80b59045e6aaafe998364a980dfc7cea3fca59",
+   "casynth_lab/legacy_engine.py": "13494afbe3ceaf31bf4a090cc4e1442fe914c6c074852985516cd01ce6c63652",
+   "casynth_lab/object_resonators.py": "ac3bb5e5a12a25d5734937f087d214e2663ac9a64e47217bffe85672e0b6bf15",
+   "casynth_lab/periodic_readout.py": "fd4853fbde04506f57c0c0024fa0a0b32b23925164ccabe22881dba6bb980590",
+   "casynth_lab/pm_network.py": "7e1fc88b58ef8623ead0194facb59d5a7f14b4e40a66732f99e95a86286f88ce",
+   "casynth_lab/registry.py": "4e0d5fff973362d3025bacb5280c889208da9dfd9660c4f0a7cfd1e91ed6ba7a",
+   "casynth_lab/runner.py": "9bdae79b5e89037152ea6709408713f359f6d60dd1a9680f284332ae79a31ce0",
+   "casynth_lab/scan_surface.py": "5cf0a3b28732f23e640861e3c1e1a6bf949c586cfe2b34b69d0d8e6246020e7d",
+   "casynth_lab/scene.py": "77fbbd4a404d9e418e70a90932e6ffe014a2dbba0853d70993f656bdce0ace47",
+   "casynth_lab/snapshot.py": "6886e8dd0d1d2615d836ec1390e6310c27783e42748c0153008ae7f02de30576",
+   "casynth_lab/tuned_events.py": "7e917e2352e1e1108f33829fbe2f563ab0d4d248ea71392398216389309f6fc1"
+  },
+  "digest": "02f53cbc329c1eb7a0f821c95791f7669173daa09f99ffaa4873740295c1f9eb",
+  "repo_id": "22b46903073195905f029c3c587445203c41ebbe",
+  "commit": "4f7e0726194a4c158d0a8b7c94a46a63a876ffd0",
+  "match": "clean",
+  "dirty": [],
+  "reason": "",
+  "environment": {
+   "python": "3.14.5",
+   "executable": "C:\\Users\\Astro\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+   "packages": {
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "pygame": "2.5.7",
+    "sounddevice": "0.5.5"
+   },
+   "os": "Windows",
+   "os_version": "10.0.26100",
+   "machine": "AMD64"
+  },
+  "audio": {},
+  "loaded_from": {
+   "casynth_core": true,
+   "casynth_engine": true,
+   "casynth_config": true,
+   "casynth_lab": true
+  }
+ },
+ "status_reason": "",
+ "pin": {
+  "commit": "4f7e0726194a4c158d0a8b7c94a46a63a876ffd0",
+  "ref": "refs/casynth/pins/4f7e0726194a4c158d0a8b7c94a46a63a876ffd0"
+ },
+ "origin_kind": "fresh",
+ "parent_record_id": null,
+ "snapshot": {
+  "runner_state_version": 1,
+  "end": {
+   "json": "state_end.json",
+   "npz": "state_end.npz"
+  },
+  "end_reason": "",
+  "origin": null,
+  "origin_seq": null,
+  "engine_state_versions": {
+   "A": 6,
+   "B": 6
+  }
+ },
+ "created": "2026-09-18T22:10:23",
+ "title": "D4.2 - Тот же Fixed / прежний длинный Fixed (Jam p3 + Octagon II p5)",
+ "note": "А — подобранный Fixed: Objects / Laplace, Decay law Fixed, Decay 0.671529 s, уровень стороны x1.220467 / Б — прежний длинный Fixed: Objects / Laplace, Decay law Fixed, Decay 1.39 s, уровень стороны x1.0. А побитно равна А записи D4.1, Б — А записи D3. Новый закон затухания в этой паре не используется. Поле и сцена исходного D3: Jam (период 3) + Octagon II (период 5), 29 клеток, старт с исходного поля с новой историей; 18 с, 6 поколений/с, f0 = 110 Hz; обе стороны — Own, Laplace, full 1, part 3, spread 1, harm 0.87, shape 0, alpha 0, dyn 0, Attack 4 ms, Events Births, Excitation Uniform. Decay 0.671529 s подобранного Fixed — ln 1000 / средняя ПРИМЕНЁННАЯ (после сглаживания 20 мс) скорость потерь gamma = 10.2866 1/s всех возбуждаемых мод активных банков прежнего Modal за 3…18 с, каждая пара «мода–отсчёт» с равным весом (5 293 928 пар); не подбор на слух и не по громкости. Частоты, удары, веса, Attack, клетки и панорама сторон одинаковы; различаются только потери и постоянный уровень стороны (одна калибровка на условие по RMS обоих каналов за 3…18 с). Среднее и уровни рассчитаны для этой исходной сцены и при ручной игре не пересчитываются.",
+ "status": "pinned",
+ "scene": {
+  "format": 2,
+  "id": "od_d4_anchor",
+  "title": "D4.2 - Тот же Fixed / прежний длинный Fixed (Jam p3 + Octagon II p5)",
+  "grid": {
+   "rows": 32,
+   "cols": 32
+  },
+  "cells": [
+   [
+    6,
+    7
+   ],
+   [
+    6,
+    8
+   ],
+   [
+    6,
+    23
+   ],
+   [
+    6,
+    24
+   ],
+   [
+    7,
+    6
+   ],
+   [
+    7,
+    9
+   ],
+   [
+    7,
+    22
+   ],
+   [
+    7,
+    25
+   ],
+   [
+    8,
+    4
+   ],
+   [
+    8,
+    7
+   ],
+   [
+    8,
+    9
+   ],
+   [
+    8,
+    21
+   ],
+   [
+    8,
+    26
+   ],
+   [
+    9,
+    4
+   ],
+   [
+    9,
+    8
+   ],
+   [
+    9,
+    20
+   ],
+   [
+    9,
+    27
+   ],
+   [
+    10,
+    4
+   ],
+   [
+    10,
+    20
+   ],
+   [
+    10,
+    27
+   ],
+   [
+    11,
+    7
+   ],
+   [
+    11,
+    21
+   ],
+   [
+    11,
+    26
+   ],
+   [
+    12,
+    5
+   ],
+   [
+    12,
+    6
+   ],
+   [
+    12,
+    22
+   ],
+   [
+    12,
+    25
+   ],
+   [
+    13,
+    23
+   ],
+   [
+    13,
+    24
+   ]
+  ],
+  "rule": "B3/S23",
+  "boundary": "torus",
+  "rate_hz": 6.0,
+  "audio": {
+   "f0_hz": 110.0,
+   "level": 1.0,
+   "side_gain": {
+    "A": 1.220467,
+    "B": 1.0
+   }
+  },
+  "variants": {
+   "A": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.671529,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "initial_side": "A",
+  "listen": "1 / 2: А — подобранный Fixed: Objects / Laplace, Decay law Fixed, Decay 0.671529 s, уровень стороны x1.220467 / Б — прежний длинный Fixed: Objects / Laplace, Decay law Fixed, Decay 1.39 s, уровень стороны x1.0. Notes: hypothesis and your listening result. The control Decay and the levels were computed for this scene from its start; they are not recomputed when you play.",
+  "factory_variants": {
+   "A": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.671529,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "param_memory": {
+   "A": {
+    "ca_object_resonators": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.671529,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "ca_object_resonators": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  }
+ },
+ "demo_scene": {
+  "format": 2,
+  "id": "od_d4_anchor",
+  "title": "D4.2 - Тот же Fixed / прежний длинный Fixed (Jam p3 + Octagon II p5)",
+  "grid": {
+   "rows": 32,
+   "cols": 32
+  },
+  "cells": [
+   [
+    6,
+    7
+   ],
+   [
+    6,
+    8
+   ],
+   [
+    6,
+    23
+   ],
+   [
+    6,
+    24
+   ],
+   [
+    7,
+    6
+   ],
+   [
+    7,
+    9
+   ],
+   [
+    7,
+    22
+   ],
+   [
+    7,
+    25
+   ],
+   [
+    8,
+    4
+   ],
+   [
+    8,
+    7
+   ],
+   [
+    8,
+    9
+   ],
+   [
+    8,
+    21
+   ],
+   [
+    8,
+    26
+   ],
+   [
+    9,
+    4
+   ],
+   [
+    9,
+    8
+   ],
+   [
+    9,
+    20
+   ],
+   [
+    9,
+    27
+   ],
+   [
+    10,
+    4
+   ],
+   [
+    10,
+    20
+   ],
+   [
+    10,
+    27
+   ],
+   [
+    11,
+    7
+   ],
+   [
+    11,
+    21
+   ],
+   [
+    11,
+    26
+   ],
+   [
+    12,
+    5
+   ],
+   [
+    12,
+    6
+   ],
+   [
+    12,
+    22
+   ],
+   [
+    12,
+    25
+   ],
+   [
+    13,
+    23
+   ],
+   [
+    13,
+    24
+   ]
+  ],
+  "rule": "B3/S23",
+  "boundary": "torus",
+  "rate_hz": 6.0,
+  "audio": {
+   "f0_hz": 110.0,
+   "level": 1.0,
+   "side_gain": {
+    "A": 1.220467,
+    "B": 1.0
+   }
+  },
+  "variants": {
+   "A": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.671529,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "initial_side": "A",
+  "listen": "1 / 2: А — подобранный Fixed: Objects / Laplace, Decay law Fixed, Decay 0.671529 s, уровень стороны x1.220467 / Б — прежний длинный Fixed: Objects / Laplace, Decay law Fixed, Decay 1.39 s, уровень стороны x1.0. Notes: hypothesis and your listening result. The control Decay and the levels were computed for this scene from its start; they are not recomputed when you play."
+ },
+ "origin_sample": 0,
+ "origin_state": {
+  "cells": [
+   [
+    6,
+    7
+   ],
+   [
+    6,
+    8
+   ],
+   [
+    6,
+    23
+   ],
+   [
+    6,
+    24
+   ],
+   [
+    7,
+    6
+   ],
+   [
+    7,
+    9
+   ],
+   [
+    7,
+    22
+   ],
+   [
+    7,
+    25
+   ],
+   [
+    8,
+    4
+   ],
+   [
+    8,
+    7
+   ],
+   [
+    8,
+    9
+   ],
+   [
+    8,
+    21
+   ],
+   [
+    8,
+    26
+   ],
+   [
+    9,
+    4
+   ],
+   [
+    9,
+    8
+   ],
+   [
+    9,
+    20
+   ],
+   [
+    9,
+    27
+   ],
+   [
+    10,
+    4
+   ],
+   [
+    10,
+    20
+   ],
+   [
+    10,
+    27
+   ],
+   [
+    11,
+    7
+   ],
+   [
+    11,
+    21
+   ],
+   [
+    11,
+    26
+   ],
+   [
+    12,
+    5
+   ],
+   [
+    12,
+    6
+   ],
+   [
+    12,
+    22
+   ],
+   [
+    12,
+    25
+   ],
+   [
+    13,
+    23
+   ],
+   [
+    13,
+    24
+   ]
+  ],
+  "vol": 0.7,
+  "selected": "A",
+  "settings": {
+   "A": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.671529,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "param_memory": {
+   "A": {
+    "ca_object_resonators": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.671529,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "ca_object_resonators": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "param_ranges": {},
+  "factory_variants": {
+   "A": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.671529,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  }
+ },
+ "window_seconds": 30.0,
+ "runner": {
+  "sr": 44100,
+  "block": 352,
+  "channels": 2,
+  "xfade_samples": 882,
+  "vol_initial": 0.7,
+  "master_gain_level": 1.0
+ },
+ "versions": {
+  "python": "3.14.5",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "sounddevice": "0.5.5",
+  "pygame": "2.5.7"
+ },
+ "journal": [
+  {
+   "out_sample": 0,
+   "seq": 1,
+   "kind": "start",
+   "args": {}
+  },
+  {
+   "out_sample": 7392,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 1
+   }
+  },
+  {
+   "out_sample": 14784,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 2
+   }
+  },
+  {
+   "out_sample": 22176,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 3
+   }
+  },
+  {
+   "out_sample": 29568,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 4
+   }
+  },
+  {
+   "out_sample": 36960,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 5
+   }
+  },
+  {
+   "out_sample": 44352,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 6
+   }
+  },
+  {
+   "out_sample": 51744,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 7
+   }
+  },
+  {
+   "out_sample": 59136,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 8
+   }
+  },
+  {
+   "out_sample": 66176,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 9
+   }
+  },
+  {
+   "out_sample": 73568,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 10
+   }
+  },
+  {
+   "out_sample": 80960,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 11
+   }
+  },
+  {
+   "out_sample": 88352,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 12
+   }
+  },
+  {
+   "out_sample": 95744,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 13
+   }
+  },
+  {
+   "out_sample": 103136,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 14
+   }
+  },
+  {
+   "out_sample": 110528,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 15
+   }
+  },
+  {
+   "out_sample": 117920,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 16
+   }
+  },
+  {
+   "out_sample": 124960,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 17
+   }
+  },
+  {
+   "out_sample": 132352,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 18
+   }
+  },
+  {
+   "out_sample": 139744,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 19
+   }
+  },
+  {
+   "out_sample": 147136,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 20
+   }
+  },
+  {
+   "out_sample": 154528,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 21
+   }
+  },
+  {
+   "out_sample": 161920,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 22
+   }
+  },
+  {
+   "out_sample": 169312,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 23
+   }
+  },
+  {
+   "out_sample": 176704,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 24
+   }
+  },
+  {
+   "out_sample": 184096,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 25
+   }
+  },
+  {
+   "out_sample": 191136,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 26
+   }
+  },
+  {
+   "out_sample": 198528,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 27
+   }
+  },
+  {
+   "out_sample": 205920,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 28
+   }
+  },
+  {
+   "out_sample": 213312,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 29
+   }
+  },
+  {
+   "out_sample": 220704,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 30
+   }
+  },
+  {
+   "out_sample": 228096,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 31
+   }
+  },
+  {
+   "out_sample": 235488,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 32
+   }
+  },
+  {
+   "out_sample": 242880,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 33
+   }
+  },
+  {
+   "out_sample": 249920,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 34
+   }
+  },
+  {
+   "out_sample": 257312,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 35
+   }
+  },
+  {
+   "out_sample": 264704,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 36
+   }
+  },
+  {
+   "out_sample": 272096,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 37
+   }
+  },
+  {
+   "out_sample": 279488,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 38
+   }
+  },
+  {
+   "out_sample": 286880,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 39
+   }
+  },
+  {
+   "out_sample": 294272,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 40
+   }
+  },
+  {
+   "out_sample": 301664,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 41
+   }
+  },
+  {
+   "out_sample": 308704,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 42
+   }
+  },
+  {
+   "out_sample": 316096,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 43
+   }
+  },
+  {
+   "out_sample": 323488,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 44
+   }
+  },
+  {
+   "out_sample": 330880,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 45
+   }
+  },
+  {
+   "out_sample": 338272,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 46
+   }
+  },
+  {
+   "out_sample": 345664,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 47
+   }
+  },
+  {
+   "out_sample": 353056,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 48
+   }
+  },
+  {
+   "out_sample": 360448,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 49
+   }
+  },
+  {
+   "out_sample": 367840,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 50
+   }
+  },
+  {
+   "out_sample": 374880,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 51
+   }
+  },
+  {
+   "out_sample": 382272,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 52
+   }
+  },
+  {
+   "out_sample": 389664,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 53
+   }
+  },
+  {
+   "out_sample": 397056,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 54
+   }
+  },
+  {
+   "out_sample": 404448,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 55
+   }
+  },
+  {
+   "out_sample": 411840,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 56
+   }
+  },
+  {
+   "out_sample": 419232,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 57
+   }
+  },
+  {
+   "out_sample": 426624,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 58
+   }
+  },
+  {
+   "out_sample": 433664,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 59
+   }
+  },
+  {
+   "out_sample": 441056,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 60
+   }
+  },
+  {
+   "out_sample": 448448,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 61
+   }
+  },
+  {
+   "out_sample": 455840,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 62
+   }
+  },
+  {
+   "out_sample": 463232,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 63
+   }
+  },
+  {
+   "out_sample": 470624,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 64
+   }
+  },
+  {
+   "out_sample": 478016,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 65
+   }
+  },
+  {
+   "out_sample": 485408,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 66
+   }
+  },
+  {
+   "out_sample": 492800,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 67
+   }
+  },
+  {
+   "out_sample": 499840,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 68
+   }
+  },
+  {
+   "out_sample": 507232,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 69
+   }
+  },
+  {
+   "out_sample": 514624,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 70
+   }
+  },
+  {
+   "out_sample": 522016,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 71
+   }
+  },
+  {
+   "out_sample": 529408,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 72
+   }
+  },
+  {
+   "out_sample": 536800,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 73
+   }
+  },
+  {
+   "out_sample": 544192,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 74
+   }
+  },
+  {
+   "out_sample": 551584,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 75
+   }
+  },
+  {
+   "out_sample": 558624,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 76
+   }
+  },
+  {
+   "out_sample": 566016,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 77
+   }
+  },
+  {
+   "out_sample": 573408,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 78
+   }
+  },
+  {
+   "out_sample": 580800,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 79
+   }
+  },
+  {
+   "out_sample": 588192,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 80
+   }
+  },
+  {
+   "out_sample": 595584,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 81
+   }
+  },
+  {
+   "out_sample": 602976,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 82
+   }
+  },
+  {
+   "out_sample": 610368,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 83
+   }
+  },
+  {
+   "out_sample": 617408,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 84
+   }
+  },
+  {
+   "out_sample": 624800,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 85
+   }
+  },
+  {
+   "out_sample": 632192,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 86
+   }
+  },
+  {
+   "out_sample": 639584,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 87
+   }
+  },
+  {
+   "out_sample": 646976,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 88
+   }
+  },
+  {
+   "out_sample": 654368,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 89
+   }
+  },
+  {
+   "out_sample": 661760,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 90
+   }
+  },
+  {
+   "out_sample": 669152,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 91
+   }
+  },
+  {
+   "out_sample": 676544,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 92
+   }
+  },
+  {
+   "out_sample": 683584,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 93
+   }
+  },
+  {
+   "out_sample": 690976,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 94
+   }
+  },
+  {
+   "out_sample": 698368,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 95
+   }
+  },
+  {
+   "out_sample": 705760,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 96
+   }
+  },
+  {
+   "out_sample": 713152,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 97
+   }
+  },
+  {
+   "out_sample": 720544,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 98
+   }
+  },
+  {
+   "out_sample": 727936,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 99
+   }
+  },
+  {
+   "out_sample": 735328,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 100
+   }
+  },
+  {
+   "out_sample": 742368,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 101
+   }
+  },
+  {
+   "out_sample": 749760,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 102
+   }
+  },
+  {
+   "out_sample": 757152,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 103
+   }
+  },
+  {
+   "out_sample": 764544,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 104
+   }
+  },
+  {
+   "out_sample": 771936,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 105
+   }
+  },
+  {
+   "out_sample": 779328,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 106
+   }
+  },
+  {
+   "out_sample": 786720,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 107
+   }
+  }
+ ],
+ "audio_start_sample": 0,
+ "end_sample": 794112,
+ "audio": {
+  "A": {
+   "file": "A.wav",
+   "samples": 794112,
+   "sha256": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04"
+  },
+  "B": {
+   "file": "B.wav",
+   "samples": 794112,
+   "sha256": "24d5d1d0ef8fb9e1f02931b7f50c0f863036cc8634cc9bd9a37faa33634cb53e"
+  },
+  "monitor": {
+   "file": "monitor.wav",
+   "samples": 794112,
+   "sha256": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04"
+  }
+ },
+ "engines": {
+  "A": "ca_object_resonators",
+  "B": "ca_object_resonators"
+ },
+ "settings_at_end": {
+  "A": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 0,
+    "radius_mul": 1.0,
+    "spectrum": 1,
+    "events": 1,
+    "excitation": 0,
+    "birth_strength": 1.0,
+    "frequency_scale": 220.0,
+    "decay_s": 0.671529,
+    "decay_law": 0,
+    "attack_ms": 4.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.87,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  },
+  "B": {
+   "engine_id": "ca_object_resonators",
+   "engine_params": {
+    "detector": 0,
+    "radius_mul": 1.0,
+    "spectrum": 1,
+    "events": 1,
+    "excitation": 0,
+    "birth_strength": 1.0,
+    "frequency_scale": 220.0,
+    "decay_s": 1.39,
+    "decay_law": 0,
+    "attack_ms": 4.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.87,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  }
+ },
+ "selected_at_end": "A",
+ "state_at_end": {
+  "cells": [
+   [
+    6,
+    7
+   ],
+   [
+    6,
+    8
+   ],
+   [
+    6,
+    22
+   ],
+   [
+    6,
+    25
+   ],
+   [
+    7,
+    6
+   ],
+   [
+    7,
+    9
+   ],
+   [
+    7,
+    22
+   ],
+   [
+    7,
+    25
+   ],
+   [
+    8,
+    5
+   ],
+   [
+    8,
+    7
+   ],
+   [
+    8,
+    9
+   ],
+   [
+    8,
+    20
+   ],
+   [
+    8,
+    21
+   ],
+   [
+    8,
+    23
+   ],
+   [
+    8,
+    24
+   ],
+   [
+    8,
+    26
+   ],
+   [
+    8,
+    27
+   ],
+   [
+    9,
+    4
+   ],
+   [
+    9,
+    5
+   ],
+   [
+    9,
+    6
+   ],
+   [
+    9,
+    8
+   ],
+   [
+    9,
+    22
+   ],
+   [
+    9,
+    25
+   ],
+   [
+    10,
+    6
+   ],
+   [
+    10,
+    22
+   ],
+   [
+    10,
+    25
+   ],
+   [
+    11,
+    5
+   ],
+   [
+    11,
+    6
+   ],
+   [
+    11,
+    20
+   ],
+   [
+    11,
+    21
+   ],
+   [
+    11,
+    23
+   ],
+   [
+    11,
+    24
+   ],
+   [
+    11,
+    26
+   ],
+   [
+    11,
+    27
+   ],
+   [
+    12,
+    5
+   ],
+   [
+    12,
+    6
+   ],
+   [
+    12,
+    22
+   ],
+   [
+    12,
+    25
+   ],
+   [
+    13,
+    22
+   ],
+   [
+    13,
+    25
+   ]
+  ],
+  "vol": 0.7,
+  "selected": "A",
+  "settings": {
+   "A": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.671529,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "param_memory": {
+   "A": {
+    "ca_object_resonators": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.671529,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "ca_object_resonators": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "param_ranges": {},
+  "factory_variants": {
+   "A": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 0.671529,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "ca_object_resonators",
+    "engine_params": {
+     "detector": 0,
+     "radius_mul": 1.0,
+     "spectrum": 1,
+     "events": 1,
+     "excitation": 0,
+     "birth_strength": 1.0,
+     "frequency_scale": 220.0,
+     "decay_s": 1.39,
+     "decay_law": 0,
+     "attack_ms": 4.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.87,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "gen": 107,
+  "paused": false,
+  "running": true
+ },
+ "diagnostics": {
+  "device_ok": false,
+  "device_error": "offline build",
+  "underruns": 0,
+  "block_errors": 0,
+  "last_error": null,
+  "clip_blocks": {
+   "A": 0,
+   "B": 0
+  },
+  "record_error": null
+ }
+}

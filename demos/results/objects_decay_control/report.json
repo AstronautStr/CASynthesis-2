@@ -1,0 +1,389 @@
+{
+ "generated": "2026-09-18T22:16:27",
+ "commit": "4f7e072",
+ "catalog": "lab_catalog/objects_decay_control_2026_09_18",
+ "mean": {
+  "method": "per-sample recurrence g <- k g + (1 - k) gt from the block-start states (numpy, float64); J(s) = modes j < ndrive of the slots with role ACTIVE; every mode-sample weighted equally",
+  "window_samples": [
+   132300,
+   793800
+  ],
+  "window_seconds": [
+   3.0,
+   18.0
+  ],
+  "k": 0.998866855645396,
+  "k_engine": 0.998866855645396,
+  "k_equal": true,
+  "mode_samples": 5293928,
+  "mean_gamma_applied": 10.28661266948659,
+  "T_ref": 0.6715286655511746,
+  "mean_gamma_target": 9.818623460940136,
+  "sum_applied": 54456586.836149804,
+  "slower_than_control": 3650429,
+  "faster_than_control": 1643499,
+  "min_gamma": 4.9696081143756405,
+  "max_gamma": 86.34694098727543,
+  "block_end_max_error": 0.0,
+  "active_not_adaptive": 0,
+  "blocks": 2256,
+  "max_active_banks": 4,
+  "max_driven_modes": 10,
+  "control_decay_s": 0.671529,
+  "control_gamma": 10.286607546334018,
+  "control_relative_error": -4.980407775079243e-07,
+  "engine_fixed_gamma": {
+   "min": 10.28660754633487,
+   "max": 10.28660754633487,
+   "blocks": 2256
+  },
+  "engine_fixed_relative_error": 4.980406946852867e-07,
+  "preflight": {
+   "mode_samples": 5293928,
+   "mean_gamma_applied": 10.286612669487145,
+   "mean_gamma_target": 9.818623460936553,
+   "slower": 3650429,
+   "faster": 1643499,
+   "min_gamma": 4.96960811437564,
+   "max_gamma": 86.34694098727543
+  },
+  "vs_preflight": {
+   "mode_samples_equal": true,
+   "mean_relative": -5.384581669432009e-14,
+   "target_relative": 3.6481928589182644e-13
+  },
+  "ok": true
+ },
+ "identity": {
+  "lengths": {
+   "control": {
+    "A": 794112,
+    "B": 794112,
+    "monitor": 794112
+   },
+   "anchor": {
+    "A": 794112,
+    "B": 794112,
+    "monitor": 794112
+   },
+   "d3": {
+    "A": 794112,
+    "B": 794112,
+    "monitor": 794112
+   }
+  },
+  "rendered": {
+   "control_A_equals_anchor_A": true,
+   "control_B_equals_d3_B": true,
+   "anchor_B_equals_d3_A": true,
+   "d3_rendered_equals_d3_record": true,
+   "monitor_equals_A": true
+  },
+  "hashes": {
+   "matched_fixed": {
+    "rendered": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04",
+    "preflight": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04",
+    "equal": true
+   },
+   "modal": {
+    "rendered": "9090f1d00d25d7d89d2e19c7e3bf931370ae4132d42e4efcabce1a664b758f07",
+    "preflight": "9090f1d00d25d7d89d2e19c7e3bf931370ae4132d42e4efcabce1a664b758f07",
+    "equal": true
+   },
+   "long_fixed": {
+    "rendered": "24d5d1d0ef8fb9e1f02931b7f50c0f863036cc8634cc9bd9a37faa33634cb53e",
+    "preflight": "24d5d1d0ef8fb9e1f02931b7f50c0f863036cc8634cc9bd9a37faa33634cb53e",
+    "equal": true
+   }
+  },
+  "d3_record_hashes": {
+   "A": "24d5d1d0ef8fb9e1f02931b7f50c0f863036cc8634cc9bd9a37faa33634cb53e",
+   "B": "9090f1d00d25d7d89d2e19c7e3bf931370ae4132d42e4efcabce1a664b758f07"
+  },
+  "records": {
+   "od_d4_control": {
+    "id": "20260918-221025-d81b66",
+    "samples": {
+     "A": 794112,
+     "B": 794112,
+     "monitor": 794112
+    },
+    "sha256": {
+     "A": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04",
+     "B": "9090f1d00d25d7d89d2e19c7e3bf931370ae4132d42e4efcabce1a664b758f07",
+     "monitor": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04"
+    },
+    "sha256_of_wav": {
+     "A": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04",
+     "B": "9090f1d00d25d7d89d2e19c7e3bf931370ae4132d42e4efcabce1a664b758f07",
+     "monitor": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04"
+    },
+    "wav_equals_rendered": {
+     "A": true,
+     "B": true,
+     "monitor": true
+    },
+    "journal_kinds": [
+     "start",
+     "step"
+    ],
+    "steps": 107,
+    "steps_equal_d3": true,
+    "end_sample": 794112,
+    "clip_blocks": {
+     "A": 0,
+     "B": 0
+    },
+    "side_gain": {
+     "A": 1.220467,
+     "B": 1.21
+    },
+    "vol_initial": 0.7,
+    "status": "pinned",
+    "commit": "4f7e0726194a4c158d0a8b7c94a46a63a876ffd0"
+   },
+   "od_d4_anchor": {
+    "id": "20260918-221023-9e3dba",
+    "samples": {
+     "A": 794112,
+     "B": 794112,
+     "monitor": 794112
+    },
+    "sha256": {
+     "A": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04",
+     "B": "24d5d1d0ef8fb9e1f02931b7f50c0f863036cc8634cc9bd9a37faa33634cb53e",
+     "monitor": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04"
+    },
+    "sha256_of_wav": {
+     "A": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04",
+     "B": "24d5d1d0ef8fb9e1f02931b7f50c0f863036cc8634cc9bd9a37faa33634cb53e",
+     "monitor": "e4e5f4de7669c55cac476ac0e8fb8618dfafb3187ce96e6f140ea990a292fa04"
+    },
+    "wav_equals_rendered": {
+     "A": true,
+     "B": true,
+     "monitor": true
+    },
+    "journal_kinds": [
+     "start",
+     "step"
+    ],
+    "steps": 107,
+    "steps_equal_d3": true,
+    "end_sample": 794112,
+    "clip_blocks": {
+     "A": 0,
+     "B": 0
+    },
+    "side_gain": {
+     "A": 1.220467,
+     "B": 1.0
+    },
+    "vol_initial": 0.7,
+    "status": "pinned",
+    "commit": "4f7e0726194a4c158d0a8b7c94a46a63a876ffd0"
+   }
+  },
+  "records_identity": {
+   "A_equal": true,
+   "A_is_preflight_matched": true,
+   "B_d41_equals_d3_B": true,
+   "B_d42_equals_d3_A": true
+  },
+  "per_block": {
+   "blocks": 2256,
+   "field_equal": true,
+   "figures_equal": true,
+   "active_banks_shared_equal": true,
+   "attack_equal": true,
+   "matched_twins_every_array_equal": true,
+   "first_bad_sample": null,
+   "differing_fields": [],
+   "fixed_r_exact": true,
+   "blocks_losses_differ": {
+    "control": 2256,
+    "anchor": 2256
+   },
+   "max_active_banks": 4,
+   "max_tails_modal": 21,
+   "shared_fields": [
+    "slot_id",
+    "smode",
+    "ndrive",
+    "npulse",
+    "nlive",
+    "sqrtlam",
+    "ffreq",
+    "cth",
+    "sth",
+    "wcur",
+    "winc",
+    "wtgt",
+    "wleft",
+    "zf",
+    "zs",
+    "zu",
+    "zfm",
+    "zsm",
+    "zum",
+    "pan",
+    "pleft",
+    "last_e",
+    "last_a",
+    "last_b"
+   ],
+   "finite": true
+  },
+  "levels": {
+   "conditions": {
+    "matched_fixed": {
+     "rms_dbfs": -33.9257540407929,
+     "preflight_rms_dbfs": -33.9257540407929,
+     "int16_peak": 0.18988616595965452,
+     "window_int16_peak": 0.10602130191961424,
+     "preflight_pcm_peak": 0.18988616595965452,
+     "preclip_peak_take": 0.1898989485171662,
+     "side_gain": 1.220467,
+     "clip_blocks": 0,
+     "at_full_scale": 0,
+     "vs_preflight_db": 0.0
+    },
+    "modal": {
+     "rms_dbfs": -33.906125224926136,
+     "preflight_rms_dbfs": -33.906125224926136,
+     "int16_peak": 0.11709952085940123,
+     "window_int16_peak": 0.11709952085940123,
+     "preflight_pcm_peak": 0.11709952085940123,
+     "preclip_peak_take": 0.11712143495140401,
+     "side_gain": 1.21,
+     "clip_blocks": 0,
+     "at_full_scale": 0,
+     "vs_preflight_db": 0.0
+    },
+    "long_fixed": {
+     "rms_dbfs": -33.9267941916195,
+     "preflight_rms_dbfs": -33.9267941916195,
+     "int16_peak": 0.16257209997863703,
+     "window_int16_peak": 0.0890835291604358,
+     "preflight_pcm_peak": 0.16257209997863703,
+     "preclip_peak_take": 0.16260148499833316,
+     "side_gain": 1.0,
+     "clip_blocks": 0,
+     "at_full_scale": 0,
+     "vs_preflight_db": 0.0
+    }
+   },
+   "spread_db": 0.020668966693364155,
+   "within_0_1_db": true,
+   "preflight_preclip_peaks_main_pair": {
+    "A": 0.1898989485171662,
+    "B": 0.11712143495140401
+   }
+  }
+ },
+ "calibration": {
+  "matched_fixed": {
+   "rms_db": -35.657311843276744,
+   "peak": 0.15559531598737714,
+   "clip": 0,
+   "gain_to_long_fixed": 1.2204665545384743,
+   "delivered_gain": 1.220467,
+   "delivered_rms_db": -33.926791021332754
+  },
+  "modal": {
+   "rms_db": -35.56282196119417,
+   "peak": 0.09679457434000333,
+   "clip": 0,
+   "gain_to_long_fixed": 1.2072616040532294,
+   "delivered_gain": 1.21,
+   "delivered_rms_db": -33.90711455486517
+  },
+  "long_fixed": {
+   "rms_db": -33.9267941916195,
+   "peak": 0.16260148499833316,
+   "clip": 0,
+   "gain_to_long_fixed": 1.0,
+   "delivered_gain": 1.0,
+   "delivered_rms_db": -33.9267941916195
+  }
+ },
+ "records": {
+  "od_d4_control": {
+   "id": "20260918-221025-d81b66",
+   "title": "D4.1 - Fixed по средней скорости потерь / Modal (Jam p3 + Octagon II p5)",
+   "replay": "match",
+   "replay_outputs": {
+    "A": true,
+    "B": true,
+    "monitor": true
+   },
+   "status": "pinned",
+   "commit": "4f7e0726194a4c158d0a8b7c94a46a63a876ffd0",
+   "pin_ref": "refs/casynth/pins/4f7e0726194a4c158d0a8b7c94a46a63a876ffd0",
+   "has_notes": true,
+   "notes_start": "Гипотеза - В А у всех частот один постоя",
+   "continue_blocks": 125,
+   "continue_clock_equal": true,
+   "continue_exact": {
+    "A": true,
+    "B": true,
+    "monitor": true
+   }
+  },
+  "od_d4_anchor": {
+   "id": "20260918-221023-9e3dba",
+   "title": "D4.2 - Тот же Fixed / прежний длинный Fixed (Jam p3 + Octagon II p5)",
+   "replay": "match",
+   "replay_outputs": {
+    "A": true,
+    "B": true,
+    "monitor": true
+   },
+   "status": "pinned",
+   "commit": "4f7e0726194a4c158d0a8b7c94a46a63a876ffd0",
+   "pin_ref": "refs/casynth/pins/4f7e0726194a4c158d0a8b7c94a46a63a876ffd0",
+   "has_notes": true,
+   "notes_start": "Гипотеза - А здесь точно такой же, как в",
+   "continue_blocks": 125,
+   "continue_clock_equal": true,
+   "continue_exact": {
+    "A": true,
+    "B": true,
+    "monitor": true
+   }
+  },
+  "d3_source": {
+   "id": "20260918-204155-4ff923",
+   "replay": "match",
+   "replay_outputs": {
+    "A": true,
+    "B": true,
+    "monitor": true
+   }
+  }
+ },
+ "timing": {
+  "od_d4_control": {
+   "p50": 0.7562999962829053,
+   "p99": 4.5697200286667385,
+   "max": 10.881499969400465,
+   "budget": 7.98185941043084,
+   "ok": true
+  },
+  "od_d4_anchor": {
+   "p50": 0.6062000175006688,
+   "p99": 4.747039993526397,
+   "max": 9.783000044990331,
+   "budget": 7.98185941043084,
+   "ok": true
+  }
+ },
+ "checks": {
+  "mean": true,
+  "identity": true,
+  "per_block": true,
+  "levels": true,
+  "records": true
+ },
+ "verdict": "all checks pass"
+}
