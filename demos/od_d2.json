@@ -1,86 +1,34 @@
 {
  "format": 2,
- "id": "oes_e1",
- "title": "E1 - Рождения / смерти: Events Births / Deaths (Octagon II p5)",
+ "id": "od_d2",
+ "title": "D2 - Две частоты расходятся по длине хвоста: Common age / Modal age (Blinker p2, две паузы)",
  "grid": {
   "rows": 32,
   "cols": 32
  },
  "cells": [
   [
-   7,
-   10
-  ],
-  [
-   7,
-   11
-  ],
-  [
-   8,
+   10,
    9
   ],
   [
-   8,
-   12
-  ],
-  [
-   9,
-   8
-  ],
-  [
-   9,
-   13
-  ],
-  [
    10,
-   7
-  ],
-  [
-   10,
-   14
-  ],
-  [
-   11,
-   7
-  ],
-  [
-   11,
-   14
-  ],
-  [
-   12,
-   8
-  ],
-  [
-   12,
-   13
-  ],
-  [
-   13,
-   9
-  ],
-  [
-   13,
-   12
-  ],
-  [
-   14,
    10
   ],
   [
-   14,
+   10,
    11
   ]
  ],
  "rule": "B3/S23",
  "boundary": "torus",
- "rate_hz": 6.0,
+ "rate_hz": 2.0,
  "audio": {
   "f0_hz": 110.0,
   "level": 1.0,
   "side_gain": {
    "A": 1.0,
-   "B": 0.93
+   "B": 0.82
   }
  },
  "variants": {
@@ -95,7 +43,7 @@
     "birth_strength": 1.0,
     "frequency_scale": 220.0,
     "decay_s": 1.39,
-    "decay_law": 0,
+    "decay_law": 1,
     "attack_ms": 4.0,
     "n": 3,
     "spread": 1.0,
@@ -112,12 +60,12 @@
     "detector": 0,
     "radius_mul": 1.0,
     "spectrum": 1,
-    "events": 2,
+    "events": 1,
     "excitation": 0,
     "birth_strength": 1.0,
     "frequency_scale": 220.0,
     "decay_s": 1.39,
-    "decay_law": 0,
+    "decay_law": 2,
     "attack_ms": 4.0,
     "n": 3,
     "spread": 1.0,
@@ -130,5 +78,35 @@
   }
  },
  "initial_side": "A",
- "listen": "1 / 2: А — Objects / Laplace, Events Births, Excitation Uniform / Б — Objects / Laplace, Events Deaths, Excitation Uniform. Notes: hypothesis and your listening result. Events / Excitation are the buttons of the Objects panel."
+ "listen": "1 / 2: А — Objects / Laplace, Decay law Common age, Stable decay 1.39 s / Б — Objects / Laplace, Decay law Modal age, Stable decay 1.39 s. Notes: hypothesis and your listening result. Decay law (Fixed / Common / Modal) and Decay are the knobs of the Objects panel; under Common / Modal age Decay is the stable (upper) T60 and each figure row shows its current target T range.",
+ "script": [
+  {
+   "at": 132704,
+   "kind": "pause",
+   "args": {
+    "on": true
+   }
+  },
+  {
+   "at": 242880,
+   "kind": "pause",
+   "args": {
+    "on": false
+   }
+  },
+  {
+   "at": 375232,
+   "kind": "pause",
+   "args": {
+    "on": true
+   }
+  },
+  {
+   "at": 485408,
+   "kind": "pause",
+   "args": {
+    "on": false
+   }
+  }
+ ]
 }

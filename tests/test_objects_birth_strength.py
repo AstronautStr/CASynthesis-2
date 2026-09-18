@@ -122,9 +122,11 @@ def rendered_like(rec):
         for side, var in (doc.get(group) or {}).items():
             if var.get('engine_id') == EID:
                 var['engine_params'].setdefault('birth_strength', 1.0)
+                var['engine_params'].setdefault('decay_law', 0)                 # Decay law (2026-09-18)
     for side, per_engine in (doc.get('param_memory') or {}).items():
         if EID in per_engine:
             per_engine[EID].setdefault('birth_strength', 1.0)
+            per_engine[EID].setdefault('decay_law', 0)
     cmds = [j for j in rec.meta['journal'] if j['kind'] != 'step']
     assert [(j['kind'], j['out_sample']) for j in cmds] == [('start', 0)], cmds
     runner = DemoRunner(scene_from_doc(doc))
@@ -146,7 +148,7 @@ class RegistryTests(unittest.TestCase):
         names = [p[0] for p in spec.params]
         self.assertEqual(names.index('birth_strength'), names.index('excitation') + 1)
         self.assertEqual(orz.OPTIONAL_PARAMS['birth_strength'], 1.0)
-        self.assertEqual((orz.MODEL_VERSION, orz.STATE_VERSION), ('ca_object_resonators_n4_v5', 5))
+        self.assertEqual((orz.MODEL_VERSION, orz.STATE_VERSION), ('ca_object_resonators_n4_v6', 6))   # v5 until Decay law (2026-09-18)
         self.assertEqual(orz.COMPATIBLE_STATES[4], 'ca_object_resonators_n4_v4')
         self.assertEqual(spec.defaults()['birth_strength'], 1.0)
         self.assertEqual(spec.defaults()['excitation'], UNIFORM)                # Uniform stays the default
@@ -384,7 +386,7 @@ class PathTests(unittest.TestCase):
         e.update_field(gens[1], events_field(gens[0], gens[1]))
         run(e, 2)
         st = e.export_state()
-        self.assertEqual((st['version'], st['model_version']), (5, orz.MODEL_VERSION))
+        self.assertEqual((st['version'], st['model_version']), (6, orz.MODEL_VERSION))          # 5 until Decay law
         self.assertEqual(st['params']['birth_strength'], 4.0)
         twin = registry.create(EID, CTX, dict(e.params))
         twin.init(np.zeros((ROWS, COLS), np.uint8), None, 0.0)
@@ -414,7 +416,7 @@ class PathTests(unittest.TestCase):
             for _ in range(20):
                 np.testing.assert_array_equal(e1.render_float(GAIN)[0], old.render_float(GAIN)[0])
         # refusals
-        for bad_state in (dict(copy.deepcopy(st), version=4),                             # v4 must say model v4
+        for bad_state in (dict(copy.deepcopy(st), version=5),                             # v5 must say model v5
                           dict(copy.deepcopy(st), params=dict(st['params'], birth_strength=4.5)),
                           dict(copy.deepcopy(st), params=dict(st['params'], birth_strength=float('nan')))):
             fresh = registry.create(EID, CTX, dict(e.params))
@@ -498,7 +500,7 @@ class SceneTests(unittest.TestCase):
         pygame.init()
         app = db.BenchApp(scene, eng)
         n_rows = len(registry.get(EID).params) + len(registry.get(EID).ranges)
-        self.assertEqual(n_rows, 17)
+        self.assertEqual(n_rows, 18)                                           # 17 until Decay law (2026-09-18)
         self.assertEqual(app._params_height(EID), n_rows * db.ROW_H)
         low = db.BenchApp(scene, eng, max_height=880)
         self.assertLessEqual(low.height, 880)

@@ -3,6 +3,11 @@
 v1: one engine (engine_id/engine_params) -> loaded as A = B.
 v2: `variants` {A, B} each with a full engine_id/engine_params, plus `listen`
 (short instruction) and optional `initial_side` (default A).
+Optional `script` (2026-09-18, Objects Decay law D2): scripted commands of the
+experiment, [{"at": samples of the scene clock > 0, "kind": "pause", "args":
+{"on": bool}}, ...] -- the runner queues them every time the scene starts from
+its beginning (Start, the pause of a stopped scene released, Restart); absent =
+none (older scenes / records unchanged).
 Unknown engine / unknown or missing engine parameter / out-of-range cell ->
 SceneError with a readable message.  No silent fallbacks.  The loaded JSON is
 never mutated by playback (the runner copies the settings).
@@ -19,6 +24,7 @@ FORMAT_VERSIONS = (1, 2)
 SIDES = ('A', 'B')
 SUPPORTED_RULES = ('B3/S23',)
 SUPPORTED_BOUNDARIES = ('torus',)
+SCRIPT_KINDS = ('pause',)            # commands a scene script may schedule (2026-09-18)
 
 
 class SceneError(ValueError):
@@ -62,6 +68,9 @@ class Scene:
         self.param_ranges = {k: {eid: {p: (float(v[0]), float(v[1])) for p, v in rr.items()}
                                  for eid, rr in per.items()}
                              for k, per in (d.get('param_ranges') or {}).items()}
+        # scripted commands (2026-09-18): (at, kind, args) on the scene clock, sorted
+        self.script = sorted(((int(c['at']), c['kind'], dict(c.get('args') or {}))
+                              for c in (d.get('script') or [])), key=lambda c: c[0])
         # v1 convenience (single engine)
         self.engine_id, self.engine_params = self.variants['A']
         self.f0_hz = float(d['audio']['f0_hz'])
@@ -173,6 +182,21 @@ def validate(d):
                         registry.validate_range(eid, pname, pair[0], pair[1])
                     except ValueError as e:
                         _fail(f"scene: param_ranges.{k}.{eid}.{pname}: {e}")
+    sc = d.get('script')
+    if sc is not None:
+        if not isinstance(sc, list):
+            _fail("scene: 'script' must be a list of {at, kind, args}")
+        for i, c in enumerate(sc):
+            if not isinstance(c, dict) or sorted(c) not in (['at', 'kind'], ['args', 'at', 'kind']):
+                _fail(f"scene: script[{i}] must be {{at, kind, args}}")
+            at = c['at']
+            if isinstance(at, bool) or not isinstance(at, int) or at <= 0:
+                _fail(f"scene: script[{i}].at must be a positive int (samples), got {at!r}")
+            if c['kind'] not in SCRIPT_KINDS:
+                _fail(f"scene: script[{i}].kind must be one of {SCRIPT_KINDS}, got {c['kind']!r}")
+            args = c.get('args') or {}
+            if not isinstance(args, dict) or sorted(args) != ['on'] or not isinstance(args['on'], bool):
+                _fail(f"scene: script[{i}].args of a pause must be {{on: true|false}}")
     a = d['audio']
     if not (isinstance(a, dict) and isinstance(a.get('f0_hz'), (int, float))
             and a['f0_hz'] > 0):
@@ -211,6 +235,10 @@ def _validate_engine(eid, params, where):
             _fail(f"scene: {where}engine_params.{name} must be an integer, got {v!r}")
         if not (lo <= v <= hi):
             _fail(f"scene: {where}engine_params.{name}={v!r} outside [{lo}, {hi}]")
+    try:
+        registry.validate_params(eid, params)          # the engine's combination rule (2026-09-18)
+    except ValueError as e:
+        _fail(f"scene: {where}engine_params: {e}")
 
 
 def scene_from_doc(d):

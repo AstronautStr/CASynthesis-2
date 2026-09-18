@@ -190,6 +190,67 @@ a v2 snapshot of model v2 additionally as Attack 0 -- bit for bit the older
 sound); the snapshot holds every slot array, the tracker
 (ids, slots, cells, centres, radii), the id counter, both fields and both
 excitations, the ramps, the DC filters and the gain.
+
+Decay law (v6, 2026-09-18, REQ memory/req-objects-decay-2026-09-18.md) -- `decay_law`
+= Fixed / Common age / Modal age (0 / 1 / 2, default 0; the bench buttons say
+Fixed / Common / Modal, LAW_NAMES holds the full names):
+    Fixed      : the previous path bit for bit -- one global r = 10 ** (-3 / (SR
+                 decay_s)) with its 20 ms ramp on a manual change, for every slot.
+    Common age / Modal age (defined for Spectrum = Laplace, full = on -- any other
+                 combination is REFUSED by the registry / set_params / the scene /
+                 the snapshot before the valid state changes; Own and Disk both
+                 work: q is always taken on the figure's OWN cells, the circle only
+                 selects the excitation):
+      history  : every cell position holds its freshness u in 0..1 (`age`): a
+                 born cell gets 1, a dead cell 0, a survivor keeps its value; after
+                 EVERY rendered block u *= exp(-B / (SR AGE_TAU_S)), AGE_TAU_S =
+                 0.5 s, on the audio sample clock (the CA pause freezes the field,
+                 not u).  The accepted transition is the same G_prev -> G
+                 difference the excitation uses (several edits before one render
+                 collapse; a re-set of the same value is no event); Stop / reset
+                 start a new history; a v5 snapshot imports u = 1 on the live
+                 cells of its previous field.  The age belongs to the POSITION,
+                 a moving figure does not carry it.
+      per mode : for the selected Laplace modes j of a figure (the same modes,
+                 the same node order; eigenvectors of the full torus Laplacian),
+                 the degenerate group Q(j) (DEGEN_TOL, the whole spectrum):
+                     P[j, i] = sum_{k in Q(j)} phi_k(i)^2 / |Q(j)|   (rows sum to 1)
+                     q_j     = sum_i P[j, i] u_i                     (clipped to
+                               [0, 1] within Q_TOL; a larger excursion is an error)
+                     T_j     = decay_s - (decay_s - T_FRESH_S) q_j    T_FRESH_S 0.08
+                     gamma_j = ln(1000) / T_j
+                 P is cached per figure (cells + settings) and recomputed only when
+                 the geometry or the mode set changes -- never per sample.
+      Common   : every driven mode of the bank gets gamma_common = mean_j gamma_j
+                 (the mean of the RATES, not of the times); Modal: each its own.
+      applied  : targets are computed at every block boundary; per sample, for
+                 every mode of an adaptive slot,
+                     ga <- k ga + (1 - k) gt        k = exp(-1 / (SR GAMMA_SMOOTH_S))
+                     r_j = exp(-ga / SR)            GAMMA_SMOOTH_S = 0.020
+                     z_j' = r_j e^{i theta_j} z_j + excitation
+                 (the same recurrence as Fixed with r_j instead of r).  A new slot
+                 / a new mode starts with ga = gt before its first sample; a
+                 continuing mode keeps ga (a new target never resets the sound).
+                 The law acts on the WHOLE ringing state of the mode, never
+                 creates energy, never changes weights, never strikes.
+      slots    : `slaw` per slot = 0 (the global r) / 1 (its own gamma states).
+                 A switch Fixed -> adaptive starts every slot in use from the
+                 gamma of the CURRENT global r (an active bank gets its real
+                 targets at the boundary, a tail / fading slot of the Fixed era
+                 holds the Decay of that moment); a switch adaptive -> Fixed sets the fixed
+                 gamma as the target, the smoothing finishes and the slot returns
+                 to the global r once |ga - gt| <= GAMMA_SETTLE gt and the r ramp
+                 is done (no step, no event).  A tail / fading slot / in-place
+                 fading mode takes its ga / gt with it and HOLDS its last target
+                 (no geometry left for a new q); Decay / law changes drive the
+                 active banks only; while the law stays Fixed a slaw = 0 tail
+                 keeps following the global r (the Fixed semantics of tails and
+                 of the Decay knob).  Bit-exact compatibility is
+                 promised for runs that stay Fixed the whole time, not for a
+                 state after an adaptive history.
+    The snapshot (v6) adds `age`, `gam_a` / `gam_t` / `slaw` and the cached P of
+    the active figures (`fig_part*`); a v5 snapshot restores as Fixed with the
+    gamma states at zero (the same sound).
 """
 import math
 
@@ -225,29 +286,44 @@ PARAMS = [('detector', 'Detector', 0, 1, True, 1),
           ('birth_strength', 'Birth strength', 0.0, 4.0, False, 1.0),
           ('frequency_scale', 'Freq scale', 55.0, 880.0, False, 220.0),
           ('decay_s', 'Decay', 0.20, 1.50, False, 0.80),
+          ('decay_law', 'Decay law', 0, 2, True, 0),
           ('attack_ms', 'Attack', 0.0, 20.0, False, 0.0)] + list(LAPLACE_PARAMS)
 # absent from older snapshots / parameter sets: the bit-exact v1 behaviour (Figure law)
 OPTIONAL_PARAMS = {'radius_mul': 1.0, 'spectrum': 0, 'attack_ms': 0.0, 'events': 0, 'excitation': 0,
-                   'birth_strength': 1.0}
+                   'birth_strength': 1.0, 'decay_law': 0}
 BIRTH_STRENGTH_RANGE = (0.0, 4.0)      # Birth strength: finite, inside this closed range
 BIRTH_STRENGTH_HINT = '0 = Uniform; 1 = original; >1 = stronger selection'
 OPTIONAL_PARAMS.update({p[0]: p[5] for p in LAPLACE_PARAMS})
 CHOICES = {'detector': ('Own', 'Disk'), 'spectrum': ('Figure', 'Laplace'),
-           'events': ('Both', 'Births', 'Deaths'), 'excitation': ('Uniform', 'Birth position')}
+           'events': ('Both', 'Births', 'Deaths'), 'excitation': ('Uniform', 'Birth position'),
+           'decay_law': ('Fixed', 'Common', 'Modal')}      # the bench buttons (60 px); full names: LAW_NAMES
+LAW_NAMES = ('Fixed', 'Common age', 'Modal age')
 DET_OWN, DET_DISK = 0, 1
 SPEC_FIGURE, SPEC_LAPLACE = 0, 1
 EV_BOTH, EV_BIRTHS, EV_DEATHS = 0, 1, 2
 EXC_UNIFORM, EXC_POSITION = 0, 1
+LAW_FIXED, LAW_COMMON, LAW_MODAL = 0, 1, 2
 POSITION_CONDITION = 'needs Births / Own / Laplace / full'      # the combination Birth position is defined for
-MODEL_VERSION = 'ca_object_resonators_n4_v5'
-STATE_VERSION = 5
+LAW_CONDITION = 'needs Laplace + full'                          # the combination Common / Modal age are defined for
+# the age-driven loss model (v6): named fixed parameters of this probe, no knobs
+T_FRESH_S = 0.08                       # T60 of a mode whose cells are all fresh (q = 1); decay_s is the stable T60
+AGE_TAU_S = 0.5                        # memory constant of a cell's freshness (audio sample clock)
+GAMMA_SMOOTH_S = 0.020                 # one-pole smoothing of the applied loss rate, per sample
+GAMMA_SETTLE = 1e-9                    # a slot converging to Fixed returns to the global r at |ga - gt| <= this * gt
+Q_TOL = 1e-9                           # q outside [0, 1] by at most this is clipped ...
+Q_ERR = 1e-6                           # ... by more than this it is a calculation error (raised)
+LN1000 = math.log(1000.0)              # gamma = ln(1000) / T60 (amplitude -60 dB)
+MODEL_VERSION = 'ca_object_resonators_n4_v6'
+STATE_VERSION = 6
 # older snapshots this engine restores (state version -> model version): the v2 state
 # (no Attack) is the v3 state with zu / qq / the attack ramp counter at zero; the v3
 # state (no Events / Excitation) is the v4 state with the per-mode pulse states at
 # zero, npulse = ndrive of the active slots and the two new counters at zero; the v4
-# state (no Birth strength) is the v5 state with birth_strength = 1 (same arrays)
+# state (no Birth strength) is the v5 state with birth_strength = 1 (same arrays); the
+# v5 state (no Decay law) is the v6 state with decay_law = Fixed, the gamma states at
+# zero, no cached participation and u = 1 on the live cells of its previous field
 COMPATIBLE_STATES = {2: 'ca_object_resonators_n4_v2', 3: 'ca_object_resonators_n4_v3',
-                     4: 'ca_object_resonators_n4_v4'}
+                     4: 'ca_object_resonators_n4_v4', 5: 'ca_object_resonators_n4_v5'}
 DEGEN_TOL = 1e-8                       # Birth position: |lambda_k - lambda_j| <= DEGEN_TOL max(1, |lambda_j|) = one group
 ZERO_PART = 1e-12                      # Birth position: sum of participations at or below this -> no packet
 ATTACK_LN9 = math.log(9.0)             # 10 -> 90 % of a one-pole step response takes ln 9 time constants
@@ -280,6 +356,75 @@ N_COUNTERS = 7
 
 def decay_r(t60_s, sr=SR_REQUIRED):
     return 10.0 ** (-3.0 / (float(sr) * float(t60_s)))
+
+
+def gamma_of_r(r, sr=SR_REQUIRED):
+    """The loss rate (1 / s) of a per-sample factor r: -sr ln r (r = exp(-gamma / sr))."""
+    return -float(sr) * math.log(float(r))
+
+
+def gamma_smooth_k(sr=SR_REQUIRED, tau_s=GAMMA_SMOOTH_S):
+    """The per-sample coefficient of the applied-gamma smoother: exp(-1 / (sr tau))."""
+    return math.exp(-1.0 / (float(sr) * float(tau_s)))
+
+
+def age_decay_k(block, sr=SR_REQUIRED, tau_s=AGE_TAU_S):
+    """The per-block factor of a cell's freshness: exp(-block / (sr tau))."""
+    return math.exp(-float(block) / (float(sr) * float(tau_s)))
+
+
+def mode_participation(L, idx, tol=DEGEN_TOL):
+    """float64 (m, N): P[j, i] = sum_{k in Q(j)} phi_k(i)^2 / |Q(j)| for the selected
+    modes `idx` (eigen-order indices of the Laplacian L), phi the orthonormal
+    eigenvectors in the node order of L and Q(j) the degenerate group of j over
+    the WHOLE spectrum (degenerate_groups): invariant to the sign and to a
+    rotation of the basis inside a group; every row sums to 1 (m = 0: (0, N))."""
+    L = np.asarray(L, np.float64)
+    idx = np.asarray(idx, np.int64)
+    N = int(L.shape[0])
+    m = int(len(idx))
+    if m == 0:
+        return np.zeros((0, N))
+    lam, vecs = np.linalg.eigh(L)
+    sq = vecs * vecs
+    P = np.empty((m, N))
+    for t, group in enumerate(degenerate_groups(lam, idx, tol)):
+        P[t] = sq[:, group].sum(axis=1) / len(group)
+    return P
+
+
+def age_targets(P, u_nodes, t_stable_s, t_fresh_s=T_FRESH_S):
+    """(q, T, gamma) of the module docstring for a participation matrix P (m, N)
+    and the freshness u_nodes (N,) in the node order of P: q = P u clipped to
+    [0, 1] within Q_TOL (RuntimeError beyond Q_ERR), T = t_stable - (t_stable -
+    t_fresh) q, gamma = ln(1000) / T -- in this order (no averaging of local
+    1 / T).  Empty P -> three empty arrays."""
+    P = np.asarray(P, np.float64)
+    if P.shape[0] == 0:
+        z = np.zeros(0)
+        return z, z.copy(), z.copy()
+    q = P @ np.asarray(u_nodes, np.float64)
+    lo, hi = float(q.min()), float(q.max())
+    if lo < -Q_ERR or hi > 1.0 + Q_ERR:
+        raise RuntimeError(f"engine {ENGINE_ID}: mode freshness q outside [0, 1]: {lo:.3e} .. {hi:.3e}")
+    q = np.clip(q, 0.0, 1.0)
+    T = float(t_stable_s) - (float(t_stable_s) - float(t_fresh_s)) * q
+    return q, T, LN1000 / T
+
+
+def decay_law_supported(params):
+    """Common / Modal age are defined for Spectrum = Laplace, full = 1."""
+    return (int(params.get('spectrum', SPEC_FIGURE)) == SPEC_LAPLACE
+            and int(params.get('fullshape', 1)) == 1)
+
+
+def validate_params(params):
+    """The combination rule of the engine (registry hook `validate`): an adaptive
+    Decay law outside Laplace / full raises ValueError; nothing else is checked here."""
+    law = int(params.get('decay_law', LAW_FIXED))
+    if law != LAW_FIXED and not decay_law_supported(params):
+        raise ValueError(f"engine {ENGINE_ID}: Decay law {LAW_NAMES[law]} {LAW_CONDITION} "
+                         f"(Spectrum Laplace with full = on); set it Fixed first")
 
 
 def attack_q(attack_ms, sr=SR_REQUIRED):
@@ -420,9 +565,13 @@ def birth_strength_profile(b, strength):
 
 @_jit
 def _render(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth, wcur, winc, wtgt, wleft,
-            zf, zs, zu, zfm, zsm, zum, pan, pleft, rr, gg, qq, ints, cst, hp_h, hp, out_scale, level):
+            zf, zs, zu, zfm, zsm, zum, pan, pleft, rr, gg, qq, ints, cst, hp_h, hp, out_scale, level,
+            slaw, gam_a, gam_t, ksm, sr):
     """`n` samples into out (n, 2) = the formulas of the module docstring INCLUDING
-    OUT_SCALE and the ramped gain.  level[s] = max |b_s| over the block (display)."""
+    OUT_SCALE and the ramped gain.  level[s] = max |b_s| over the block (display).
+    v6: a slot with slaw = 1 smooths its applied gamma per mode and sample (ksm)
+    and uses r_j = exp(-gamma / sr) in place of the global r; slaw = 0 slots run
+    the previous arithmetic unchanged."""
     S = role.shape[0]
     qf = cst[en.C_QF]; qs = cst[en.C_QS]; strength = cst[en.C_STRENGTH]
     for s in range(S):
@@ -491,12 +640,19 @@ def _render(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth, wcur, winc,
             # the fed modes: an active slot drives n_driven, a tail only what its last
             # packet (Deaths) left it -- npulse (0 for an ordinary tail)
             nd = ndrive[s] if role[s] == ROLE_ACTIVE else npulse[s]
+            adaptive = slaw[s] == 1
             acc = 0.0
             for j in range(nl):
                 re = zre[s, j]
                 im = zim[s, j]
                 c = cth[s, j]
                 sn = sth[s, j]
+                if adaptive:
+                    ga = ksm * gam_a[s, j] + (1.0 - ksm) * gam_t[s, j]
+                    gam_a[s, j] = ga
+                    rj = math.exp(-ga / sr)
+                else:
+                    rj = r
                 if j < nd:
                     # the per-mode packet states (Birth position): the same pulse and
                     # smoothing; exactly 0.0 while the states are 0, so a uniform packet
@@ -506,10 +662,10 @@ def _render(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth, wcur, winc,
                     zsm[s, j] = zsm[s, j] * qs
                     um = q * zum[s, j] + (1.0 - q) * pm
                     zum[s, j] = um
-                    nre = r * (c * re - sn * im) + (p + um)
+                    nre = rj * (c * re - sn * im) + (p + um)
                 else:
-                    nre = r * (c * re - sn * im)
-                nim = r * (sn * re + c * im)
+                    nre = rj * (c * re - sn * im)
+                nim = rj * (sn * re + c * im)
                 zre[s, j] = nre
                 zim[s, j] = nim
                 acc += wcur[s, j] * nre
@@ -552,6 +708,7 @@ class ObjectResonatorsEngine(SoundEngine):
                              f"stereo are supported (got {ctx.sr} / {ctx.block} / {ctx.channels})")
         for k, v in OPTIONAL_PARAMS.items():
             self.params.setdefault(k, v)
+        validate_params(self.params)                     # v6: an adaptive law needs Laplace / full
         self.engine_id = ENGINE_ID
         self.model_version = MODEL_VERSION
         self.sr = float(ctx.sr)
@@ -562,6 +719,8 @@ class ObjectResonatorsEngine(SoundEngine):
         self.ramp_n = int(round(RAMP_MS / 1000.0 * self.sr))
         self.consts = en.consts(self.sr)
         self.cache = fg.SpectrumCache(N_BANK)
+        self.ksm = gamma_smooth_k(self.sr)
+        self.age_k = age_decay_k(n, self.sr)
         self._grid = None
         self._exc = None
         self._zero()
@@ -608,6 +767,13 @@ class ObjectResonatorsEngine(SoundEngine):
         # evictions (tail -> fading), hard drops, unvoiced blocks, changes, in-place fades,
         # Birth position packets with zero participation, packets refused (unsupported combination)
         self.counters = np.zeros(N_COUNTERS, np.int64)
+        # v6: the per-slot loss law and the per-mode applied / target gamma (1 / s)
+        self.slaw = np.zeros(S, np.int64)
+        self.gam_a = np.zeros((S, M))
+        self.gam_t = np.zeros((S, M))
+        # v6: the freshness of every cell position (set with the field in init / restore)
+        self.age = None if self._grid is None else np.zeros(self._grid.shape)
+        self.part = {}                             # id -> dict(key, P, r, c): cached participation
         self.figures = {}                          # id -> Figure
         self.next_id = 1
         self.G_prev = None
@@ -617,7 +783,7 @@ class ObjectResonatorsEngine(SoundEngine):
         _render(n, out, self.role, self.ndrive, self.npulse, self.nlive, self.zre, self.zim, self.cth, self.sth,
                 self.wcur, self.winc, self.wtgt, self.wleft, self.zf, self.zs, self.zu, self.zfm, self.zsm,
                 self.zum, self.pan, self.pleft, self.rr, self.gg, self.qq, self.ints, self.consts, self.hp_h,
-                self.hp, OUT_SCALE, self.level)
+                self.hp, OUT_SCALE, self.level, self.slaw, self.gam_a, self.gam_t, self.ksm, self.sr)
 
     # -- geometry helpers -------------------------------------------------------------
     def _radius_mul(self):
@@ -693,6 +859,9 @@ class ObjectResonatorsEngine(SoundEngine):
         self.last_e[s] = 0.0
         self.last_a[s] = 0.0
         self.last_b[s] = 0.0
+        self.slaw[s] = 0
+        self.gam_a[s] = 0.0
+        self.gam_t[s] = 0.0
 
     def _zero_pulse(self, s):
         """No excitation left in slot s: the slot and the per-mode pulse states."""
@@ -715,7 +884,7 @@ class ObjectResonatorsEngine(SoundEngine):
 
     _SLOT_FIELDS = ('role', 'slot_id', 'smode', 'ndrive', 'npulse', 'nlive', 'zre', 'zim', 'sqrtlam', 'ffreq',
                     'cth', 'sth', 'wcur', 'winc', 'wtgt', 'wleft', 'zf', 'zs', 'zu', 'zfm', 'zsm', 'zum', 'pan',
-                    'pleft', 'level', 'last_e', 'last_a', 'last_b')
+                    'pleft', 'level', 'last_e', 'last_a', 'last_b', 'slaw', 'gam_a', 'gam_t')
 
     def _move_slot(self, src, dst):
         for name in self._SLOT_FIELDS:
@@ -739,6 +908,8 @@ class ObjectResonatorsEngine(SoundEngine):
         self.zsm[s, idx] = 0.0
         self.zum[s, idx] = 0.0
         self.last_b[s, idx] = 0.0
+        # the loss rates of a zeroed mode are kept: a quiet mode inside the live range of
+        # an adaptive slot still runs the kernel (on a zero state) and a rate stays a rate
 
     def _release_quiet(self):
         """Block boundary: silent tails freed, finished fades freed, quiet / faded
@@ -843,9 +1014,10 @@ class ObjectResonatorsEngine(SoundEngine):
         self.smode[dst] = self.smode[s]
         self.ndrive[dst] = 0
         self.nlive[dst] = m
-        for name in ('zre', 'zim', 'sqrtlam', 'ffreq', 'cth', 'sth', 'wcur', 'winc', 'wtgt'):
+        for name in ('zre', 'zim', 'sqrtlam', 'ffreq', 'cth', 'sth', 'wcur', 'winc', 'wtgt', 'gam_a', 'gam_t'):
             a = getattr(self, name)
             a[dst, :m] = a[s, keep]
+        self.slaw[dst] = self.slaw[s]                            # the tail keeps its law and holds its targets
         self.wleft[dst] = self.wleft[s]
         self.pan[dst] = self.pan[s]
         self.pleft[dst] = self.pleft[s]
@@ -904,7 +1076,117 @@ class ObjectResonatorsEngine(SoundEngine):
 
     def _tune_figure(self, f, exc, ramp):
         freqs, w, sq, mode = self._modes_of(f.cells, exc)
-        self._tune_slot(f.slot, freqs, w, sq, mode, ramp)
+        s = f.slot
+        n_old = int(self.ndrive[s])
+        self._tune_slot(s, freqs, w, sq, mode, ramp)
+        if self._decay_law() != LAW_FIXED:
+            # an adaptive law: the bank's targets from the current history; a NEW slot
+            # (slaw 0 -> 1) or the NEW modes of a continuing bank start at their target
+            self._target_figure(f, fresh_from=(n_old if self.slaw[s] == 1 else 0))
+        elif self.slaw[s] == 1 and int(self.ndrive[s]) > n_old:
+            # a bank still converging to Fixed grew: its new modes are fixed from the start
+            g = gamma_of_r(self.rr[R_TGT], self.sr)
+            self.gam_a[s, n_old:int(self.ndrive[s])] = g
+            self.gam_t[s, n_old:int(self.ndrive[s])] = g
+
+    # -- the age-driven losses (v6) ------------------------------------------------------
+    def _decay_law(self):
+        return int(self.params.get('decay_law', OPTIONAL_PARAMS['decay_law']))
+
+    def _law_key(self):
+        st = self._settings()
+        return (int(st['n']), float(st['spread']), float(st['alpha']), float(st['shape']), float(st['harm']),
+                int(st['fullshape']), float(st['dyn']), self.f0)
+
+    def _participation(self, f):
+        """The cached participation matrix of figure f under the current Laplace
+        settings -- dict(key, P (m, N), r, c) with the node cells (r, c) in the node
+        order of P; recomputed only when the cells or the settings changed."""
+        rows, cols = self._grid.shape
+        key = (f.cells.tobytes(), self._law_key())
+        cur = self.part.get(f.id)
+        if cur is not None and cur['key'] == key:
+            return cur
+        _freqs, _amps, graph = laplace_modes_of(f.cells, rows, cols, self.f0, self._settings(), self.E_prev,
+                                                with_graph=True)
+        P = mode_participation(graph['L'], graph['idx'])
+        order = graph['order']
+        cur = dict(key=key, P=P, r=f.cells[order, 0].copy(), c=f.cells[order, 1].copy())
+        self.part[f.id] = cur
+        return cur
+
+    def _target_figure(self, f, fresh_from=None):
+        """The loss targets of the bank of figure f from its history (q -> T -> gamma,
+        Common: the mean rate); `fresh_from` = the first mode whose applied gamma
+        starts AT the target (None: every applied value is kept)."""
+        s = f.slot
+        if s < 0 or self.smode[s] != SPEC_LAPLACE:
+            return
+        part = self._participation(f)
+        m = int(part['P'].shape[0])
+        if m != int(self.ndrive[s]):                              # pragma: no cover  (same law, same graph)
+            raise RuntimeError(f"engine {ENGINE_ID}: participation modes {m} != bank {int(self.ndrive[s])}")
+        if m == 0:
+            self.slaw[s] = 1
+            return
+        _q, _T, gamma = age_targets(part['P'], self.age[part['r'], part['c']], float(self.params['decay_s']))
+        if self._decay_law() == LAW_COMMON:
+            gamma = np.full(m, float(gamma.mean()))
+        if self.slaw[s] == 0:
+            # the slot enters the adaptive mechanism now (a new bank): every mode of it
+            # starts at its target
+            self.slaw[s] = 1
+            fresh_from = 0
+        self.gam_t[s, :m] = gamma
+        if fresh_from is not None and fresh_from < m:
+            self.gam_a[s, fresh_from:m] = gamma[fresh_from:]
+
+    def _refresh_targets(self):
+        """Block boundary under an adaptive law: the targets of every sounding bank
+        from the current history (the applied values are kept)."""
+        for f in self.figures.values():
+            if f.slot >= 0:
+                self._target_figure(f)
+
+    def _settle_fixed(self):
+        """Block boundary under Fixed: banks still converging from an adaptive history
+        follow the fixed target (Decay changes included) and return to the global r
+        once settled and the r ramp is done; tails hold what they carry."""
+        g = gamma_of_r(self.rr[R_TGT], self.sr)
+        for s in range(N_ACTIVE):
+            if self.role[s] != ROLE_ACTIVE or self.slaw[s] != 1:
+                continue
+            nl = int(self.nlive[s])
+            self.gam_t[s, :nl] = g
+            if int(self.ints[I_R_LEFT]) == 0 and bool(np.all(np.abs(self.gam_a[s, :nl] - g) <= GAMMA_SETTLE * g)):
+                self.slaw[s] = 0
+                self.gam_a[s] = 0.0
+                self.gam_t[s] = 0.0
+
+    def _enter_adaptive(self):
+        """The law left Fixed: every slot in use takes gamma states of its own, starting
+        from the gamma of the CURRENT global r.  An active bank gets its real targets at
+        the boundary before its next sample; a tail / fading slot of the Fixed era holds
+        the Decay of the moment of the switch (the target of a running r ramp) -- a
+        separated tail ends by the law it left with, later Decay moves drive the active
+        banks only."""
+        g_cur = gamma_of_r(self.rr[R_CUR], self.sr)
+        g_tgt = gamma_of_r(self.rr[R_TGT], self.sr)
+        for s in range(N_SLOTS):
+            if self.role[s] == ROLE_FREE or self.slaw[s] != 0:
+                continue
+            nl = int(self.nlive[s])
+            self.slaw[s] = 1
+            self.gam_a[s, :nl] = g_cur
+            self.gam_t[s, :nl] = g_cur if self.role[s] == ROLE_ACTIVE else g_tgt
+
+    def _leave_adaptive(self):
+        """The law became Fixed: every active bank aims at the fixed gamma (the
+        smoothing finishes, _settle_fixed hands the bank back to the global r)."""
+        g = gamma_of_r(self.rr[R_TGT], self.sr)
+        for s in range(N_ACTIVE):
+            if self.role[s] == ROLE_ACTIVE and self.slaw[s] == 1:
+                self.gam_t[s, :int(self.nlive[s])] = g
 
     def _retune_all(self, exc):
         """Spectrum law / Laplace settings / excitation changed on the same field:
@@ -1011,6 +1293,8 @@ class ObjectResonatorsEngine(SoundEngine):
         rows, cols = G.shape
         births = (G != 0) & (G_prev == 0)
         deaths = (G_prev != 0) & (G == 0)
+        self.age[births] = 1.0                                    # v6: a born position is fresh ...
+        self.age[deaths] = 0.0                                    # ... a dead one has no history
         events = self._events()
         comps = fg.components(G)
         old_ids = sorted(self.figures)
@@ -1062,6 +1346,8 @@ class ObjectResonatorsEngine(SoundEngine):
             self.next_id += 1
             figures[f.id] = f
         self.figures = figures
+        for fid in [k for k in self.part if k not in figures]:
+            del self.part[fid]
         self._allocate(exc)
         if events != EV_DEATHS:                        # Deaths: the appearance of a bank is no event
             for f in new_figs:
@@ -1111,12 +1397,21 @@ class ObjectResonatorsEngine(SoundEngine):
                 self._allocate(self.E_prev)              # a slot may have been freed
         if self._waiting():
             self.counters[C_UNVOICED] += 1
+        if self._decay_law() != LAW_FIXED:
+            self._refresh_targets()                      # v6: targets from the current history, every block
+        else:
+            self._settle_fixed()
+
+    def _age_block(self):
+        """After every rendered block: every position forgets a little (audio clock)."""
+        self.age *= self.age_k
 
     # -- SoundEngine ----------------------------------------------------------------
     def init(self, grid, exc, gain=0.0):
         self._zero()
         self._grid = np.array(grid, np.uint8, copy=True)
         self._exc = None if exc is None else np.array(exc, np.float64, copy=True)
+        self.age = np.zeros(self._grid.shape)            # the first boundary births every live cell
         g = float(gain)
         self.gg[:] = (g, g, 0.0)
 
@@ -1133,10 +1428,24 @@ class ObjectResonatorsEngine(SoundEngine):
             self.params = old
             raise ValueError(f"engine {ENGINE_ID}: birth_strength must be a finite number in "
                              f"{list(BIRTH_STRENGTH_RANGE)}, got {params.get('birth_strength')!r}")
+        try:
+            validate_params(self.params)                 # v6: an adaptive law needs Laplace / full
+        except ValueError:
+            self.params = old
+            raise
         if self._grid is None:
             return
         if float(self.params['frequency_scale']) != float(old['frequency_scale']):
             self._rescale_figure_slots()
+        law_old = int(old.get('decay_law', OPTIONAL_PARAMS['decay_law']))
+        law = self._decay_law()
+        if law != law_old:
+            # a law change: no packet, no reset -- a continuing bank starts its transition
+            # from its actual applied gamma (Common <-> Modal: the boundary retargets)
+            if law_old == LAW_FIXED:
+                self._enter_adaptive()
+            elif law == LAW_FIXED:
+                self._leave_adaptive()
         spectral = any(self.params[k] != old.get(k, OPTIONAL_PARAMS[k]) for k in ('spectrum',) + SPECTRUM_KEYS)
         if spectral and self.figures:
             self._retune_all(self.E_prev)
@@ -1185,6 +1494,7 @@ class ObjectResonatorsEngine(SoundEngine):
         self._set_gain(gain)
         out = self._out
         self._kernel(out.shape[0], out)
+        self._age_block()
         a = np.abs(out)
         peak = float(a.max()) if a.size else 0.0
         return out.copy(), peak, int(np.count_nonzero(a > 1.0))
@@ -1196,6 +1506,7 @@ class ObjectResonatorsEngine(SoundEngine):
             self._boundary()
         out = np.zeros_like(self._out)
         self._kernel(out.shape[0], out)
+        self._age_block()
         return out
 
     def inject(self, slot, a):
@@ -1218,13 +1529,23 @@ class ObjectResonatorsEngine(SoundEngine):
         det = int(self.params['detector'])
         spec = self._spectrum()
         ev, ex = self._events(), self._excitation()
+        law = self._decay_law()
         figs = []
         for fid in sorted(self.figures):
             f = self.figures[fid]
             s = f.slot
             nd = int(self.ndrive[s]) if s >= 0 else 0
             r_eff = self._eff_radius(f)
+            if s >= 0 and nd > 0 and self.slaw[s] == 1:
+                gt = self.gam_t[s, :nd]
+                ga = self.gam_a[s, :nd]
+                t_lo, t_hi = float(LN1000 / gt.max()), float(LN1000 / gt.min())
+                t_applied = float(LN1000 / ga.mean())
+            else:
+                t_lo = t_hi = t_applied = (float(LN1000 / gamma_of_r(self.rr[R_CUR], self.sr)) if s >= 0 else 0.0)
             figs.append(dict(id=fid, color=(fid - 1) % N_PALETTE, slot=s, n=int(len(f.cells)),
+                             t_lo=t_lo, t_hi=t_hi, t_applied=t_applied,
+                             adaptive=bool(s >= 0 and self.slaw[s] == 1),
                              cells=f.cells.tolist(), centre=[f.centre[0], f.centre[1]],
                              radius=r_eff, radius_geom=f.radius,
                              covers_all=bool(det == DET_DISK and fg.covers_field(r_eff, rows, cols)),
@@ -1254,6 +1575,10 @@ class ObjectResonatorsEngine(SoundEngine):
                     position_supported=bool(self._position_supported()),
                     position_condition=POSITION_CONDITION,
                     birth_strength=self._birth_strength(), birth_strength_hint=BIRTH_STRENGTH_HINT,
+                    decay_law=law, decay_law_name=LAW_NAMES[law], law_supported=bool(decay_law_supported(self.params)),
+                    law_condition=LAW_CONDITION, t_fresh_s=T_FRESH_S, age_tau_s=AGE_TAU_S,
+                    gamma_smooth_s=GAMMA_SMOOTH_S,
+                    n_adaptive=int(np.count_nonzero((self.role != ROLE_FREE) & (self.slaw == 1))),
                     spectrum=spec, spectrum_name=CHOICES['spectrum'][spec], f0=self.f0,
                     laplace=self._settings(),
                     frequency_scale=self._scale(), decay_s=float(self.params['decay_s']),
@@ -1266,7 +1591,7 @@ class ObjectResonatorsEngine(SoundEngine):
     # -- snapshot ---------------------------------------------------------------------
     _ARRAYS = ('role', 'slot_id', 'smode', 'ndrive', 'npulse', 'nlive', 'zre', 'zim', 'sqrtlam', 'ffreq', 'wcur',
                'winc', 'wtgt', 'wleft', 'zf', 'zs', 'zu', 'zfm', 'zsm', 'zum', 'pan', 'pleft', 'rr', 'gg', 'qq',
-               'ints', 'hp', 'level', 'last_e', 'last_a', 'last_b', 'counters')
+               'ints', 'hp', 'level', 'last_e', 'last_a', 'last_b', 'counters', 'slaw', 'gam_a', 'gam_t')
 
     def _fresh_arrays(self):
         S, M = N_SLOTS, N_BANK
@@ -1281,7 +1606,8 @@ class ObjectResonatorsEngine(SoundEngine):
                     rr=np.zeros(3), gg=np.zeros(3), qq=np.zeros(3), ints=np.zeros(4, np.int64),
                     hp=np.zeros((2, 2)),
                     level=np.zeros(S), last_e=np.zeros(S), last_a=np.zeros(S), last_b=np.zeros((S, M)),
-                    counters=np.zeros(N_COUNTERS, np.int64))
+                    counters=np.zeros(N_COUNTERS, np.int64),
+                    slaw=np.zeros(S, np.int64), gam_a=np.zeros((S, M)), gam_t=np.zeros((S, M)))
 
     def export_state(self):
         if self._grid is None:
@@ -1293,6 +1619,17 @@ class ObjectResonatorsEngine(SoundEngine):
             offsets[k + 1] = offsets[k] + len(f.cells)
         cells = (np.concatenate([f.cells for f in figs], axis=0) if figs
                  else np.zeros((0, 2), np.int64))
+        # v6: the cached participation of the figures whose cache is current (row-major
+        # (m, N) blocks; 0 modes = nothing cached for that figure)
+        parts = []
+        modes = np.zeros(len(figs), np.int64)
+        poff = np.zeros(len(figs) + 1, np.int64)
+        for k, f in enumerate(figs):
+            cur = self.part.get(f.id)
+            if cur is not None and cur['key'] == (f.cells.tobytes(), self._law_key()) and f.slot >= 0:
+                parts.append(cur['P'].reshape(-1))
+                modes[k] = cur['P'].shape[0]
+            poff[k + 1] = poff[k] + (modes[k] * len(f.cells))
         st = dict(version=self.STATE_VERSION, engine_id=self.engine_id,
                   model_version=self.model_version, params=dict(self.params),
                   sr=int(self.sr), block=int(self._out.shape[0]), out_scale=OUT_SCALE,
@@ -1305,6 +1642,10 @@ class ObjectResonatorsEngine(SoundEngine):
                   fig_radii=np.array([f.radius for f in figs], np.float64),
                   fig_cells=np.ascontiguousarray(cells, dtype=np.int64),
                   fig_offsets=offsets,
+                  fig_part=(np.concatenate(parts) if parts else np.zeros(0)),
+                  fig_part_modes=modes, fig_part_offsets=poff,
+                  age=self.age.copy(),
+                  law_key=list(self._law_key()),
                   grid_pending=self._grid.copy(),
                   grid_prev=(np.zeros_like(self._grid) if self.G_prev is None
                              else self.G_prev.copy()),
@@ -1345,6 +1686,18 @@ class ObjectResonatorsEngine(SoundEngine):
             cnt = state.get('counters')
             if isinstance(cnt, np.ndarray) and cnt.shape == (5,):
                 state['counters'] = np.concatenate([cnt, np.zeros(N_COUNTERS - 5, cnt.dtype)])
+            # a state without the Decay law (v2 .. v5): Fixed, no gamma states, no cached
+            # participation, and the past age unknown -- u = 1 on the live cells of its
+            # previous field (not a recovery of the hidden history; the Fixed sound is the same)
+            state.setdefault('slaw', np.zeros(S, np.int64))
+            state.setdefault('gam_a', np.zeros((S, M)))
+            state.setdefault('gam_t', np.zeros((S, M)))
+            gv0 = state.get('grid_prev')
+            if isinstance(gv0, np.ndarray):
+                state.setdefault('age', (np.asarray(gv0) != 0).astype(np.float64))
+            state.setdefault('fig_part', np.zeros(0))
+            state.setdefault('fig_part_modes', None)
+            state.setdefault('fig_part_offsets', None)
         if int(state.get('sr', -1)) != int(self.sr) or int(state.get('block', -1)) != self._out.shape[0]:
             raise ValueError(f"engine {ENGINE_ID}: state sr / block do not match the context")
         params = state.get('params')
@@ -1357,6 +1710,9 @@ class ObjectResonatorsEngine(SoundEngine):
         if not valid_birth_strength(params['birth_strength']):
             raise ValueError(f"engine {ENGINE_ID}: birth_strength of the state must be a finite number in "
                              f"{list(BIRTH_STRENGTH_RANGE)}, got {params['birth_strength']!r}")
+        if int(params['decay_law']) not in (LAW_FIXED, LAW_COMMON, LAW_MODAL):
+            raise ValueError(f"engine {ENGINE_ID}: decay_law of the state is not 0 / 1 / 2")
+        validate_params(params)                          # an adaptive law needs Laplace / full
         if float(state.get('out_scale', OUT_SCALE)) != OUT_SCALE:
             raise ValueError(f"engine {ENGINE_ID}: out_scale of the state is not {OUT_SCALE}")
         if float(state.get('laplace_gain', LAPLACE_GAIN)) != LAPLACE_GAIN:
@@ -1383,6 +1739,17 @@ class ObjectResonatorsEngine(SoundEngine):
             raise ValueError(f"engine {ENGINE_ID}: unknown slot role in the state")
         if not np.all(np.isin(arrays['smode'], (SPEC_FIGURE, SPEC_LAPLACE))):
             raise ValueError(f"engine {ENGINE_ID}: unknown spectrum law of a slot in the state")
+        if not np.all(np.isin(arrays['slaw'], (0, 1))):
+            raise ValueError(f"engine {ENGINE_ID}: unknown loss law of a slot in the state")
+        if (arrays['gam_a'] < 0.0).any() or (arrays['gam_t'] < 0.0).any():
+            raise ValueError(f"engine {ENGINE_ID}: negative loss rates in the state")
+        adaptive = arrays['slaw'] == 1
+        if ((arrays['role'] == ROLE_FREE) & adaptive).any():
+            raise ValueError(f"engine {ENGINE_ID}: a free slot of the state carries a loss law")
+        for s in np.nonzero(adaptive)[0]:
+            nl = int(arrays['nlive'][s])
+            if nl and (not (arrays['gam_t'][s, :nl] > 0.0).all() or not (arrays['gam_a'][s, :nl] > 0.0).all()):
+                raise ValueError(f"engine {ENGINE_ID}: loss rates of adaptive slot {int(s)} are not positive")
         if ((arrays['ndrive'] < 0).any() or (arrays['ndrive'] > N_BANK).any()
                 or (arrays['nlive'] < arrays['ndrive']).any() or (arrays['nlive'] > N_BANK).any()):
             raise ValueError(f"engine {ENGINE_ID}: mode counts of the state out of range")
@@ -1400,6 +1767,13 @@ class ObjectResonatorsEngine(SoundEngine):
         if not np.array_equal(np.asarray(gp, np.uint8), g):
             raise ValueError(f"engine {ENGINE_ID}: the pending field of the state differs "
                              f"from the bench field")
+        age = state.get('age')
+        if not isinstance(age, np.ndarray) or age.shape != g.shape or not np.all(np.isfinite(age)):
+            raise ValueError(f"engine {ENGINE_ID}: age missing / wrong shape / not finite")
+        if (age < 0.0).any() or (age > 1.0).any():
+            raise ValueError(f"engine {ENGINE_ID}: age of the state outside [0, 1]")
+        if (age[np.asarray(gv, np.uint8) == 0] != 0.0).any():
+            raise ValueError(f"engine {ENGINE_ID}: age of the state is non-zero on a dead cell")
         ep = state.get('exc_pending')
         ev = state.get('exc_prev')
         if ep is not None and (not isinstance(ep, np.ndarray) or ep.shape != g.shape):
@@ -1460,6 +1834,34 @@ class ObjectResonatorsEngine(SoundEngine):
         if len(seen) != len(comps):
             raise ValueError(f"engine {ENGINE_ID}: the previous field has components the state "
                              f"does not track")
+        # v6: the cached participation matrices (optional per figure; absent = recomputed
+        # at the next boundary from the same cells / settings)
+        pmodes = state.get('fig_part_modes')
+        poff = state.get('fig_part_offsets')
+        pdata = state.get('fig_part')
+        part = {}
+        if pmodes is not None or poff is not None:
+            if (not isinstance(pmodes, np.ndarray) or pmodes.shape != (F,) or not isinstance(poff, np.ndarray)
+                    or poff.shape != (F + 1,) or not isinstance(pdata, np.ndarray) or pdata.ndim != 1
+                    or poff[0] != 0 or poff[-1] != len(pdata) or not np.all(np.isfinite(pdata))):
+                raise ValueError(f"engine {ENGINE_ID}: cached participation of the state is inconsistent")
+            law_key = self._law_key_of(params)
+            for k in range(F):
+                m = int(pmodes[k])
+                if m == 0:
+                    continue
+                fig = figures[int(ids[k])]
+                N = len(fig.cells)
+                if fig.slot < 0 or m != int(arrays['ndrive'][fig.slot]) or poff[k + 1] - poff[k] != m * N:
+                    raise ValueError(f"engine {ENGINE_ID}: cached participation of figure {int(ids[k])} does "
+                                     f"not match its bank")
+                P = np.array(pdata[poff[k]:poff[k + 1]], np.float64).reshape(m, N)
+                if (P < -Q_TOL).any() or (P > 1.0 + Q_TOL).any() or not np.allclose(P.sum(axis=1), 1.0, atol=1e-9):
+                    raise ValueError(f"engine {ENGINE_ID}: cached participation of figure {int(ids[k])} is not "
+                                     f"a weight matrix")
+                _canon, order = fg.canonical_placement(fig.cells, rows, cols)
+                part[int(ids[k])] = dict(key=(fig.cells.tobytes(), law_key), P=P,
+                                         r=fig.cells[order, 0].copy(), c=fig.cells[order, 1].copy())
         active_ids = set(int(v) for v in arrays['slot_id'][arrays['role'] == ROLE_ACTIVE])
         if active_ids != set(f.id for f in figures.values() if f.slot >= 0):
             raise ValueError(f"engine {ENGINE_ID}: active slots and figures of the state disagree")
@@ -1486,11 +1888,18 @@ class ObjectResonatorsEngine(SoundEngine):
                 self.cth[s, :nl] = c
                 self.sth[s, :nl] = sn
         self.figures = figures
+        self.part = part
+        self.age = np.array(age, np.float64, copy=True)
         self.next_id = int(state.get('next_id', 1))
         self._grid = np.array(g, np.uint8, copy=True)
         self._exc = None if exc is None else np.array(exc, np.float64, copy=True)
         self.G_prev = np.array(Gp, np.uint8, copy=True)
         self.E_prev = np.array(ev, np.float64, copy=True)
+
+    def _law_key_of(self, params):
+        st = laplace_settings(params)
+        return (int(st['n']), float(st['spread']), float(st['alpha']), float(st['shape']), float(st['harm']),
+                int(st['fullshape']), float(st['dyn']), self.f0)
 
 
 def position_supported(params):
@@ -1503,18 +1912,27 @@ def position_supported(params):
 
 
 def inactive(params):
-    """Settings that do not act for the current mode (bench: shown as text)."""
+    """Settings that do not act for the current mode (bench: shown as text).  v6: the
+    Decay law buttons are locked while the combination cannot take an adaptive law
+    (the reason is the text); an adaptive law locks Spectrum and full in return, so
+    the combination can never be left unnoticed -- set Fixed first."""
     out = {}
     if int(params.get('excitation', EXC_UNIFORM)) != EXC_POSITION:
         # stored, shown with its value, acts only with Birth position (v5)
         out['birth_strength'] = f"{float(params.get('birth_strength', 1.0)):.2f}  Birth position only"
+    law = int(params.get('decay_law', LAW_FIXED))
+    if law != LAW_FIXED:
+        out['spectrum'] = "Laplace  held by Decay law"
+        out['fullshape'] = "on  held by Decay law"
+    elif not decay_law_supported(params):
+        out['decay_law'] = f"Fixed  ({LAW_CONDITION})"
     if int(params.get('spectrum', SPEC_FIGURE)) == SPEC_LAPLACE:
         out['frequency_scale'] = 'Figure law only (f0 = scene)'
         if float(params.get('shape', 0.0)) <= 0.0:
             out['dyn'] = 'acts only with shape > 0'
     else:
         for k in SPECTRUM_KEYS:
-            out[k] = 'Laplace only'
+            out.setdefault(k, 'Laplace only')
     return out
 
 
@@ -1529,4 +1947,4 @@ def overlay(params, rows, cols):
 
 register(EngineSpec(ENGINE_ID, LABEL, PARAMS, lambda ctx, params: ObjectResonatorsEngine(ctx, params),
                     choices=CHOICES, inactive=inactive, overlay=overlay,
-                    ranges={'radius_mul': RADIUS_RANGE}))
+                    ranges={'radius_mul': RADIUS_RANGE}, validate=validate_params))

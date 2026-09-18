@@ -45,6 +45,7 @@ COMMANDS = ('start', 'stop', 'pause', 'set_cell', 'reset', 'vol',
             'copy_spectrum',           # 2026-09-17: the shared spectrum settings only
             'set_range')               # 2026-09-17: the slider range of a ranged parameter (UI, no sound)
 RUNNER_STATE_VERSION = 1           # export_state() / from_state() format
+SCRIPT_FLAG = 'script'             # args key of a command the runner queued from the scene script
 
 # re-exported for callers that only import the runner
 validate_param = registry.validate_param
@@ -234,9 +235,16 @@ class DemoRunner:
             for _seq, _at, k, a in self._pending:
                 if k == 'set_engine' and a['side'] in eids:
                     eids[a['side']] = a['engine_id']
-            if not registry.spectrum_keys(eids[args['src']], eids[args['dst']]):
+            keys = registry.spectrum_keys(eids[args['src']], eids[args['dst']])
+            if not keys:
                 raise ValueError(f"copy_spectrum: {registry.label(eids[args['src']])} and "
                                  f"{registry.label(eids[args['dst']])} share no spectrum settings")
+            # the destination's combination rule with the copied settings (2026-09-18)
+            src_p = self._params_when_applied(args['src'])
+            dst_p = dict(self._params_when_applied(args['dst']))
+            for k in keys:
+                dst_p[k] = src_p[k]
+            registry.validate_params(eids[args['dst']], dst_p)
         if kind == 'set_engine':
             if args.get('engine_id') not in registry.REGISTRY:
                 raise ValueError(f"unknown engine {args.get('engine_id')!r} "
@@ -246,6 +254,9 @@ class DemoRunner:
             # a queued set_engine for that side counts
             eid = self._engine_when_applied(args['side'])
             args['value'] = validate_param(eid, args.get('name'), args.get('value'))
+            # ... and against the parameters it will have then: the engine's combination
+            # rule refuses here, before anything changes (2026-09-18, Objects Decay law)
+            registry.validate_params(eid, dict(self._params_when_applied(args['side']), **{args['name']: args['value']}))
         elif kind == 'set_range':
             eid = self._engine_when_applied(args['side'])
             lo, hi = registry.validate_range(eid, args.get('name'), args.get('lo'), args.get('hi'))
@@ -273,6 +284,31 @@ class DemoRunner:
                 eid = a['engine_id']
         return eid
 
+    def _params_when_applied(self, side):
+        """The parameter dict a side will hold once the queued commands have been
+        applied (set_engine / set_param / copy_side / copy_spectrum / factory on it,
+        in queue order; sources are taken as they are now)."""
+        s = self.sides[side]
+        eid, params = s.engine_id, dict(s.params)
+        for _seq, _at, k, a in self._pending:
+            if k == 'set_engine' and a['side'] == side:
+                if a['engine_id'] != eid:
+                    eid = a['engine_id']
+                    params = dict(self._memory.get((side, eid)) or engine_defaults(eid))
+            elif k == 'set_param' and a['side'] == side:
+                params[a['name']] = a['value']
+            elif k == 'copy_side' and a['dst'] == side:
+                src = self.sides[a['src']]
+                eid, params = src.engine_id, dict(src.params)
+            elif k == 'copy_spectrum' and a['dst'] == side:
+                src = self.sides[a['src']]
+                for key in registry.spectrum_keys(src.engine_id, eid):
+                    params[key] = src.params[key]
+            elif k == 'factory':
+                eid, params = self.scene.factory_variants[side]
+                params = dict(params)
+        return params
+
     def _apply_due(self):
         due = [c for c in self._pending
                if c[1] is None or c[1] <= self.out_samples]
@@ -282,23 +318,30 @@ class DemoRunner:
         for c in due:
             self._pending.remove(c)
         for seq, _at, kind, args in due:
-            self._apply(kind, args)
+            if self._apply(kind, args) is False:
+                continue                  # refused at apply time: no state change, not journaled
             self.journal.append((self.out_samples, seq, kind, dict(args)))
             if kind in ('reset', 'stop'):
                 # Reset/stop discard everything still queued for the future
                 # (those events belong to the previous run).
                 self._pending.clear()
+                if kind == 'reset':
+                    self._schedule_script()          # the scene begins again
 
     def _apply(self, kind, args):
         if kind == 'start':
+            was_running = self.running
             self.running = True
             self.paused = False
+            if not was_running:
+                self._schedule_script()              # the scene begins (from its start)
         elif kind == 'pause':
             on = bool(args.get('on', not self.paused))
             if not on and not self.running:
                 # releasing the pause of a stopped scene STARTS it (transport
                 # model: Stop = reset + pause + silence; un-pause = go)
                 self.running = True
+                self._schedule_script()
             self.paused = on
         elif kind == 'set_cell':
             r, c, v = int(args['r']), int(args['c']), int(bool(args['v']))
@@ -345,6 +388,10 @@ class DemoRunner:
             v = validate_param(s.engine_id, args['name'], args['value'])
             params = dict(s.params)
             params[args['name']] = v
+            try:
+                registry.validate_params(s.engine_id, params)     # the state it would make must be valid
+            except ValueError:
+                return False
             s.set_params(params)
             self._memory[(s.name, s.engine_id)] = dict(s.params)
         elif kind == 'set_engine':
@@ -367,6 +414,10 @@ class DemoRunner:
                 for k in keys:
                     params[k] = validate_param(dst.engine_id, k, src.params[k])
                 if params != dst.params:
+                    try:
+                        registry.validate_params(dst.engine_id, params)
+                    except ValueError:
+                        return False
                     dst.set_params(params)
                     self._memory[(dst.name, dst.engine_id)] = dict(dst.params)
         elif kind == 'factory':
@@ -392,6 +443,15 @@ class DemoRunner:
             if s.name == self.selected:
                 self._begin_xfade(None)
         self._memory[(s.name, eid)] = dict(s.params)
+
+    def _schedule_script(self):
+        """The scene begins from its start (t_samples = 0 at this boundary): queue its
+        scripted commands (scene `script`, 2026-09-18) at out_samples + at, marked
+        SCRIPT_FLAG.  They are journaled when applied like any command; a journal
+        replay skips them because the replayed start queues them again."""
+        for at, kind, args in getattr(self.scene, 'script', ()):
+            self._seq += 1
+            self._pending.append((self._seq, self.out_samples + int(at), kind, dict(args, **{SCRIPT_FLAG: True})))
 
     def _begin_xfade(self, from_side):
         """Start a mixer crossfade from `from_side` (None = from silence).
@@ -541,6 +601,10 @@ class DemoRunner:
                                  f"the registry")
             for k, v in params.items():
                 registry.validate_param(eid, k, v)
+            try:
+                registry.validate_params(eid, params)
+            except ValueError as e:
+                raise ValueError(f"snapshot: side {n}: {e}")
         if not isinstance(state['memory'], dict):
             raise ValueError("snapshot: memory must be a mapping")
         for n, per_engine in state['memory'].items():

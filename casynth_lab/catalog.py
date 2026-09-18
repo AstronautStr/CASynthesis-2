@@ -44,6 +44,13 @@ STATE_END, STATE_ORIGIN = 'state_end', 'state_origin'
 DEFAULT_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             'lab_catalog', 'local')
 REPLAY_COMMANDS_SKIP = ('step',)          # journal entries computed by the CA, not input
+
+
+def _replayed(j):
+    """A journal entry the replay posts: not a CA step, and not a command the runner
+    queued itself from the scene script (args 'script': the replayed start queues it
+    again, 2026-09-18)."""
+    return j['kind'] not in REPLAY_COMMANDS_SKIP and not (j.get('args') or {}).get('script')
 _WAV_CHUNK_FRAMES = SR                    # 1 s per streaming chunk
 
 
@@ -286,7 +293,7 @@ def end_state_by_replay(meta, progress=None):
     origin = meta.get('origin_sample', 0)
     end = meta['end_sample'] - origin
     cmds = [dict(j, out_sample=j['out_sample'] - origin) for j in meta['journal']
-            if j['kind'] not in REPLAY_COMMANDS_SKIP and j['out_sample'] >= origin]
+            if _replayed(j) and j['out_sample'] >= origin]
     cmds.sort(key=lambda j: (j['out_sample'], j['seq']))
     i = 0
     try:
@@ -782,8 +789,7 @@ class Catalog:
         start, end = meta['audio_start_sample'] - shift, meta['end_sample'] - shift
         try:
             cmds = [dict(j, out_sample=j['out_sample'] - shift) for j in meta['journal']
-                    if j['kind'] not in REPLAY_COMMANDS_SKIP and j['out_sample'] >= origin
-                    and keep(j)]
+                    if _replayed(j) and j['out_sample'] >= origin and keep(j)]
             cmds.sort(key=lambda j: (j['out_sample'], j['seq']))
         except (KeyError, TypeError) as e:
             return RecomputeResult('unavailable', f"journal unreadable: {e}")

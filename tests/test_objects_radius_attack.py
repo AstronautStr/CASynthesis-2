@@ -761,7 +761,7 @@ class AttackTests(unittest.TestCase):
         spec = registry.get(EID).spec_of('attack_ms')
         self.assertEqual(spec, ('attack_ms', 'Attack', 0.0, 20.0, False, 0.0))
         self.assertEqual(orz.OPTIONAL_PARAMS['attack_ms'], 0.0)
-        self.assertEqual((orz.MODEL_VERSION, orz.STATE_VERSION), ('ca_object_resonators_n4_v5', 5))   # v4 until Birth strength (2026-09-18)
+        self.assertEqual((orz.MODEL_VERSION, orz.STATE_VERSION), ('ca_object_resonators_n4_v6', 6))   # v4 until Birth strength, v5 until Decay law (2026-09-18)
 
     def test_attack_zero_is_the_previous_path_bit_for_bit(self):
         """The v1/v2 scalar reference of the N4 gate (no attack in its formulas) equals the
@@ -874,7 +874,7 @@ class AttackTests(unittest.TestCase):
         self.assertGreater(int(e.ints[orz.I_Q_LEFT]), 0)
         self.assertNotEqual(float(e.zu[0]), 0.0)
         st = e.export_state()
-        self.assertEqual(st['version'], 5)
+        self.assertEqual(st['version'], 6)                                      # 5 until Decay law (2026-09-18)
         for name in ('zu', 'qq'):
             self.assertIn(name, st)
         twin = registry.create(EID, CTX, dict(e.params))

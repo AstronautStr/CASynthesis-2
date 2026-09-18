@@ -1,75 +1,127 @@
 {
  "format": 2,
- "id": "oes_e1",
- "title": "E1 - Рождения / смерти: Events Births / Deaths (Octagon II p5)",
+ "id": "od_d3",
+ "title": "D3 - Разные хвосты в смеси двух периодов: Fixed 1.39 s / Modal age (Jam p3 + Octagon II p5)",
  "grid": {
   "rows": 32,
   "cols": 32
  },
  "cells": [
   [
-   7,
-   10
+   6,
+   7
+  ],
+  [
+   6,
+   8
   ],
   [
    7,
-   11
+   6
+  ],
+  [
+   7,
+   9
+  ],
+  [
+   8,
+   4
+  ],
+  [
+   8,
+   7
   ],
   [
    8,
    9
   ],
   [
+   9,
+   4
+  ],
+  [
+   9,
+   8
+  ],
+  [
+   10,
+   4
+  ],
+  [
+   11,
+   7
+  ],
+  [
+   12,
+   5
+  ],
+  [
+   12,
+   6
+  ],
+  [
+   6,
+   23
+  ],
+  [
+   6,
+   24
+  ],
+  [
+   7,
+   22
+  ],
+  [
+   7,
+   25
+  ],
+  [
    8,
-   12
+   21
+  ],
+  [
+   8,
+   26
   ],
   [
    9,
-   8
+   20
   ],
   [
    9,
-   13
+   27
   ],
   [
    10,
-   7
+   20
   ],
   [
    10,
-   14
+   27
   ],
   [
    11,
-   7
+   21
   ],
   [
    11,
-   14
+   26
   ],
   [
    12,
-   8
+   22
   ],
   [
    12,
-   13
+   25
   ],
   [
    13,
-   9
+   23
   ],
   [
    13,
-   12
-  ],
-  [
-   14,
-   10
-  ],
-  [
-   14,
-   11
+   24
   ]
  ],
  "rule": "B3/S23",
@@ -80,7 +132,7 @@
   "level": 1.0,
   "side_gain": {
    "A": 1.0,
-   "B": 0.93
+   "B": 1.21
   }
  },
  "variants": {
@@ -112,12 +164,12 @@
     "detector": 0,
     "radius_mul": 1.0,
     "spectrum": 1,
-    "events": 2,
+    "events": 1,
     "excitation": 0,
     "birth_strength": 1.0,
     "frequency_scale": 220.0,
     "decay_s": 1.39,
-    "decay_law": 0,
+    "decay_law": 2,
     "attack_ms": 4.0,
     "n": 3,
     "spread": 1.0,
@@ -130,5 +182,5 @@
   }
  },
  "initial_side": "A",
- "listen": "1 / 2: А — Objects / Laplace, Events Births, Excitation Uniform / Б — Objects / Laplace, Events Deaths, Excitation Uniform. Notes: hypothesis and your listening result. Events / Excitation are the buttons of the Objects panel."
+ "listen": "1 / 2: А — Objects / Laplace, Decay law Fixed, Decay 1.39 s / Б — Objects / Laplace, Decay law Modal age, Stable decay 1.39 s. Notes: hypothesis and your listening result. Decay law (Fixed / Common / Modal) and Decay are the knobs of the Objects panel; under Common / Modal age Decay is the stable (upper) T60 and each figure row shows its current target T range."
 }

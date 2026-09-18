@@ -647,6 +647,48 @@ Continue, v4 import; levels at the five s, timing with the knob moved, catalog c
 older Objects scene (`n4_*`, `ol_*`, `ora_*`, `oes_*`) carries `birth_strength: 1.0` (same sound;
 their records stay pinned to their own commits).
 
+## Objects -- decay from the history of the cells, D1-D3 (2026-09-18)
+
+REQ `memory/req-objects-decay-2026-09-18.md`, preflight
+`memory/research/objects-decay-preflight-2026-09-18.json`.  Objects v6
+(`ca_object_resonators_n4_v6`, `STATE_VERSION` 6; a v5 snapshot restores as Fixed with u = 1
+on its live cells -- the same sound): the knob **Decay law** (`decay_law`, buttons Fixed /
+Common / Modal = Fixed / Common age / Modal age, default Fixed, absent = Fixed) right after
+Decay.
+
+- **Fixed** -- the previous path bit for bit (one global r with its 20 ms ramp).
+- **History** -- every cell position holds its freshness u (born 1, dead 0, survivors keep
+  theirs, `u *= exp(-B / (SR 0.5 s))` after every rendered block, also while the CA is paused).
+- **Common age / Modal age** (only with Spectrum Laplace + full; the combination is refused
+  by the registry, the runner at post time, the scene loader and the snapshot, and the panel
+  locks it both ways): per selected Laplace mode j of a figure `q_j = sum_i P_ji u_i` (P = the
+  squared eigenvector entries averaged over the degenerate group), `T_j = Decay - (Decay -
+  0.08) q_j`, `gamma_j = ln(1000) / T_j`; Common gives every mode of the bank the MEAN RATE,
+  Modal each its own.  The applied gamma follows the target with a 20 ms one-pole per
+  sample and `r_j = exp(-gamma / SR)` replaces r for that mode -- on the whole ringing state,
+  never a strike, never a weight.  Decay is then the STABLE (upper) T60; the figure rows show
+  the current target T range (a target, not a measured length).  Tails keep their applied /
+  target gamma and hold the last target; a switch of the law or of Decay never strikes.
+- **Scene `script`** (new optional scene key): commands the runner queues at every start of
+  the scene from its beginning (Start, the pause of a stopped scene released, Restart) --
+  used for the two CA pauses of D2.  They stand in the journal marked `script` and the
+  replay skips them (the replayed start queues them again); Continue never repeats past ones.
+
+Entry: **`run_objects_decay.bat`** opens the bench on the CATALOG screen of
+`lab_catalog/objects_decay_2026_09_18/` (build once with `python demos/build_objects_decay.py`).
+Both sides: Own, Laplace, full 1, part 3, spread 1, harm 0.87, shape / alpha / dyn 0, Attack
+4 ms, Events Births, Excitation Uniform, f0 110 Hz, the preflight cells.
+
+| scene | field | rate, length | A | B | side gain B |
+|---|---|---|---|---|---|
+| `od_d1` | Octagon II p5 | 2 gen/s, 20 s | Fixed, Decay 0.947926 s | Common age, 1.39 s | 1.09 |
+| `od_d2` | Blinker p2, two scripted pauses | 2 gen/s, 16 s | Common age, 1.39 s | Modal age, 1.39 s | 0.82 |
+| `od_d3` | Jam p3 + Octagon II p5 | 6 gen/s, 18 s | Fixed, 1.39 s | Modal age, 1.39 s | 1.21 |
+
+Side gains: A - B of the REQ windows at unit gains (D1 5..20 s, D2 the active parts after 2 s
+without the pauses, D3 3..18 s).  Gates: `tests/test_objects_decay.py` (1q).  Measurements:
+`python demos/objects_decay_report.py` -> `demos/results/objects_decay/report.{json,md}`.
+
 ## Adding a sound engine (S3 interface)
 
 The bench owns the field, clocks, command queue/journal, transport, the A/B

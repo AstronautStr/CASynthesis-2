@@ -32,11 +32,16 @@ class EngineSpec:
                  pair is the default range of the slider, the spec's lo / hi
                  stay the validation bounds (lo <= min < max <= hi).  The bench
                  keeps the edited range per side (runner set_range, scene
-                 `param_ranges`); the registry entry itself is never changed."""
-    __slots__ = ('id', 'label', 'params', 'factory', 'choices', 'inactive', 'overlay', 'ranges')
+                 `param_ranges`); the registry entry itself is never changed.
+      validate : validate(params) -> None, raising ValueError for a COMBINATION
+                 of values the engine does not define (Objects Decay law,
+                 2026-09-18); every single value has already passed its range.
+                 The scene loader, the runner (before a command changes anything)
+                 and the snapshot call it through validate_params()."""
+    __slots__ = ('id', 'label', 'params', 'factory', 'choices', 'inactive', 'overlay', 'ranges', 'validate')
 
     def __init__(self, id, label, params, factory, choices=None, inactive=None, overlay=None,
-                 ranges=None):
+                 ranges=None, validate=None):
         self.id = id
         self.label = label
         self.params = tuple(tuple(p) for p in params)
@@ -45,6 +50,7 @@ class EngineSpec:
         self.inactive = inactive
         self.overlay = overlay
         self.ranges = {k: (float(v[0]), float(v[1])) for k, v in (ranges or {}).items()}
+        self.validate = validate
 
     def defaults(self):
         return {p[0]: p[5] for p in self.params}
@@ -187,6 +193,16 @@ def validate_param(engine_id, name, value):
     if not (lo <= value <= hi):
         raise ValueError(f"{engine_id}.{name}={value!r} outside [{lo}, {hi}]")
     return value
+
+
+def validate_params(engine_id, params):
+    """The engine's combination rule on a FULL parameter dict (after the per-value
+    checks): returns the dict, raises ValueError.  Engines without a rule accept
+    everything."""
+    fn = get(engine_id).validate
+    if fn is not None:
+        fn(params)
+    return params
 
 
 def _legacy_factory(engine_id):

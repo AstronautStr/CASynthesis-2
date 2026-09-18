@@ -23,6 +23,7 @@ Gates (any FAIL -> exit 1):
   1n. objects radius/attack python tests/test_objects_radius_attack.py (radius range, full masks, attack)
   1o. objects events/modal python tests/test_objects_event_source.py (Births / Deaths, Birth position)
   1p. objects birth strength python tests/test_objects_birth_strength.py (Birth strength law, M2)
+  1q. objects decay law python tests/test_objects_decay.py          (history -> losses, D1-D3, scene script)
   2. golden master     python tests/golden/golden_master.py       (audio, byte-exact)
   3. ui frame + smoke  CASYNTH_DUMPFRAME render of gol_synth.py   (pixel-exact vs
                        tests/golden/ui_frame.png; doubles as the import/init smoke)
@@ -165,6 +166,12 @@ def main():
 
     results.append(("objects birth strength (the force of the birth position, M2)",
                     _run("Objects birth-strength tests", [py, os.path.join("tests", "test_objects_birth_strength.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"},
+                         timeout=900)))
+
+    results.append(("objects decay law (losses from the history of the cells, D1-D3)",
+                    _run("Objects decay-law tests", [py, os.path.join("tests", "test_objects_decay.py")],
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"},
                          timeout=900)))

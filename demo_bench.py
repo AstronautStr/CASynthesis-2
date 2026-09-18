@@ -63,9 +63,9 @@ PANEL_W = 270
 TAB_W, TAB_H = 96, 30
 ARROW_W = 28
 ENG_W, ENG_H = 62, 24        # 4 engine buttons per row (74 / 3 per row until 2026-09-17)
-ROW_H = 18                   # 26 until 2026-09-17, 22 until Events / Excitation, 20 until Birth strength (2026-09-18): Objects has 16 knobs + a range row; the window must fit a 960 px desktop
+ROW_H = 17                   # 26 until 2026-09-17, 22 until Events / Excitation, 20 until Birth strength, 18 until Decay law (2026-09-18): Objects has 17 knobs + a range row; the window must fit a 960 px desktop
 CHOICE_H = 16                # word button of a named-choice knob (18 until 2026-09-18)
-RANGE_FIELD_H = 18           # Min / Max field of a ranged knob (20 until 2026-09-18)
+RANGE_FIELD_H = 17           # Min / Max field of a ranged knob (20 until 2026-09-18, 18 until Decay law)
 ENG_PER_ROW = 4
 FIGURE_ROWS_MAX = 8          # figure rows of the Objects display reserved below the knobs (fewer on a low desktop)
 FIGURE_ROWS_MIN = 3
@@ -101,6 +101,31 @@ LIB_PREV_W, LIB_PREV_H = 30, 22
 C_GHOST = (111, 208, 224, 110)   # dragged pattern over the field (alpha)
 C_SEL = (58, 96, 138)            # text selection
 FALLBACK_CHAR_W = 7              # text metrics before a font is bound (tests)
+
+
+def decay_law_line(disp):
+    """The fourth Objects header line under an adaptive Decay law (2026-09-18)."""
+    return f"{disp.get('decay_law_name', '?')}  stable {float(disp['decay_s']):.2f} s;  rows: target T"
+
+
+def fit_text(font, variants, room, color):
+    """The rendered first variant not wider than `room` px (else the last one)."""
+    t = None
+    for text in variants:
+        t = font.render(text, True, color)
+        if t.get_width() <= room:
+            return t
+    return t
+
+
+def figure_decay_text(f, a):
+    """The tail of an Objects figure row: the last packet a (Fixed), or the current
+    TARGET T range of the bank's modes under an adaptive Decay law (2026-09-18) --
+    a target, never a measured length of the sound."""
+    if not f.get('adaptive'):
+        return f"a {a:.2f}"
+    lo, hi = float(f.get('t_lo', 0.0)), float(f.get('t_hi', 0.0))
+    return f"T {lo:.2f} s" if hi - lo < 0.005 else f"T {lo:.2f}-{hi:.2f} s"
 
 
 def _is_toggle(spec):
@@ -410,7 +435,9 @@ class BenchApp:
                             self._post('set_param', side=side, name=name, value=value)
                             return f'param:{name}'
                     continue
-                if sx - 6 <= pos[0] < sx + sw + 6 and sy - 8 <= pos[1] < sy + sh + 8:
+                # +-4 px around the bar (+-8 until 2026-09-18: with ROW_H 17 that shadowed the top
+                # of the next row's word buttons)
+                if sx - 6 <= pos[0] < sx + sw + 6 and sy - 4 <= pos[1] < sy + sh + 4:
                     if _is_toggle(spec):
                         self._post('set_param', side=side, name=name,
                                    value=0 if params[name] else 1)
@@ -1259,15 +1286,24 @@ class BenchApp:
                          f" dropped {disp.get('drops', 0)}")
             screen.blit(small.render(f"Figures: sounding {disp['n_sounding']} of {disp['n_figures']}"
                                      f"   tails {disp['n_tails']}{attack}{extra}", True, C_DIM), (x, y))
+            # line 2 (2026-09-18, Decay law): Radius x (Disk only), the spectrum law, then the
+            # decay -- `decay d s` (Fixed) or the law's short name (Common / Modal); `*` = a
+            # 20 ms ramp.  The first variant that fits left of the pattern column is drawn
+            # (the older line was 349 px and ran under that column)
+            room = PANEL_W + MARGIN - 2
             if int(disp.get('spectrum', 0)) == 1:
                 lap = disp.get('laplace', {})
-                law = (f"Laplace f0 {float(disp.get('f0', 0.0)):.0f} Hz  n {int(lap.get('n', 0))}"
-                       f"  {'full' if int(lap.get('fullshape', 1)) else '8x8'}")
+                law = (f"Laplace {float(disp.get('f0', 0.0)):.0f} Hz n {int(lap.get('n', 0))}"
+                       f" {'full' if int(lap.get('fullshape', 1)) else '8x8'}")
             else:
                 law = f"scale {float(disp['frequency_scale']):.0f} Hz"
-            screen.blit(small.render(f"R x{float(disp.get('radius_mul', 1.0)):.3f}   {law}   decay "
-                                     f"{float(disp['decay_s']):.2f} s{ramp}   a | level", True, C_DIM),
-                        (x, y + 14))
+            dlaw = int(disp.get('decay_law', 0))
+            star = "*" if int(disp.get('ramp_left', 0)) > 0 else ""
+            decay = (f"decay {float(disp['decay_s']):.2f} s{star}" if dlaw == 0
+                     else f"{('Fixed', 'Common', 'Modal')[dlaw]}{star}")
+            rx = f"R x{float(disp.get('radius_mul', 1.0)):.3f}" if int(disp.get('detector', 1)) == 1 else ""
+            variants = [f"{rx}   {law}   {decay}" if rx else f"{law}   {decay}", f"{law}   {decay}", decay]
+            screen.blit(fit_text(small, variants, room, C_DIM), (x, y + 14))
             # v4 (2026-09-17): the event source and the packet distribution; Birth position
             # outside its combination makes NO packets -- said here, never a uniform strike
             if 'events_name' in disp:
@@ -1281,13 +1317,18 @@ class BenchApp:
                 screen.blit(small.render(line, True, col), (x, y + 28))
             # v5 (2026-09-18): the meaning of Birth strength (its value sits on the knob row
             # while it acts; stored and shown on the inactive row with Uniform)
+            # v6 (2026-09-18): an adaptive Decay law says what Decay means now (the stable,
+            # upper T60) and what the rows show (the target T range) -- unless Birth position
+            # needs this line for its own hint (the law's name stays on line 2)
             if 'birth_strength' in disp:
                 if int(disp.get('excitation', 0)) == 1:
                     line4 = BIRTH_STRENGTH_LINE
+                elif int(disp.get('decay_law', 0)) != 0:
+                    line4 = decay_law_line(disp)
                 else:
                     line4 = f"Birth strength {float(disp['birth_strength']):.2f} stored (Birth position only)"
                 screen.blit(small.render(line4, True, C_DIM), (x, y + 42))
-            bar_x, bar_w = x + 98, 76
+            bar_x, bar_w = x + 82, 60                    # 98 / 76 until Decay law (2026-09-18): room for the T range
             shown = [f for f in disp['figures'] if f['slot'] >= 0][:self.figure_rows]
             for k, f in enumerate(shown):
                 ry = y + FIGURE_HEAD_H + k * DISPLAY_ROW_H
@@ -1299,7 +1340,7 @@ class BenchApp:
                 _pg.draw.rect(screen, C_ACCENT, (bar_x, ry, int(bar_w * min(a, 1.0)), 8), border_radius=3)
                 tx = bar_x + int(bar_w * min(lv / 5.0, 1.0))
                 _pg.draw.line(screen, C_TXT, (tx, ry - 2), (tx, ry + 10), 1)
-                screen.blit(small.render(f"{float(f['f_low']):.0f} Hz  a {a:.2f}", True, C_TXT),
+                screen.blit(small.render(f"{float(f['f_low']):.0f} Hz  {figure_decay_text(f, a)}", True, C_TXT),
                             (bar_x + bar_w + 6, ry - 3))
             return
         if 'u' in disp:
