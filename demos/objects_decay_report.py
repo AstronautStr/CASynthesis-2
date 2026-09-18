@@ -163,13 +163,23 @@ def mono(y):
     return (np.asarray(y, np.float64)[:, 0] + np.asarray(y, np.float64)[:, 1]) / 32767.0
 
 
-def decay_t60(x, a, b, win=441):
-    """T60 (s) from the slope of 10 log10(mean square) over 10 ms windows in [a, b)."""
+T60_FLOOR = 30.0 / 32767.0          # 10 ms windows below this RMS (30 LSB) are not used for a slope
+
+
+def decay_t60(x, a, b, win=441, min_windows=8):
+    """T60 (s) from the slope of 10 log10(mean square) over the 10 ms windows in
+    [a, b) -- only the leading windows whose RMS stays above T60_FLOOR (the int16
+    quantisation bends the slope below it); nan with fewer than `min_windows`."""
     n = (b - a) // win
-    if n < 5:
+    if n < min_windows:
         return float('nan')
     seg = x[a:a + n * win].reshape(n, win)
     ms = np.maximum((seg * seg).mean(axis=1), 1e-30)
+    low = np.nonzero(ms < T60_FLOOR ** 2)[0]
+    n = int(low[0]) if low.size else n
+    if n < min_windows:
+        return float('nan')
+    ms = ms[:n]
     db = 10.0 * np.log10(ms)
     t = (np.arange(n) + 0.5) * win / SR
     slope = float(np.polyfit(t, db, 1)[0])
@@ -214,28 +224,45 @@ def d1_checks():
                          applied_T_range=[LN1000 / max(r[3] for r in inside), LN1000 / min(r[3] for r in inside)],
                          pcm_T60_A=decay_t60(xa, a + int(0.06 * SR), b - int(0.01 * SR)),
                          pcm_T60_B=decay_t60(xb, a + int(0.06 * SR), b - int(0.01 * SR))))
+    def med(vals):
+        v = [x for x in vals if math.isfinite(x)]
+        return float(np.median(v)) if v else float('nan')
     phases = {}
     for p in range(5):
         sel = [r for r in rows if r['phase'] == p]
+        fb = [r['pcm_T60_B'] for r in sel if math.isfinite(r['pcm_T60_B'])]
         phases[p] = dict(n=len(sel), target_T=float(np.mean([r['target_T_at_step'] for r in sel])),
                          applied_T=float(np.mean([r['applied_T_mean'] for r in sel])),
-                         pcm_T60_A=float(np.median([r['pcm_T60_A'] for r in sel])),
-                         pcm_T60_B=float(np.median([r['pcm_T60_B'] for r in sel])),
-                         pcm_T60_B_spread=[float(min(r['pcm_T60_B'] for r in sel)), float(max(r['pcm_T60_B'] for r in sel))])
+                         pcm_T60_A=med([r['pcm_T60_A'] for r in sel]),
+                         pcm_T60_B=med([r['pcm_T60_B'] for r in sel]),
+                         pcm_measured=len(fb),
+                         pcm_T60_B_spread=([float(min(fb)), float(max(fb))] if fb else [float('nan'), float('nan')]))
     res['phases'] = phases
     res['rows'] = rows
+    ok = [v for v in phases.values() if math.isfinite(v['pcm_T60_B']) and math.isfinite(v['pcm_T60_A'])]
     ap = [v['applied_T'] for v in phases.values()]
-    pb = [v['pcm_T60_B'] for v in phases.values()]
-    pa = [v['pcm_T60_A'] for v in phases.values()]
+    pb = [v['pcm_T60_B'] for v in ok]
+    pa = [v['pcm_T60_A'] for v in ok]
+    res['pcm_phases_measured'] = len(ok)
     res['applied_T_phase_ratio_max_min'] = max(ap) / min(ap)
-    res['pcm_T60_B_phase_ratio_max_min'] = max(pb) / min(pb)
-    res['pcm_T60_A_phase_ratio_max_min'] = max(pa) / min(pa)
-    res['mechanism_in_audio'] = bool(res['pcm_T60_B_phase_ratio_max_min'] > 1.5 and res['pcm_T60_A_phase_ratio_max_min'] < 1.15)
+    res['pcm_T60_B_phase_ratio_max_min'] = max(pb) / min(pb) if pb else float('nan')
+    res['pcm_T60_A_phase_ratio_max_min'] = max(pa) / min(pa) if pa else float('nan')
+    res['pcm_B_vs_applied_max_rel'] = max(abs(v['pcm_T60_B'] - v['applied_T']) / v['applied_T'] for v in ok) if ok else float('nan')
+    res['pcm_A_vs_control_max_rel'] = max(abs(v['pcm_T60_A'] - case['decay']['A']) / case['decay']['A'] for v in ok) if ok else float('nan')
+    # the mechanism in the rendered audio: the applied T differs by phase, the PCM decay of B
+    # follows it where measurable, A stays at its constant
+    res['mechanism_in_audio'] = bool(res['applied_T_phase_ratio_max_min'] > 1.3 and len(ok) >= 3
+                                     and res['pcm_T60_B_phase_ratio_max_min'] > 1.2
+                                     and res['pcm_B_vs_applied_max_rel'] < 0.1 and res['pcm_A_vs_control_max_rel'] < 0.05)
     return res
 
 
 # -- 3. D2 ----------------------------------------------------------------------------------------
-def dft_amp(x, centre, f, n=4096):
+PCM_WIN = 2048                     # 46 ms Hann: 110 / 216 Hz stay apart (bin 21.5 Hz)
+PCM_FLOOR = 10.0 / 32767.0 * PCM_WIN / 4.0     # the DFT amplitude of a 10-LSB sine (mono L + R)
+
+
+def dft_amp(x, centre, f, n=PCM_WIN):
     a = max(0, centre - n // 2)
     seg = x[a:a + n]
     w = np.hanning(len(seg))
@@ -272,17 +299,17 @@ def d2_checks():
                 row[law] = dict(relative_mode_db=[20 * math.log10(lo / lo0), 20 * math.log10(hi / hi0)],
                                 upper_over_lower_db=20 * math.log10(hi / lo))
             rows.append(row)
-        # the same ratio in the rendered PCM (DFT at the two frequencies, 93 ms Hann windows)
+        # the same ratio in the rendered int16 PCM (DFT at the two frequencies, 46 ms Hann
+        # windows centred after the first measurement; a component below 10 LSB is not
+        # measured -- the Common tail reaches the quantisation floor within ~0.3 s)
         pcm_rows = []
-        for t_after in (0.05, 0.15, 0.30, 0.55, 1.0):
+        for t_after in (0.03, 0.06, 0.10, 0.15, 0.20, 0.30):
             c = first + int(t_after * SR)
-            if c + 2048 > p_off:
-                break
             r = dict(t_after_s=t_after)
             for s, law in (('A', 'Common'), ('B', 'Modal')):
                 x = mono(y[s])
                 lo, hi = dft_amp(x, c, freqs[0]), dft_amp(x, c, freqs[1])
-                r[law] = 20 * math.log10(hi / lo)
+                r[law] = 20 * math.log10(hi / lo) if min(lo, hi) >= PCM_FLOOR else None
             pcm_rows.append(r)
         pauses.append(dict(pause_on=p_on, pause_off=p_off, first_measurement=first, engine=rows, pcm=pcm_rows))
     # comparison with the independent probe of the preflight (first pause)
@@ -302,9 +329,20 @@ def d2_checks():
                            common_db=e3['Common']['upper_over_lower_db'] - e0['Common']['upper_over_lower_db']))
     return dict(frequencies_hz=freqs, pauses=pauses, probe_comparison=cmp, worst_probe_diff_db=worst, growth=growth,
                 journal_pauses=[(j[0], j[3]['on'], bool(j[3].get('script'))) for j in runner.journal if j[2] == 'pause'],
+                pcm_growth=[pcm_growth(p['pcm']) for p in pauses],
                 mechanism_in_audio=bool(all(g['modal_db'] > g['common_db'] + 20.0 for g in growth)
-                                        and all(p['pcm'][-1]['Modal'] - p['pcm'][0]['Modal'] >
-                                                p['pcm'][-1]['Common'] - p['pcm'][0]['Common'] + 10.0 for p in pauses)))
+                                        and all(pg['modal_db'] > pg['common_db'] + 10.0
+                                                for pg in (pcm_growth(p['pcm']) for p in pauses))))
+
+
+def pcm_growth(rows):
+    """Growth of upper - lower from the first to the last row where BOTH sides are
+    above the floor."""
+    ok = [r for r in rows if r['Common'] is not None and r['Modal'] is not None]
+    if len(ok) < 2:
+        return dict(from_s=None, to_s=None, modal_db=float('nan'), common_db=float('nan'))
+    return dict(from_s=ok[0]['t_after_s'], to_s=ok[-1]['t_after_s'], modal_db=ok[-1]['Modal'] - ok[0]['Modal'],
+                common_db=ok[-1]['Common'] - ok[0]['Common'])
 
 
 # -- 4. D3 ----------------------------------------------------------------------------------------
@@ -468,23 +506,32 @@ def stress(label, g0, rate, seconds, law, change_every_block=False, seed=0):
 
 
 def big_figure_boundary_ms(n_side, law, repeats=6):
-    """One figure of n_side x n_side cells whose geometry changes at every boundary
-    (one corner cell toggled): the mean ms of one engine block (both kinds of law)."""
+    """One figure of n_side x n_side cells whose geometry changes at every boundary:
+    (new, again) = the median ms of one engine block of ONE side when every
+    boundary brings a shape not seen before (one different cell of the bottom row
+    missing each time -- the worst case), and when the same shapes come back (a
+    periodic figure: the participation comes from the shape cache)."""
     rows = cols = max(32, n_side + 4)
     g = np.zeros((rows, cols), np.uint8)
     g[2:2 + n_side, 2:2 + n_side] = 1
     e = registry.create(EID, ctx(6.0), side_params(law, STABLE_DECAY_S))
     e.init(g, None, GAIN)
     e.render_float(GAIN)
-    ts = []
-    for k in range(repeats):
-        g2 = g.copy()
-        g2[2 + n_side - 1, 2 + n_side - 1] = k % 2       # the corner comes and goes
-        e.update_field(g2, None)
-        t0 = time.perf_counter()
-        e.render_float(GAIN)
-        ts.append((time.perf_counter() - t0) * 1000.0)
-    return float(np.median(ts))
+    out = []
+    for _pass in range(2):
+        ts = []
+        for k in range(repeats):
+            for missing in (k, None):              # the shape, then the full square again
+                g2 = g.copy()
+                if missing is not None:
+                    g2[2 + n_side - 1, 2 + missing] = 0
+                e.update_field(g2, None)
+                t0 = time.perf_counter()
+                e.render_float(GAIN)
+                if missing is not None:
+                    ts.append((time.perf_counter() - t0) * 1000.0)
+        out.append(float(np.median(ts)))
+    return out[0], out[1]
 
 
 def timing_limits():
@@ -498,9 +545,10 @@ def timing_limits():
         print(f"  stress {orz.LAW_NAMES[law]}: p99 {rows[-2]['p99']:.2f} / {rows[-1]['p99']:.2f} ms", flush=True)
     big = []
     for n in (6, 10, 14, 18, 22):
-        big.append(dict(side=n, cells=n * n, fixed_ms=big_figure_boundary_ms(n, FIXED),
-                        modal_ms=big_figure_boundary_ms(n, MODAL)))
-        print(f"  big figure {n}x{n}: Fixed {big[-1]['fixed_ms']:.2f} ms, Modal {big[-1]['modal_ms']:.2f} ms", flush=True)
+        fx, _fx2 = big_figure_boundary_ms(n, FIXED)
+        md, md2 = big_figure_boundary_ms(n, MODAL)
+        big.append(dict(side=n, cells=n * n, fixed_ms=fx, modal_ms=md, modal_again_ms=md2))
+        print(f"  big figure {n}x{n}: Fixed {fx:.2f} ms, Modal new {md:.2f} / again {md2:.2f} ms", flush=True)
     return dict(stress=rows, big_figure=big, budget_ms=BUDGET_MS)
 
 
@@ -535,15 +583,20 @@ def write_markdown(rep, path):
              'interval, and the T60 measured in the rendered PCM between the steps (10 ms windows from +60 ms; median over the '
              'cycles):')
     L.append('')
-    L.append('| phase | intervals | target T at step s | applied T mean s | PCM T60 A s | PCM T60 B s (min…max) |')
+    L.append('| phase | intervals | target T at step s | applied T mean s | PCM T60 A s | PCM T60 B s (min…max, measured) |')
     L.append('|---|---|---|---|---|---|')
     for p, v in d1['phases'].items():
         L.append(f"| {p} | {v['n']} | {v['target_T']:.3f} | {v['applied_T']:.3f} | {v['pcm_T60_A']:.3f} | "
-                 f"{v['pcm_T60_B']:.3f} ({v['pcm_T60_B_spread'][0]:.3f}…{v['pcm_T60_B_spread'][1]:.3f}) |")
+                 f"{v['pcm_T60_B']:.3f} ({v['pcm_T60_B_spread'][0]:.3f}…{v['pcm_T60_B_spread'][1]:.3f}, "
+                 f"{v['pcm_measured']}) |")
     L.append('')
-    L.append(f"Max / min over the phases: applied T {d1['applied_T_phase_ratio_max_min']:.2f}, PCM T60 of B "
-             f"{d1['pcm_T60_B_phase_ratio_max_min']:.2f}, PCM T60 of A {d1['pcm_T60_A_phase_ratio_max_min']:.2f}.  "
-             f"The phase sequence differs in the real audio of B and not of A: {d1['mechanism_in_audio']}.")
+    L.append(f"Max / min over the phases: applied T {d1['applied_T_phase_ratio_max_min']:.2f}; over the "
+             f"{d1['pcm_phases_measured']} phases measurable in the PCM: T60 of B {d1['pcm_T60_B_phase_ratio_max_min']:.2f}, "
+             f"of A {d1['pcm_T60_A_phase_ratio_max_min']:.2f}; PCM B vs applied T within "
+             f"{100 * d1['pcm_B_vs_applied_max_rel']:.1f} %, PCM A vs the control within "
+             f"{100 * d1['pcm_A_vs_control_max_rel']:.1f} %.  The phase without births (no new strike) continues the tail "
+             f"of the previous interval, which is near the int16 floor by then: \"nan\" = fewer than 8 windows above 30 LSB.  "
+             f"The phase sequence differs in the rendered audio of B and not of A: {d1['mechanism_in_audio']}.")
     L.append('')
     d2 = rep['d2']
     L.append('## 3. D2 — Common age / Modal age, the two scripted pauses')
@@ -562,12 +615,18 @@ def write_markdown(rep, path):
                      f"{r['Common']['upper_over_lower_db']:.1f} | {r['Modal']['relative_mode_db'][0]:.1f} / "
                      f"{r['Modal']['relative_mode_db'][1]:.1f} | {r['Modal']['upper_over_lower_db']:.1f} |")
         L.append('')
-        L.append('Upper − lower in the rendered PCM (DFT, 93 ms Hann windows):')
+        L.append('Upper − lower in the rendered int16 PCM (DFT, 46 ms Hann windows; "-" = a component below 10 LSB):')
         L.append('')
         L.append('| after s | Common dB | Modal dB |')
         L.append('|---|---|---|')
         for r in p['pcm']:
-            L.append(f"| {r['t_after_s']:.2f} | {r['Common']:.1f} | {r['Modal']:.1f} |")
+            cm = '-' if r['Common'] is None else f"{r['Common']:.1f}"
+            md = '-' if r['Modal'] is None else f"{r['Modal']:.1f}"
+            L.append(f"| {r['t_after_s']:.2f} | {cm} | {md} |")
+        pg = d2['pcm_growth'][k]
+        L.append('')
+        L.append(f"PCM growth of upper − lower from {pg['from_s']} to {pg['to_s']} s: Modal {pg['modal_db']:+.1f} dB, "
+                 f"Common {pg['common_db']:+.1f} dB.")
         L.append('')
     L.append('Against the independent two-mode probe of the preflight (first pause):')
     L.append('')
@@ -634,12 +693,15 @@ def write_markdown(rep, path):
         L.append(f"| {r['label']} | {r['law']} | {r['cells']} | {r['figures']} | {r['p50']:.2f} | {r['p99']:.2f} | "
                  f"{r['max']:.2f} | {r['ok']} | {r['peak']:.3f} | {r['clip']} | {r['finite']} |")
     L.append('')
-    L.append('One figure whose geometry changes at every boundary (median ms of one block of ONE side):')
+    L.append('One figure whose geometry changes at every boundary (median ms of one block of ONE side; "new" = a '
+             'shape never seen before at every boundary, the worst case; "again" = the same shapes return, as in a '
+             'periodic figure):')
     L.append('')
-    L.append('| figure | cells | Fixed ms | Modal ms |')
-    L.append('|---|---|---|---|')
+    L.append('| figure | cells | Fixed ms | Modal new ms | Modal again ms |')
+    L.append('|---|---|---|---|---|')
     for b in t['big_figure']:
-        L.append(f"| {b['side']} x {b['side']} | {b['cells']} | {b['fixed_ms']:.2f} | {b['modal_ms']:.2f} |")
+        L.append(f"| {b['side']} x {b['side']} | {b['cells']} | {b['fixed_ms']:.2f} | {b['modal_ms']:.2f} | "
+                 f"{b['modal_again_ms']:.2f} |")
     L.append('')
     L.append(f"Budget {t['budget_ms']:.2f} ms for BOTH sides.  The eigen-decompositions run only when the geometry or the "
              f"mode set changes, never per sample.")

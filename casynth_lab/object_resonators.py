@@ -219,8 +219,12 @@ Fixed / Common / Modal, LAW_NAMES holds the full names):
                                [0, 1] within Q_TOL; a larger excursion is an error)
                      T_j     = decay_s - (decay_s - T_FRESH_S) q_j    T_FRESH_S 0.08
                      gamma_j = ln(1000) / T_j
-                 P is cached per figure (cells + settings) and recomputed only when
-                 the geometry or the mode set changes -- never per sample.
+                 P is cached per figure (cells + settings) and per canonical shape
+                 (the Laplacian of the canonical placement is the same matrix at any
+                 position, so a repeating phase or a moving figure costs nothing);
+                 it is recomputed only for a shape / mode set not seen yet -- never
+                 per sample.  Under an adaptive law the frequency call itself hands
+                 its graph over (the same numbers, one eigvalsh less).
       Common   : every driven mode of the bank gets gamma_common = mean_j gamma_j
                  (the mean of the RATES, not of the times); Modal: each its own.
       applied  : targets are computed at every block boundary; per sample, for
@@ -312,6 +316,7 @@ GAMMA_SMOOTH_S = 0.020                 # one-pole smoothing of the applied loss 
 GAMMA_SETTLE = 1e-9                    # a slot converging to Fixed returns to the global r at |ga - gt| <= this * gt
 Q_TOL = 1e-9                           # q outside [0, 1] by at most this is clipped ...
 Q_ERR = 1e-6                           # ... by more than this it is a calculation error (raised)
+SHAPE_CACHE_MAX = 4096                 # participation matrices kept per canonical shape (cleared when full)
 LN1000 = math.log(1000.0)              # gamma = ln(1000) / T60 (amplitude -60 dB)
 MODEL_VERSION = 'ca_object_resonators_n4_v6'
 STATE_VERSION = 6
@@ -719,6 +724,8 @@ class ObjectResonatorsEngine(SoundEngine):
         self.ramp_n = int(round(RAMP_MS / 1000.0 * self.sr))
         self.consts = en.consts(self.sr)
         self.cache = fg.SpectrumCache(N_BANK)
+        self.pshape = {}                           # (rows, cols, canonical cells, law key) -> P (v6)
+        self._graph_hand = None                    # (cells bytes, law key, graph) of the last frequency call
         self.ksm = gamma_smooth_k(self.sr)
         self.age_k = age_decay_k(n, self.sr)
         self._grid = None
@@ -821,7 +828,14 @@ class ObjectResonatorsEngine(SoundEngine):
         """(freqs, weights, sqrtlam, mode) of a figure under the current spectrum law."""
         rows, cols = self._grid.shape
         if self._spectrum() == SPEC_LAPLACE:
-            freqs, amps = laplace_modes_of(cells, rows, cols, self.f0, self._settings(), exc)
+            if self._decay_law() != LAW_FIXED:
+                # v6: the same call with its graph (the numbers never depend on the flag);
+                # the participation of this figure reuses it instead of a second eigvalsh
+                freqs, amps, graph = laplace_modes_of(cells, rows, cols, self.f0, self._settings(), exc,
+                                                      with_graph=True)
+                self._graph_hand = (np.ascontiguousarray(cells, dtype=np.int64).tobytes(), self._law_key(), graph)
+            else:
+                freqs, amps = laplace_modes_of(cells, rows, cols, self.f0, self._settings(), exc)
             return freqs, LAPLACE_GAIN * amps, np.zeros(len(freqs)), SPEC_LAPLACE
         sq = self.cache.get(cells, rows, cols)
         n = len(sq)
@@ -1103,14 +1117,25 @@ class ObjectResonatorsEngine(SoundEngine):
         settings -- dict(key, P (m, N), r, c) with the node cells (r, c) in the node
         order of P; recomputed only when the cells or the settings changed."""
         rows, cols = self._grid.shape
-        key = (f.cells.tobytes(), self._law_key())
+        law_key = self._law_key()
+        key = (f.cells.tobytes(), law_key)
         cur = self.part.get(f.id)
         if cur is not None and cur['key'] == key:
             return cur
-        _freqs, _amps, graph = laplace_modes_of(f.cells, rows, cols, self.f0, self._settings(), self.E_prev,
-                                                with_graph=True)
-        P = mode_participation(graph['L'], graph['idx'])
-        order = graph['order']
+        canon, order = fg.canonical_placement(f.cells, rows, cols)
+        skey = (int(rows), int(cols), canon.tobytes(), law_key)
+        P = self.pshape.get(skey)
+        if P is None:
+            hand = self._graph_hand
+            if hand is not None and hand[0] == key[0] and hand[1] == law_key:
+                graph = hand[2]
+            else:
+                _freqs, _amps, graph = laplace_modes_of(f.cells, rows, cols, self.f0, self._settings(), self.E_prev,
+                                                        with_graph=True)
+            P = mode_participation(graph['L'], graph['idx'])
+            if len(self.pshape) >= SHAPE_CACHE_MAX:
+                self.pshape.clear()                  # a cache: clearing never changes a result
+            self.pshape[skey] = P
         cur = dict(key=key, P=P, r=f.cells[order, 0].copy(), c=f.cells[order, 1].copy())
         self.part[f.id] = cur
         return cur
