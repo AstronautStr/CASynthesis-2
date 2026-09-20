@@ -1,0 +1,588 @@
+{
+ "generated": "2026-09-20 16:49:25",
+ "commit": "cea5127109 (clean)",
+ "spectral": {
+  "generations": 48,
+  "components": 96,
+  "modes": 240,
+  "all_variants_equal": true,
+  "worst_diff_vs_preflight": 0.0,
+  "preflight_phases": 3
+ },
+ "waves": {
+  "baseline": {
+   "blocks": 1488,
+   "seconds": 11.877006802721088,
+   "worst_abs_diff_int16": 0,
+   "byte_exact": true
+  },
+  "table": [
+   {
+    "wave": "Saw",
+    "f": 55.0,
+    "harmonics": 360,
+    "rel_rms_db": -76.18637631560543,
+    "ok": true
+   },
+   {
+    "wave": "Saw",
+    "f": 110.0,
+    "harmonics": 180,
+    "rel_rms_db": -85.92437019085203,
+    "ok": true
+   },
+   {
+    "wave": "Saw",
+    "f": 190.53,
+    "harmonics": 104,
+    "rel_rms_db": -93.07177791911735,
+    "ok": true
+   },
+   {
+    "wave": "Saw",
+    "f": 440.0,
+    "harmonics": 45,
+    "rel_rms_db": -103.65860408653549,
+    "ok": true
+   },
+   {
+    "wave": "Saw",
+    "f": 1760.0,
+    "harmonics": 11,
+    "rel_rms_db": -121.43306667322584,
+    "ok": true
+   },
+   {
+    "wave": "Saw",
+    "f": 3457.31,
+    "harmonics": 5,
+    "rel_rms_db": -129.6403872742331,
+    "ok": true
+   },
+   {
+    "wave": "Saw",
+    "f": 9871.3,
+    "harmonics": 2,
+    "rel_rms_db": -145.401102498841,
+    "ok": true
+   },
+   {
+    "wave": "Saw",
+    "f": 17000.0,
+    "harmonics": 1,
+    "rel_rms_db": -145.39961403307484,
+    "ok": true
+   },
+   {
+    "wave": "Square",
+    "f": 55.0,
+    "harmonics": 180,
+    "rel_rms_db": -77.84412792734575,
+    "ok": true
+   },
+   {
+    "wave": "Square",
+    "f": 110.0,
+    "harmonics": 90,
+    "rel_rms_db": -87.51019463221199,
+    "ok": true
+   },
+   {
+    "wave": "Square",
+    "f": 190.53,
+    "harmonics": 52,
+    "rel_rms_db": -94.59018119316228,
+    "ok": true
+   },
+   {
+    "wave": "Square",
+    "f": 440.0,
+    "harmonics": 23,
+    "rel_rms_db": -105.39544038042052,
+    "ok": true
+   },
+   {
+    "wave": "Square",
+    "f": 1760.0,
+    "harmonics": 6,
+    "rel_rms_db": -123.9136562629269,
+    "ok": true
+   },
+   {
+    "wave": "Square",
+    "f": 3457.31,
+    "harmonics": 3,
+    "rel_rms_db": -130.56327696401246,
+    "ok": true
+   },
+   {
+    "wave": "Square",
+    "f": 9871.3,
+    "harmonics": 1,
+    "rel_rms_db": -145.40153118025668,
+    "ok": true
+   },
+   {
+    "wave": "Square",
+    "f": 17000.0,
+    "harmonics": 1,
+    "rel_rms_db": -145.39961403307484,
+    "ok": true
+   }
+  ],
+  "lines": [
+   {
+    "variant": "R",
+    "k1": 0.0,
+    "k2": -28.45107430757964,
+    "k3": -44.43441648687572,
+    "mode": -5.783723261686296,
+    "mode_h2": -6.38327818840648,
+    "above_band_db": -93.91310731622205
+   },
+   {
+    "variant": "F_saw",
+    "k1": 0.0,
+    "k2": -9.408719529233249,
+    "k3": -23.337470392860354,
+    "mode": -33.91334848188619,
+    "mode_h2": -55.5109889973334,
+    "above_band_db": -98.92131839789775
+   },
+   {
+    "variant": "F_square",
+    "k1": 0.0,
+    "k2": -55.54577455884443,
+    "k3": -23.36492225295183,
+    "mode": -51.811571962258476,
+    "mode_h2": -68.87579333888633,
+    "above_band_db": -95.77606425010995
+   },
+   {
+    "variant": "W_saw",
+    "k1": 0.0,
+    "k2": -0.4006943824254514,
+    "k3": -7.8959295294817675,
+    "mode": -5.615144488307932,
+    "mode_h2": -5.886786098430477,
+    "above_band_db": -91.21184470907127
+   },
+   {
+    "variant": "W_square",
+    "k1": 0.0,
+    "k2": -28.46220705076872,
+    "k3": -7.970106433430058,
+    "mode": -5.785284137241588,
+    "mode_h2": -6.4098434183689506,
+    "above_band_db": -93.63122789829325
+   }
+  ]
+ },
+ "filter": {
+  "worst_db_vs_preflight": 0.0,
+  "worst_amplitude_vs_preflight": 5.551115123125783e-17,
+  "nonzero_harmonic_counts_match": true,
+  "one_mask_for_saw_and_square": 0.0,
+  "depth_zero_max_abs_diff": 1.0302869668521453e-13,
+  "silent_peak_int16": {
+   "empty": 0,
+   "one_cell": 0
+  },
+  "carrier_harmonics": 180,
+  "top_harmonic_hz": 19800.0
+ },
+ "levels": [
+  {
+   "variant": "R",
+   "side_gain": 1.0,
+   "rms_db": -29.926104165527075,
+   "rms_db_at_gain_1": -29.926104165527075,
+   "peak": 0.04524395263132107,
+   "peak_at_gain_1": 0.04524395263132107,
+   "clip_blocks": 0,
+   "centroid_hz": 239.42367461076222,
+   "above_1k_share": 9.995345507079328e-08
+  },
+  {
+   "variant": "F_saw",
+   "side_gain": 0.89,
+   "rms_db": -29.912649439746787,
+   "rms_db_at_gain_1": -28.9001440111377,
+   "peak": 0.01800111932806674,
+   "peak_at_gain_1": 0.020225976773108698,
+   "clip_blocks": 0,
+   "centroid_hz": 141.39653704033452,
+   "above_1k_share": 0.0007295024153425485
+  },
+  {
+   "variant": "F_square",
+   "side_gain": 0.97,
+   "rms_db": -29.912480368417285,
+   "rms_db_at_gain_1": -29.647852133959546,
+   "peak": 0.014772223479658196,
+   "peak_at_gain_1": 0.015229096370781646,
+   "clip_blocks": 0,
+   "centroid_hz": 120.21646263371538,
+   "above_1k_share": 0.0003988213602669844
+  },
+  {
+   "variant": "W_saw",
+   "side_gain": 0.78,
+   "rms_db": -29.94426419723026,
+   "rms_db_at_gain_1": -27.78543203912288,
+   "peak": 0.0728415028114059,
+   "peak_at_gain_1": 0.093386542065905,
+   "clip_blocks": 0,
+   "centroid_hz": 695.3239763785391,
+   "above_1k_share": 0.14729097757663825
+  },
+  {
+   "variant": "W_square",
+   "side_gain": 0.9,
+   "rms_db": -29.95766043414122,
+   "rms_db_at_gain_1": -29.042170436338534,
+   "peak": 0.044591026756983926,
+   "peak_at_gain_1": 0.049545585285537694,
+   "clip_blocks": 0,
+   "centroid_hz": 516.7137738128206,
+   "above_1k_share": 0.08006075458403428
+  }
+ ],
+ "level_span_db": 0.045180065723936735,
+ "records": [
+  {
+   "id": "lc_saw_baseline_filter",
+   "variants": {
+    "A": "R",
+    "B": "F_saw"
+   },
+   "side_gain": {
+    "A": 1.0,
+    "B": 0.89
+   },
+   "engines": {
+    "A": "laplacian",
+    "B": "laplace_carriers"
+   },
+   "block_ms": {
+    "p50": 2.358400000957772,
+    "p99": 4.439413995132782,
+    "max": 5.936599976848811,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -29.926104165527075,
+    "peak": 0.04524395263132107,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "B": {
+    "rms_db": -29.912649439746787,
+    "peak": 0.01800111932806674,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "a_minus_b_db": -0.013454725780288612,
+   "within_1db": true,
+   "continue": {
+    "exact": true,
+    "from_seconds": 6.0,
+    "blocks": 200,
+    "field_changed": true
+   }
+  },
+  {
+   "id": "lc_saw_baseline_bank",
+   "variants": {
+    "A": "R",
+    "B": "W_saw"
+   },
+   "side_gain": {
+    "A": 1.0,
+    "B": 0.78
+   },
+   "engines": {
+    "A": "laplacian",
+    "B": "laplace_carriers"
+   },
+   "block_ms": {
+    "p50": 2.360500016948208,
+    "p99": 4.621418000897394,
+    "max": 7.443500013323501,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -29.926104165527075,
+    "peak": 0.04524395263132107,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "B": {
+    "rms_db": -29.94426419723026,
+    "peak": 0.0728415028114059,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "a_minus_b_db": 0.01816003170318581,
+   "within_1db": true,
+   "continue": {
+    "exact": true,
+    "from_seconds": 6.0,
+    "blocks": 200,
+    "field_changed": true
+   }
+  },
+  {
+   "id": "lc_square_baseline_filter",
+   "variants": {
+    "A": "R",
+    "B": "F_square"
+   },
+   "side_gain": {
+    "A": 1.0,
+    "B": 0.97
+   },
+   "engines": {
+    "A": "laplacian",
+    "B": "laplace_carriers"
+   },
+   "block_ms": {
+    "p50": 2.362100000027567,
+    "p99": 4.388679994735869,
+    "max": 6.585299997823313,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -29.926104165527075,
+    "peak": 0.04524395263132107,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "B": {
+    "rms_db": -29.912480368417285,
+    "peak": 0.014772223479658196,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "a_minus_b_db": -0.013623797109790559,
+   "within_1db": true,
+   "continue": {
+    "exact": true,
+    "from_seconds": 6.0,
+    "blocks": 200,
+    "field_changed": true
+   }
+  },
+  {
+   "id": "lc_square_baseline_bank",
+   "variants": {
+    "A": "R",
+    "B": "W_square"
+   },
+   "side_gain": {
+    "A": 1.0,
+    "B": 0.9
+   },
+   "engines": {
+    "A": "laplacian",
+    "B": "laplace_carriers"
+   },
+   "block_ms": {
+    "p50": 2.355000004172325,
+    "p99": 4.41977401089389,
+    "max": 5.248800007393584,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -29.926104165527075,
+    "peak": 0.04524395263132107,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "B": {
+    "rms_db": -29.95766043414122,
+    "peak": 0.044591026756983926,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "a_minus_b_db": 0.03155626861414618,
+   "within_1db": true,
+   "continue": {
+    "exact": true,
+    "from_seconds": 6.0,
+    "blocks": 200,
+    "field_changed": true
+   }
+  },
+  {
+   "id": "lc_saw_filter_bank",
+   "variants": {
+    "A": "F_saw",
+    "B": "W_saw"
+   },
+   "side_gain": {
+    "A": 0.89,
+    "B": 0.78
+   },
+   "engines": {
+    "A": "laplace_carriers",
+    "B": "laplace_carriers"
+   },
+   "block_ms": {
+    "p50": 2.4850000045262277,
+    "p99": 4.657119993935339,
+    "max": 5.21079997997731,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -29.912649439746787,
+    "peak": 0.01800111932806674,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "B": {
+    "rms_db": -29.94426419723026,
+    "peak": 0.0728415028114059,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "a_minus_b_db": 0.03161475748347442,
+   "within_1db": true,
+   "continue": {
+    "exact": true,
+    "from_seconds": 6.0,
+    "blocks": 200,
+    "field_changed": true
+   }
+  },
+  {
+   "id": "lc_square_filter_bank",
+   "variants": {
+    "A": "F_square",
+    "B": "W_square"
+   },
+   "side_gain": {
+    "A": 0.97,
+    "B": 0.9
+   },
+   "engines": {
+    "A": "laplace_carriers",
+    "B": "laplace_carriers"
+   },
+   "block_ms": {
+    "p50": 2.460499992594123,
+    "p99": 4.647871998022311,
+    "max": 7.221399981062859,
+    "budget": 7.98185941043084,
+    "ok": true
+   },
+   "A": {
+    "rms_db": -29.912480368417285,
+    "peak": 0.014772223479658196,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "B": {
+    "rms_db": -29.95766043414122,
+    "peak": 0.044591026756983926,
+    "clip_blocks": 0,
+    "same_as_variant_track": true
+   },
+   "a_minus_b_db": 0.045180065723936735,
+   "within_1db": true,
+   "continue": {
+    "exact": true,
+    "from_seconds": 6.0,
+    "blocks": 200,
+    "field_changed": true
+   }
+  }
+ ],
+ "stress": [
+  {
+   "variant": "R",
+   "settings": "n 20, dense random field, vol 1.0",
+   "p99_ms": 27.99199999892153,
+   "max_ms": 29.50450000935234,
+   "over_budget": true,
+   "pre_clip_peak": 0.6980694124269076,
+   "clip_blocks": 315
+  },
+  {
+   "variant": "F_saw",
+   "settings": "n 20, dense random field, vol 1.0",
+   "p99_ms": 22.65079600038007,
+   "max_ms": 24.496300000464544,
+   "over_budget": true,
+   "pre_clip_peak": 0.7389225998742965,
+   "clip_blocks": 0
+  },
+  {
+   "variant": "W_saw",
+   "settings": "n 20, dense random field, vol 1.0",
+   "p99_ms": 69.25822000019258,
+   "max_ms": 84.86750000156462,
+   "over_budget": true,
+   "pre_clip_peak": 1.0641359777192156,
+   "clip_blocks": 429
+  }
+ ],
+ "catalog_root": "lab_catalog\\laplace_carriers_2026_09_20",
+ "catalog": [
+  {
+   "rid": "20260920-164918-277956",
+   "title": "1 - Пила через лапласиановский фильтр: Laplace / Filter (Jam, 4 поколения/с)",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - А — исходный Laplacian на син"
+  },
+  {
+   "rid": "20260920-164914-f2dedf",
+   "title": "2 - Пила на каждой моде: Laplace / Wave bank (Jam, 4 поколения/с)",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - А — исходный Laplacian на син"
+  },
+  {
+   "rid": "20260920-164910-795d5f",
+   "title": "3 - Меандр через лапласиановский фильтр: Laplace / Filter (Jam, 4 поколения/с)",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - А — исходный Laplacian на син"
+  },
+  {
+   "rid": "20260920-164906-98c8aa",
+   "title": "4 - Меандр на каждой моде: Laplace / Wave bank (Jam, 4 поколения/с)",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - А — исходный Laplacian на син"
+  },
+  {
+   "rid": "20260920-164902-181f45",
+   "title": "5 - Два способа с пилой: Filter / Wave bank (Jam, 4 поколения/с)",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - Теперь сравниваем два вариант"
+  },
+  {
+   "rid": "20260920-164859-4c4922",
+   "title": "6 - Два способа с меандром: Filter / Wave bank (Jam, 4 поколения/с)",
+   "status": "match",
+   "reason": "",
+   "notes_start": "Гипотеза - Теперь сравниваем два вариант"
+  }
+ ],
+ "summary": [
+  "Wave bank / Sine is the existing engine byte-exact over 12 s: True",
+  "Filter coefficients equal the preflight (worst 5.6e-17) and one mask serves both waves",
+  "Table error at or below -76 dB, REQ asks for -60 dB",
+  "Six records: levels within 1 dB, Continue exact, budget kept, each variant byte-identical across records: True",
+  "Timbre of the ready tracks (spectral centroid): R 239 Hz, Filter 141 / 120 Hz (DARKER than the baseline: with three modes the 24 dB mask leaves few harmonics of the carrier), Wave bank 695 / 517 Hz (15% / 8% of the energy above 1 kHz against 0% of R) -- the change is in the audio, not in a clip or a level drop.",
+  "Limits: the prepared scenes stay inside the block budget; a dense random field with n = 20 modes is measured in section 6 (the baseline `laplacian` is over the budget there too; the Wave bank additionally builds one band-limited table per new mode frequency) and is outside the delivered material."
+ ]
+}

@@ -1,0 +1,417 @@
+{
+ "snapshot_file_version": 1,
+ "state": {
+  "version": 1,
+  "scene": {
+   "format": 2,
+   "id": "lc_saw_filter_bank",
+   "title": "5 - Два способа с пилой: Filter / Wave bank (Jam, 4 поколения/с)",
+   "grid": {
+    "rows": 32,
+    "cols": 32
+   },
+   "cells": [
+    [
+     7,
+     10
+    ],
+    [
+     7,
+     11
+    ],
+    [
+     8,
+     9
+    ],
+    [
+     8,
+     12
+    ],
+    [
+     9,
+     7
+    ],
+    [
+     9,
+     10
+    ],
+    [
+     9,
+     12
+    ],
+    [
+     10,
+     7
+    ],
+    [
+     10,
+     11
+    ],
+    [
+     11,
+     7
+    ],
+    [
+     12,
+     10
+    ],
+    [
+     13,
+     8
+    ],
+    [
+     13,
+     9
+    ]
+   ],
+   "rule": "B3/S23",
+   "boundary": "torus",
+   "rate_hz": 4.0,
+   "audio": {
+    "f0_hz": 110.0,
+    "level": 1.0,
+    "side_gain": {
+     "A": 0.89,
+     "B": 0.78
+    }
+   },
+   "variants": {
+    "A": {
+     "engine_id": "laplace_carriers",
+     "engine_params": {
+      "method": 0,
+      "waveform": 1,
+      "filter_width_oct": 0.35,
+      "filter_depth_db": 24.0,
+      "n": 3,
+      "spread": 1.0,
+      "alpha": 0.0,
+      "shape": 0.0,
+      "harm": 0.0,
+      "fullshape": 1,
+      "dyn": 0.0
+     }
+    },
+    "B": {
+     "engine_id": "laplace_carriers",
+     "engine_params": {
+      "method": 1,
+      "waveform": 1,
+      "filter_width_oct": 0.35,
+      "filter_depth_db": 24.0,
+      "n": 3,
+      "spread": 1.0,
+      "alpha": 0.0,
+      "shape": 0.0,
+      "harm": 0.0,
+      "fullshape": 1,
+      "dyn": 0.0
+     }
+    }
+   },
+   "initial_side": "A",
+   "listen": "1 / 2: А — Laplace waves, Filter, пила (width 0.35 окт, depth 24 dB) / Б — Laplace waves, Wave bank, пила на каждой моде. Notes: hypothesis and your listening result. Method / Wave are the buttons of the Laplace waves panel; the seven spectrum settings are shared (\"spectrum A to B\")."
+  },
+  "ctx": {
+   "sr": 44100,
+   "block": 352,
+   "channels": 2,
+   "f0": 110.0,
+   "level": 1.0,
+   "rate_hz": 4.0
+  },
+  "grid": {
+   "__array__": "grid"
+  },
+  "exc": {
+   "__array__": "exc"
+  },
+  "gen": 47,
+  "out_samples": 529408,
+  "t_samples": 529408,
+  "ca_samples": 529408,
+  "running": true,
+  "paused": false,
+  "vol": 0.7,
+  "selected": "A",
+  "xfade_from": null,
+  "xfade_pos": 0,
+  "seq": 1,
+  "pending": [],
+  "memory": {
+   "A": {
+    "laplace_carriers": {
+     "method": 0,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "laplace_carriers": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "ranges": {},
+  "sides": {
+   "A": {
+    "engine_id": "laplace_carriers",
+    "params": {
+     "method": 0,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    },
+    "peak": 0.01800111932806674,
+    "clip_blocks": 0,
+    "engine_state_version": 1,
+    "engine": {
+     "version": 1,
+     "engine_id": "laplace_carriers",
+     "params": {
+      "method": 0,
+      "waveform": 1,
+      "filter_width_oct": 0.35,
+      "filter_depth_db": 24.0,
+      "n": 3,
+      "spread": 1.0,
+      "alpha": 0.0,
+      "shape": 0.0,
+      "harm": 0.0,
+      "fullshape": 1,
+      "dyn": 0.0
+     },
+     "gain_prev": 0.024919999999999998,
+     "mix": 0.0,
+     "wave_prev": 1,
+     "slots": 2400,
+     "voices": 24,
+     "modes": 20,
+     "tails": 96,
+     "carrier_k": 180,
+     "f0": 110.0,
+     "steals": 0,
+     "steal_amp_max": 0.0,
+     "filter_steals": 0,
+     "bank_phase": {
+      "__array__": "sides.A.engine.bank_phase"
+     },
+     "bank_amp_cur": {
+      "__array__": "sides.A.engine.bank_amp_cur"
+     },
+     "bank_pan_cur": {
+      "__array__": "sides.A.engine.bank_pan_cur"
+     },
+     "bank_freq_slots": {
+      "__array__": "sides.A.engine.bank_freq_slots"
+     },
+     "bank_amp_tgt": {
+      "__array__": "sides.A.engine.bank_amp_tgt"
+     },
+     "bank_pan_tgt": {
+      "__array__": "sides.A.engine.bank_pan_tgt"
+     },
+     "bank__release_cnt": {
+      "__array__": "sides.A.engine.bank__release_cnt"
+     },
+     "bank__release_amp0": {
+      "__array__": "sides.A.engine.bank__release_amp0"
+     },
+     "bank__release_len": {
+      "__array__": "sides.A.engine.bank__release_len"
+     },
+     "bank__env_phase": {
+      "__array__": "sides.A.engine.bank__env_phase"
+     },
+     "bank__env_level": {
+      "__array__": "sides.A.engine.bank__env_level"
+     },
+     "bank__amp_smooth": {
+      "__array__": "sides.A.engine.bank__amp_smooth"
+     },
+     "bank__freq_prev": {
+      "__array__": "sides.A.engine.bank__freq_prev"
+     },
+     "filter_th": {
+      "__array__": "sides.A.engine.filter_th"
+     },
+     "filter_amp_cur": {
+      "__array__": "sides.A.engine.filter_amp_cur"
+     },
+     "filter_amp_tgt": {
+      "__array__": "sides.A.engine.filter_amp_tgt"
+     },
+     "filter_spec_cur": {
+      "__array__": "sides.A.engine.filter_spec_cur"
+     },
+     "filter_spec_tgt": {
+      "__array__": "sides.A.engine.filter_spec_tgt"
+     },
+     "filter_env_phase": {
+      "__array__": "sides.A.engine.filter_env_phase"
+     },
+     "filter_env_level": {
+      "__array__": "sides.A.engine.filter_env_level"
+     },
+     "filter_alive": {
+      "__array__": "sides.A.engine.filter_alive"
+     },
+     "filter_rel_cnt": {
+      "__array__": "sides.A.engine.filter_rel_cnt"
+     },
+     "filter_rel_len": {
+      "__array__": "sides.A.engine.filter_rel_len"
+     },
+     "filter_rel_amp0": {
+      "__array__": "sides.A.engine.filter_rel_amp0"
+     }
+    }
+   },
+   "B": {
+    "engine_id": "laplace_carriers",
+    "params": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    },
+    "peak": 0.0728415028114059,
+    "clip_blocks": 0,
+    "engine_state_version": 1,
+    "engine": {
+     "version": 1,
+     "engine_id": "laplace_carriers",
+     "params": {
+      "method": 1,
+      "waveform": 1,
+      "filter_width_oct": 0.35,
+      "filter_depth_db": 24.0,
+      "n": 3,
+      "spread": 1.0,
+      "alpha": 0.0,
+      "shape": 0.0,
+      "harm": 0.0,
+      "fullshape": 1,
+      "dyn": 0.0
+     },
+     "gain_prev": 0.02184,
+     "mix": 1.0,
+     "wave_prev": 1,
+     "slots": 2400,
+     "voices": 24,
+     "modes": 20,
+     "tails": 96,
+     "carrier_k": 180,
+     "f0": 110.0,
+     "steals": 0,
+     "steal_amp_max": 0.0,
+     "filter_steals": 0,
+     "bank_phase": {
+      "__array__": "sides.B.engine.bank_phase"
+     },
+     "bank_amp_cur": {
+      "__array__": "sides.B.engine.bank_amp_cur"
+     },
+     "bank_pan_cur": {
+      "__array__": "sides.B.engine.bank_pan_cur"
+     },
+     "bank_freq_slots": {
+      "__array__": "sides.B.engine.bank_freq_slots"
+     },
+     "bank_amp_tgt": {
+      "__array__": "sides.B.engine.bank_amp_tgt"
+     },
+     "bank_pan_tgt": {
+      "__array__": "sides.B.engine.bank_pan_tgt"
+     },
+     "bank__release_cnt": {
+      "__array__": "sides.B.engine.bank__release_cnt"
+     },
+     "bank__release_amp0": {
+      "__array__": "sides.B.engine.bank__release_amp0"
+     },
+     "bank__release_len": {
+      "__array__": "sides.B.engine.bank__release_len"
+     },
+     "bank__env_phase": {
+      "__array__": "sides.B.engine.bank__env_phase"
+     },
+     "bank__env_level": {
+      "__array__": "sides.B.engine.bank__env_level"
+     },
+     "bank__amp_smooth": {
+      "__array__": "sides.B.engine.bank__amp_smooth"
+     },
+     "bank__freq_prev": {
+      "__array__": "sides.B.engine.bank__freq_prev"
+     },
+     "filter_th": {
+      "__array__": "sides.B.engine.filter_th"
+     },
+     "filter_amp_cur": {
+      "__array__": "sides.B.engine.filter_amp_cur"
+     },
+     "filter_amp_tgt": {
+      "__array__": "sides.B.engine.filter_amp_tgt"
+     },
+     "filter_spec_cur": {
+      "__array__": "sides.B.engine.filter_spec_cur"
+     },
+     "filter_spec_tgt": {
+      "__array__": "sides.B.engine.filter_spec_tgt"
+     },
+     "filter_env_phase": {
+      "__array__": "sides.B.engine.filter_env_phase"
+     },
+     "filter_env_level": {
+      "__array__": "sides.B.engine.filter_env_level"
+     },
+     "filter_alive": {
+      "__array__": "sides.B.engine.filter_alive"
+     },
+     "filter_rel_cnt": {
+      "__array__": "sides.B.engine.filter_rel_cnt"
+     },
+     "filter_rel_len": {
+      "__array__": "sides.B.engine.filter_rel_len"
+     },
+     "filter_rel_amp0": {
+      "__array__": "sides.B.engine.filter_rel_amp0"
+     }
+    }
+   }
+  }
+ }
+}
