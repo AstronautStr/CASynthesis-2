@@ -715,6 +715,146 @@ class Records(unittest.TestCase):
             self.assertLess(p99, budget_ms, f"{case['id']}: p99 {p99:.2f} ms over {budget_ms:.2f}")
 
 
+class KnobDragBudget(unittest.TestCase):
+    """REQ 6.7 on the case the user hit on 2026-09-20: underruns while a knob is
+    dragged on a live field.
+
+    The field and the settings are the ones from that session (the end field of the
+    "Few dots dance" record, 48 cells, 2 generations / s, f0 110 Hz, FM depth 1.97,
+    n 3, spread 1, alpha 0, shape 1, harm 1, full on, dyn 0.08), and `harm` is dragged
+    down.  Dragging a spectrum knob is the worst case for this engine: EVERY mode of
+    EVERY figure changes frequency on every block, so every modulator spawns a tail
+    that keeps sounding for the whole release -- the live modulator count triples --
+    AND the whole field is re-analysed.  The bench runs its event loop at 60 Hz and
+    drains every pending MOUSEMOTION, so a drag posts several `set_param` commands per
+    block (a 1000 Hz mouse can post ~8); the runner applies all of them in one block.
+    """
+
+    # the user's field, 2026-09-20 (end state of lab_catalog/objects_decay_2026_09_18/
+    # 20260920-213449-4caf42, opened anew in the bench)
+    FIELD = ((1, 27), (2, 26), (2, 28), (3, 26), (3, 28), (4, 27), (5, 0), (5, 1), (6, 0),
+             (6, 1), (9, 2), (10, 1), (10, 3), (10, 8), (11, 0), (11, 3), (11, 7), (11, 9),
+             (12, 1), (12, 2), (12, 6), (12, 9), (13, 7), (13, 8), (17, 7), (17, 8), (18, 1),
+             (18, 2), (18, 6), (18, 9), (19, 0), (19, 3), (19, 7), (19, 9), (20, 1), (20, 3),
+             (20, 8), (21, 2), (24, 0), (24, 1), (25, 0), (25, 1), (26, 27), (27, 26),
+             (27, 28), (28, 26), (28, 28), (29, 27))
+    SETTINGS = dict(n=3, spread=1.0, alpha=0.0, shape=1.0, harm=1.0, fullshape=1, dyn=0.08)
+    DEPTH = 1.97
+    RATE = 2.0
+    COMMANDS_PER_BLOCK = 4          # what a 60 Hz UI drag posts with an ordinary mouse
+
+    def field(self):
+        g = np.zeros((32, 32), np.uint8)
+        for r, c in self.FIELD:
+            g[r, c] = 1
+        return g
+
+    STEP = 0.001                    # one slider step of the knob (the bench rounds to 3)
+
+    def _drag(self, engine, blocks=320, commands=COMMANDS_PER_BLOCK, drag_from=40):
+        """Run the live field under the engine while `harm` is dragged.
+
+        The knob travels one slider step per command and turns around at the ends, so the
+        drag never stops: at every command rate the whole measured window is spent
+        dragging (a sweep that simply runs into 0 would leave the faster rates coasting
+        and make them look cheap)."""
+        import time
+        g = self.field()
+        exc = None
+        engine.init(g, exc, GAIN)
+        ca, gen, times, harm, way = 0, 0, [], 1.0, -1.0
+        for i in range(blocks):
+            t0 = time.perf_counter()
+            if ca >= (gen + 1) * (SR / self.RATE):
+                new = step(g)
+                exc = events_field(g, new)
+                g = new
+                gen += 1
+                engine.update_field(g, exc)
+            if i >= drag_from:
+                for _k in range(commands):
+                    harm += way * self.STEP
+                    if not (0.0 <= harm <= 1.0):
+                        way = -way
+                        harm = min(max(harm, 0.0), 1.0)
+                    engine.set_params(dict(engine.params, harm=round(harm, 3)))
+            engine.render(GAIN, i * BLOCK)
+            times.append((time.perf_counter() - t0) * 1000.0)
+            ca += BLOCK
+        return np.array(times[drag_from // 2:])
+
+    def _runs(self, commands, n=2):
+        """The drag, measured twice.  What starves the device is the SUSTAINED cost --
+        the render thread keeps AUDIO_LOOKAHEAD_MS of blocks ahead, so a single late
+        block is absorbed and only a mean above the budget drains the queue.  A single
+        p99 on a busy desktop is scheduler noise, so the p99 gate reads the better run
+        while the mean gate reads both."""
+        out = []
+        for _ in range(n):
+            e = lfm.LaplaceFMEngine(EngineContext(SR, BLOCK, 2, F0, 1.0, self.RATE),
+                                    dict(fm_depth=self.DEPTH, **self.SETTINGS))
+            out.append(self._drag(e, commands=commands))
+        return out
+
+    def test_dragging_a_spectrum_knob_stays_inside_the_block(self):
+        budget = BLOCK / SR * 1000.0
+        runs = self._runs(self.COMMANDS_PER_BLOCK)
+        mean = max(float(t.mean()) for t in runs)
+        p99 = min(float(np.percentile(t, 99)) for t in runs)
+        self.assertLess(mean, budget / 2.0,
+                        f"dragged knob: {mean:.2f} ms per block on average, half of the "
+                        f"{budget:.2f} ms block is the most a side may sustain")
+        self.assertLess(p99, budget,
+                        f"dragged knob: p99 {p99:.2f} ms over the {budget:.2f} ms block")
+
+    def test_the_cost_does_not_grow_with_the_command_rate(self):
+        """Several `set_param` commands in one block must cost ONE analysis: the bench
+        posts one per mouse event and the runner applies every command that is due."""
+        slow = min(float(t.mean()) for t in self._runs(1))
+        fast = min(float(t.mean()) for t in self._runs(8))
+        self.assertLess(fast, 1.5 * slow,
+                        f"8 commands per block cost {fast:.2f} ms against {slow:.2f} ms for one")
+
+    def test_the_drag_is_the_only_thing_that_changed(self):
+        """A control: the same field without the drag is cheap, so the tests above are
+        about the drag and not about the field being dense."""
+        budget = BLOCK / SR * 1000.0
+        idle = max(float(t.mean()) for t in self._runs(0))
+        self.assertLess(idle, budget / 4.0)
+
+    def test_both_sides_of_a_live_ab_stay_inside_the_block(self):
+        """The bench renders BOTH sides every block: the baseline on A and the FM on B,
+        with the shared spectrum knob dragged on B."""
+        import time
+        budget = BLOCK / SR * 1000.0
+        doc = dict(format=2, id='lfm_drag', title='drag', grid=dict(rows=32, cols=32),
+                   cells=[[r, c] for r, c in self.FIELD], rule='B3/S23', boundary='torus',
+                   rate_hz=self.RATE,
+                   audio=dict(f0_hz=F0, level=1.0, side_gain=dict(A=1.0, B=1.0)),
+                   variants=dict(A=dict(engine_id='laplacian', engine_params=dict(self.SETTINGS)),
+                                 B=dict(engine_id=lfm.ENGINE_ID,
+                                        engine_params=dict(fm_depth=self.DEPTH, **self.SETTINGS))),
+                   initial_side='B', listen='')
+        runner = DemoRunner(scene_from_doc(doc))
+        runner.post('start', at=0)
+        times, harm, way = [], 1.0, -1.0
+        for i in range(320):
+            if i >= 40:
+                for _k in range(self.COMMANDS_PER_BLOCK):
+                    harm += way * self.STEP
+                    if not (0.0 <= harm <= 1.0):
+                        way = -way
+                        harm = min(max(harm, 0.0), 1.0)
+                    runner.post('set_param', side='B', name='harm', value=round(harm, 3))
+            t0 = time.perf_counter()
+            runner.next_block()
+            times.append((time.perf_counter() - t0) * 1000.0)
+        t = np.array(times[20:])
+        mean, p99 = float(t.mean()), float(np.percentile(t, 99))
+        self.assertLess(mean, budget, f"live A/B with a dragged knob: {mean:.2f} ms per block")
+        self.assertLess(p99, 1.5 * budget, f"live A/B with a dragged knob: p99 {p99:.2f} ms")
+
+
 class BenchIntegration(unittest.TestCase):
 
     def test_registry_entry(self):

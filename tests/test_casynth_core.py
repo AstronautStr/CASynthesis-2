@@ -1190,6 +1190,52 @@ def test_tune_zero_bitexact():
             f"tune=0 empty-minima snap changed r={r} to {got_empty}"
 
 
+def test_laplacian_matrix_equals_the_sparse_reference_bit_for_bit():
+    """The graph Laplacian map_laplacian builds densely (2026-09-20, a speed fix) must
+    equal scipy's sparse csgraph.laplacian EXACTLY -- values, the SIGN OF ITS ZEROS and
+    therefore the eigen-decomposition LAPACK returns for it.
+
+    The sign of zero is not cosmetic here: writing `-A` instead of filling a zero matrix
+    leaves -0.0 in every hole, and although -0.0 == 0.0, eigh then returns eigenvalues
+    that differ in the last bit -- enough to move one across the `> 1e-6` non-zero test
+    and pick a different lowest mode (caught by the Objects/Laplace gate, 0.34 Hz)."""
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import laplacian as sparse_laplacian
+    rng = np.random.default_rng(1109)
+    checked = 0
+    for _ in range(200):
+        h, w = int(rng.integers(3, 12)), int(rng.integers(3, 12))
+        patch = (rng.random((h, w)) < rng.uniform(0.2, 0.9)).astype(np.uint8)
+        live = list(map(tuple, np.argwhere(patch > 0)))
+        cnt = len(live)
+        if cnt < 2:
+            continue
+        pos = {p: i for i, p in enumerate(live)}
+        ri, ci = [], []
+        for r, col in live:
+            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1),
+                           (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                nb = (r + dr, col + dc)
+                if nb in pos:
+                    ri.append(pos[(r, col)])
+                    ci.append(pos[nb])
+        if not ri:
+            continue
+        checked += 1
+        want = sparse_laplacian(csr_matrix((np.ones(len(ri)), (ri, ci)),
+                                           shape=(cnt, cnt))).toarray().astype(float)
+        ri_a, ci_a = np.asarray(ri), np.asarray(ci)
+        got = np.zeros((cnt, cnt))
+        got[ri_a, ci_a] = -1.0
+        got[np.arange(cnt), np.arange(cnt)] = np.bincount(ci_a, minlength=cnt)
+        assert np.array_equal(got, want), f"Laplacian values differ on a {cnt}-node graph"
+        assert np.array_equal(np.signbit(got), np.signbit(want)),             f"zero signs differ on a {cnt}-node graph (-0.0 moves eigenvalues)"
+        ew, vw = np.linalg.eigh(want)
+        eg, vg = np.linalg.eigh(got)
+        assert np.array_equal(ew, eg) and np.array_equal(vw, vg),             f"eigh differs on a {cnt}-node graph"
+    assert checked > 100, f"only {checked} graphs exercised"
+
+
 def test_render_transpose_equivalence():
     """Envelope refactor: the carrier transpose in render_chunk_laplacian is a
     pure frequency scale.  Rendering a slot at (freq=f, transpose=r) must equal

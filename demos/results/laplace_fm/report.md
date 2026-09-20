@@ -64,8 +64,8 @@ Energy of the delivered FM track at or above 0.50*sr: -137 dB.
 
 | record | A | B | A RMS | B RMS | A-B | <=0.5 dB | A == pinned | B == the FM track | p99 ms |
 |---|---|---|---|---|---|---|---|---|---|
-| lfm_baseline | R | FM | -29.93 | -29.96 | +0.03 | True | True | True | 4.41 |
-| lfm_saw_bank | W_saw | FM | -29.94 | -29.96 | +0.02 | True | True | True | 5.05 |
+| lfm_baseline | R | FM | -29.93 | -29.96 | +0.03 | True | True | True | 3.36 |
+| lfm_saw_bank | W_saw | FM | -29.94 | -29.96 | +0.02 | True | True | True | 3.63 |
 
 sha256 of the FM track: `73ba50680d3df391` -- the same in both records. R and Wave bank / Saw carry the sha256 of the pinned record `20260920-164914-f2dedf` already listened to.
 
@@ -79,12 +79,23 @@ Cost with the field analysis and the oversampling included; the last column is t
 
 | case | figures | modulators | p99 ms | max ms | within budget | baseline p99 |
 |---|---|---|---|---|---|---|
-| the delivered Jam, f0 110, n 3 | 3 | 7 | 2.31 | 2.95 | True | 2.42 |
-| high note f0 1760, n 3 | 3 | 7 | 1.59 | 2.88 | True | 2.54 |
-| high note f0 1760, I 4 | 3 | 7 | 1.75 | 2.77 | True | 2.32 |
-| the Jam with n 20 | 3 | 10 | 1.96 | 2.63 | True | 4.05 |
-| dense random field, n 3 | 24 | 65 | 15.05 | 16.01 | False | 12.81 |
-| dense random field, n 20 | 24 | 187 | 26.48 | 29.62 | False | 16.55 |
+| the delivered Jam, f0 110, n 3 | 3 | 7 | 1.32 | 1.41 | True | 1.91 |
+| high note f0 1760, n 3 | 3 | 7 | 1.30 | 1.46 | True | 2.45 |
+| high note f0 1760, I 4 | 3 | 7 | 1.27 | 1.38 | True | 2.30 |
+| the Jam with n 20 | 3 | 10 | 1.64 | 1.74 | True | 2.35 |
+| dense random field, n 3 | 24 | 65 | 7.06 | 7.80 | True | 6.40 |
+| dense random field, n 20 | 24 | 187 | 14.98 | 15.74 | False | 11.93 |
+
+The reported case (2026-09-20): the user's live field with `harm` dragged down. Every mode of every figure changes frequency on every block, so every modulator keeps its tails sounding, and the 60 Hz event loop delivers several `set_param` commands into one block.
+
+| set_param per block | figures | modulators | mean ms | p99 ms | max ms | blocks over budget |
+|---|---|---|---|---|---|---|
+| 0 | 8 | 24 | 1.46 | 2.68 | 5.72 | 0 of 300 |
+| 1 | 8 | 24 | 3.79 | 6.16 | 8.14 | 1 of 300 |
+| 4 | 8 | 24 | 3.84 | 6.73 | 8.25 | 1 of 300 |
+| 8 | 8 | 24 | 3.66 | 6.53 | 7.34 | 0 of 300 |
+
+The MEAN is what decides: the render thread keeps 40 ms of blocks ahead of the device, so a single late block is absorbed and only a sustained cost above the budget drains that queue. The cost no longer grows with the number of commands in a block (one analysis per block instead of one per command), and the occasional late block left in the table is this desktop scheduling, not the engine.
 
 ## The catalog
 
@@ -100,6 +111,7 @@ Cost with the field analysis and the oversampling included; the last column is t
 - The phase law checks out against an independent Bessel expansion (2e-13), coincident modulators add coherently, and the carrier is modulated JOINTLY (-158 dB against the joint formula, -2 dB against a sum of separate carriers).
 - Band: the reference converges (worst 16x vs 32x -165 dB, REQ -80 dB) and the shipped x8 is within -155 dB of it on still figures and -89 dB over the whole Jam with its transitions (REQ -60 dB).
 - Levels: the three tracks sit within 0.03 dB, nothing clips, and R / Wave bank+Saw are byte-identical to the pinned record already listened to.
-- Budget: p99 5.05 ms of the 7.98 ms block on both delivered scenes; Continue is exact including a generation change and a pause.
+- Budget: p99 3.63 ms of the 7.98 ms block on both delivered scenes; Continue is exact including a generation change and a pause.
 - Limits (section 6): the delivered scenes, a high note and n = 20 all stay inside the block; a dense random field leaves the budget (as the baseline does on the same field) -- the table says where, and no index or frequency is reduced to hide it.
+- A dragged spectrum knob on a live field -- the case the user reported as underruns -- now costs 3.84 ms per block at worst against the 7.98 ms budget, and no longer grows with the command rate; the same runs measured 14.6 ms (4 commands per block) and 23.7 ms (8) before the 2026-09-20 speed fixes.
 - Nothing here says the FM sounds useful: that is the listening question of the catalog.

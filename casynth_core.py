@@ -31,8 +31,6 @@ researcher-fixed) gol_life_synth_laplacian.py copy.  Both apps import from here.
 
 import numpy as np
 from scipy import ndimage, linalg
-from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import laplacian as sparse_laplacian
 
 # ── Shared constants ──────────────────────────────────────────────────────────
 SR = 44100                 # audio sample rate (used only for the anti-alias guard)
@@ -230,8 +228,21 @@ def map_laplacian(patch, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=
                 ci_.append(pos[nb])
     if not ri:
         return np.zeros(n), np.zeros(n)
-    A = csr_matrix((np.ones(len(ri)), (ri, ci_)), shape=(cnt, cnt))
-    L = sparse_laplacian(A).toarray().astype(float)
+    # L = D - A of the 8-neighbour graph, built densely (2026-09-20).  The figures here
+    # have a handful of nodes (MAX_LAPLACIAN_NODES = 256 at most) and the sparse round
+    # trip -- csr_matrix, scipy's csgraph.laplacian, toarray -- cost ~127 us per figure
+    # against ~6 us for the dense form; on a live field that is re-analysed on every
+    # block of a knob drag it was the single most expensive step.  Entries (-1) and
+    # degrees (<= 8) are exact integers in float64, so the matrix is the SAME bit for
+    # bit.  It is written into a ZERO matrix rather than negating an adjacency: `-A`
+    # leaves -0.0 in every off-diagonal hole, and although -0.0 == 0.0, LAPACK then
+    # returns eigenvalues that differ in the last bit -- enough to move one across the
+    # `> 1e-6` non-zero test and pick a different lowest mode.
+    ri_a = np.asarray(ri)
+    ci_a = np.asarray(ci_)
+    L = np.zeros((cnt, cnt))
+    L[ri_a, ci_a] = -1.0
+    L[np.arange(cnt), np.arange(cnt)] = np.bincount(ci_a, minlength=cnt)
 
     # e_ev: excitation values at each graph node (row-major order of
     # argwhere(patch>0) == boolean-indexing order of exc[patch>0]); read only

@@ -108,6 +108,10 @@ AMP_EPS = 1e-4                    # a source below this on both ends of the bloc
 BETA_EPS = 1e-9                   # an index below this is not worth a sine (-180 dB)
 BETA_TAIL_MIN = 1e-4              # below this an old modulator is not worth a tail (-80 dB step)
 BETA_FREE = 1e-4                  # a spent modulator tail this quiet frees its slot
+# Column chunking of the render (speed only, never the values): aim for this many
+# (modulator x sample) cells per pass, never fewer than this many samples.
+CHUNK_CELLS = 12000
+CHUNK_MIN = 128
 
 
 # ── the output filter ─────────────────────────────────────────────────────────
@@ -430,7 +434,16 @@ class _FMSources:
     def render(self, n_os, ramp_os):
         """Mono FM sum at OVERSAMPLE*sr: sum over the sounding sources of
         A(t)*sin(theta_c + sum_j beta_j(t)*sin(theta_j)), A and every beta glided
-        across the block on the pool's own ramp."""
+        across the block on the pool's own ramp.
+
+        Evaluated in COLUMN chunks (2026-09-20).  One modulator per row and the whole
+        block per column is 1.6 MB of temporaries at the modulator counts a dragged
+        spectrum knob produces (every mode changes frequency every block, so every
+        modulator also has its tails sounding), and the block then costs more in memory
+        traffic than in arithmetic.  Chunking the SAMPLES keeps the working set in
+        cache; every output sample is still computed by exactly the same operations in
+        exactly the same order, so the result is bit-for-bit what the full-width
+        version produced (the pinned records replay unchanged)."""
         act = np.nonzero((self.amp_cur >= AMP_EPS) | (self.amp_tgt >= AMP_EPS))[0]
         if not len(act):
             self.advance(n_os)
@@ -439,23 +452,43 @@ class _FMSources:
         fm = self.f_mod[act]
         b0 = self.beta_cur[act]
         db = self.beta_tgt[act] - b0
-        acc = np.zeros((len(act), n_os))
         live = (fm > 0.0) & ((np.abs(b0) > BETA_EPS) | (np.abs(b0 + db) > BETA_EPS))
+        rows = cols = uniq = starts = None
+        inc = th_m = bb0 = bdb = None
         if live.any():
             rows, cols = np.nonzero(live)                     # rows ascending
-            thm = self.th_mod[act]
             inc = (TWO_PI / self.sr_os) * fm[rows, cols]
-            s = np.sin(thm[rows, cols][:, None] + inc[:, None] * idx[None, :])
-            s *= b0[rows, cols][:, None] + db[rows, cols][:, None] * ramp_os[None, :]
+            th_m = self.th_mod[act][rows, cols]
+            bb0 = b0[rows, cols]
+            bdb = db[rows, cols]
             uniq, starts = np.unique(rows, return_index=True)
-            acc[uniq] = np.add.reduceat(s, starts, axis=0)
         inc_c = TWO_PI * self.f0 / self.sr_os
-        a0 = self.amp_cur[act][:, None]
-        da = (self.amp_tgt[act] - self.amp_cur[act])[:, None]
-        y = ((a0 + da * ramp_os[None, :])
-             * np.sin(self.th_c[act][:, None] + inc_c * idx[None, :] + acc)).sum(axis=0)
+        th_c = self.th_c[act]
+        a0 = self.amp_cur[act]
+        da = self.amp_tgt[act] - a0
+        y = np.empty(n_os)
+        chunk = self._chunk(0 if rows is None else len(rows), n_os)
+        for c0 in range(0, n_os, chunk):
+            sl = slice(c0, min(c0 + chunk, n_os))
+            idx_c = idx[sl]
+            ramp_c = ramp_os[sl]
+            acc = np.zeros((len(act), len(idx_c)))
+            if rows is not None:
+                s = np.sin(th_m[:, None] + inc[:, None] * idx_c[None, :])
+                s *= bb0[:, None] + bdb[:, None] * ramp_c[None, :]
+                acc[uniq] = np.add.reduceat(s, starts, axis=0)
+            y[sl] = ((a0[:, None] + da[:, None] * ramp_c[None, :])
+                     * np.sin(th_c[:, None] + inc_c * idx_c[None, :] + acc)).sum(axis=0)
         self.advance(n_os)
         return y
+
+    @staticmethod
+    def _chunk(n_rows, n_os):
+        """Samples per pass: enough rows x columns to keep the vector units busy, few
+        enough to stay in cache.  Only the SPEED depends on this number."""
+        if n_rows <= 0:
+            return n_os
+        return int(min(n_os, max(CHUNK_MIN, CHUNK_CELLS // n_rows)))
 
     def advance(self, n_os):
         """Commit the block: every phase moves on (a free-running oscillator per
@@ -528,12 +561,22 @@ class LaplaceFMEngine(SoundEngine):
         self._analyse()
 
     def set_params(self, params):
+        """The analysis is deferred to the next render (2026-09-20).
+
+        The bench drains every pending mouse event at 60 Hz and the runner applies all
+        the commands that are due in ONE block, so dragging a spectrum knob delivers
+        several `set_param` commands per block -- each of which used to re-analyse the
+        whole field (the most expensive thing the engine does).  Only the LAST value of
+        a block can reach the audio, so analysing once, at the render, is the same
+        spectrum bit for bit and costs one analysis instead of four."""
         super().set_params(params)
         if self._grid is not None:
-            self._analyse()
+            self._pending_analysis = True
 
     def render(self, gain, t_samples):
         n = self.ctx.block
+        if self._pending_analysis:
+            self._analyse()
         self.src.update(self._mods, self._index(), self._release_chunks,
                         self._attack_chunks, self._decay_chunks, self._sustain)
         y_os = self.src.render(n * self.oversample, self._ramp_os)
@@ -638,6 +681,7 @@ class LaplaceFMEngine(SoundEngine):
 
     # -- internals ---------------------------------------------------------------------
     def _clear_audio(self, gain):
+        self._pending_analysis = False
         self.src = _FMSources(self.ctx.f0, self.ctx.sr, self.oversample)
         self.fir_hist = np.zeros(self.taps - 1)
         self.dc_x = 0.0
@@ -655,6 +699,7 @@ class LaplaceFMEngine(SoundEngine):
         for v in voices:
             v['pan'] = PAN_CENTER
         self.voices = voices
+        self._pending_analysis = False
         mods = [None] * MAX_VOICES
         for i, v in enumerate(voices[:MAX_VOICES]):
             fr = np.asarray(v['freqs'], dtype=float)

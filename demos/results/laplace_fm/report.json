@@ -12,6 +12,48 @@
   "sustain": 1.0,
   "block_ms": 7.98185941043084
  },
+ "knob_drag": [
+  {
+   "commands_per_block": 0,
+   "figures": 8,
+   "modulators": 24,
+   "mean_ms": 1.459555999414685,
+   "p99_ms": 2.6830139957019123,
+   "max_ms": 5.722899979446083,
+   "over_budget_blocks": 0,
+   "blocks": 300
+  },
+  {
+   "commands_per_block": 1,
+   "figures": 8,
+   "modulators": 24,
+   "mean_ms": 3.7940653333983696,
+   "p99_ms": 6.156677015242166,
+   "max_ms": 8.144999999785796,
+   "over_budget_blocks": 1,
+   "blocks": 300
+  },
+  {
+   "commands_per_block": 4,
+   "figures": 8,
+   "modulators": 24,
+   "mean_ms": 3.8423326657114862,
+   "p99_ms": 6.728099003084928,
+   "max_ms": 8.249699982115999,
+   "over_budget_blocks": 1,
+   "blocks": 300
+  },
+  {
+   "commands_per_block": 8,
+   "figures": 8,
+   "modulators": 24,
+   "mean_ms": 3.6619519984621243,
+   "p99_ms": 6.533508004504255,
+   "max_ms": 7.3370999889448285,
+   "over_budget_blocks": 0,
+   "blocks": 300
+  }
+ ],
  "modes": {
   "generations": 49,
   "voice_counts": [
@@ -296,8 +338,8 @@
    "preclip_peak_last_block": 0.04524395263132107,
    "pcm_peak": 0.134857177734375,
    "clip_blocks": 0,
-   "p99_ms": 5.167538013483866,
-   "max_ms": 7.229200011352077
+   "p99_ms": 4.069538980838847,
+   "max_ms": 5.802400002721697
   },
   {
    "variant": "W_saw",
@@ -309,8 +351,8 @@
    "preclip_peak_last_block": 0.0728415028114059,
    "pcm_peak": 0.156219482421875,
    "clip_blocks": 0,
-   "p99_ms": 5.593767998216214,
-   "max_ms": 9.030599991092458
+   "p99_ms": 4.8852529935538795,
+   "max_ms": 7.099999987985939
   },
   {
    "variant": "FM",
@@ -322,8 +364,8 @@
    "preclip_peak_last_block": 0.03273936247334953,
    "pcm_peak": 0.087371826171875,
    "clip_blocks": 0,
-   "p99_ms": 3.693691999069422,
-   "max_ms": 7.211199990706518
+   "p99_ms": 2.4441199935972704,
+   "max_ms": 4.681999998865649
   }
  ],
  "level_span_db": 0.03438190645018935,
@@ -352,8 +394,8 @@
    },
    "a_minus_b_db": 0.03438190645018935,
    "within_05db": true,
-   "p99_ms": 4.409973987785637,
-   "max_ms": 8.234400011133403,
+   "p99_ms": 3.3599119968130258,
+   "max_ms": 4.7660999989602715,
    "ok": true
   },
   {
@@ -380,8 +422,8 @@
    },
    "a_minus_b_db": 0.016221874747010645,
    "within_05db": true,
-   "p99_ms": 5.04541600879748,
-   "max_ms": 6.556400010595098,
+   "p99_ms": 3.632839003112169,
+   "max_ms": 5.0749999936670065,
    "ok": true
   }
  ],
@@ -410,9 +452,9 @@
    "n": 3,
    "figures": 3,
    "modulators": 7,
-   "p99_ms": 2.3127110020141064,
-   "max_ms": 2.9460000223480165,
-   "baseline_p99_ms": 2.4170720047550276,
+   "p99_ms": 1.3214720186078917,
+   "max_ms": 1.410800003213808,
+   "baseline_p99_ms": 1.9052529847249389,
    "within_budget": true
   },
   {
@@ -422,9 +464,9 @@
    "n": 3,
    "figures": 3,
    "modulators": 7,
-   "p99_ms": 1.5917780020390553,
-   "max_ms": 2.8843999898526818,
-   "baseline_p99_ms": 2.5379529924248314,
+   "p99_ms": 1.301131976651959,
+   "max_ms": 1.4640000008512288,
+   "baseline_p99_ms": 2.453199979208875,
    "within_budget": true
   },
   {
@@ -434,9 +476,9 @@
    "n": 3,
    "figures": 3,
    "modulators": 7,
-   "p99_ms": 1.7459749983390778,
-   "max_ms": 2.76909998501651,
-   "baseline_p99_ms": 2.316641981014981,
+   "p99_ms": 1.2672270002076393,
+   "max_ms": 1.3807000068482012,
+   "baseline_p99_ms": 2.296586005832068,
    "within_budget": true
   },
   {
@@ -446,9 +488,9 @@
    "n": 20,
    "figures": 3,
    "modulators": 10,
-   "p99_ms": 1.9584670214680953,
-   "max_ms": 2.6347000093664974,
-   "baseline_p99_ms": 4.045249017945018,
+   "p99_ms": 1.635940991400274,
+   "max_ms": 1.736300007905811,
+   "baseline_p99_ms": 2.3507069825427584,
    "within_budget": true
   },
   {
@@ -458,10 +500,10 @@
    "n": 3,
    "figures": 24,
    "modulators": 65,
-   "p99_ms": 15.053153986809766,
-   "max_ms": 16.008300008252263,
-   "baseline_p99_ms": 12.812092994863594,
-   "within_budget": false
+   "p99_ms": 7.058918006659948,
+   "max_ms": 7.798800012096763,
+   "baseline_p99_ms": 6.401391004037572,
+   "within_budget": true
   },
   {
    "case": "dense random field, n 20",
@@ -470,9 +512,9 @@
    "n": 20,
    "figures": 24,
    "modulators": 187,
-   "p99_ms": 26.4820019993931,
-   "max_ms": 29.616700019687414,
-   "baseline_p99_ms": 16.546961985004582,
+   "p99_ms": 14.980875002220271,
+   "max_ms": 15.744800009997562,
+   "baseline_p99_ms": 11.932463019038536,
    "within_budget": false
   }
  ],
@@ -508,8 +550,9 @@
   "The phase law checks out against an independent Bessel expansion (2e-13), coincident modulators add coherently, and the carrier is modulated JOINTLY (-158 dB against the joint formula, -2 dB against a sum of separate carriers).",
   "Band: the reference converges (worst 16x vs 32x -165 dB, REQ -80 dB) and the shipped x8 is within -155 dB of it on still figures and -89 dB over the whole Jam with its transitions (REQ -60 dB).",
   "Levels: the three tracks sit within 0.03 dB, nothing clips, and R / Wave bank+Saw are byte-identical to the pinned record already listened to.",
-  "Budget: p99 5.05 ms of the 7.98 ms block on both delivered scenes; Continue is exact including a generation change and a pause.",
+  "Budget: p99 3.63 ms of the 7.98 ms block on both delivered scenes; Continue is exact including a generation change and a pause.",
   "Limits (section 6): the delivered scenes, a high note and n = 20 all stay inside the block; a dense random field leaves the budget (as the baseline does on the same field) -- the table says where, and no index or frequency is reduced to hide it.",
+  "A dragged spectrum knob on a live field -- the case the user reported as underruns -- now costs 3.84 ms per block at worst against the 7.98 ms budget, and no longer grows with the command rate; the same runs measured 14.6 ms (4 commands per block) and 23.7 ms (8) before the 2026-09-20 speed fixes.",
   "Nothing here says the FM sounds useful: that is the listening question of the catalog."
  ]
 }
