@@ -1277,25 +1277,30 @@ class BenchApp:
         if not disp:
             return
         if disp.get('fm'):
-            # Laplace FM (2026-09-20): the depth I, what depth 0 means (the knob stays
-            # editable, so the meaning is said here), the sounding figures and their
-            # modulators, and the output band the sum goes through.
-            screen.blit(small.render(f"Laplace FM: depth {float(disp['depth']):.2f}"
-                                     f"   f0 {float(disp['f0']):.0f} Hz"
-                                     f"   depth 0 = carrier sine only", True, C_DIM), (x, y))
-            screen.blit(small.render(f"figures {int(disp['sounding'])} of {int(disp['voices'])}"
-                                     f"   modulators {int(disp['modulators'])}"
-                                     f"   tails {int(disp['tails'])}/{int(disp['mod_tails'])}",
-                                     True, C_DIM), (x, y + 14))
-            screen.blit(small.render(f"oversample x{int(disp['oversample'])}"
-                                     f"   {int(disp['taps'])} taps"
-                                     f"   delay {int(disp['delay_samples'])} samples"
-                                     f"   DC blocked", True, C_DIM), (x, y + 28))
+            # Laplace FM (2026-09-20): the depth I and what depth 0 means (the knob stays
+            # editable, so its meaning belongs next to it), the sounding figures with their
+            # modulators and tails, and the output band the summed FM goes through.  Every
+            # line is kept inside the panel column (PANEL_W).
+            room = PANEL_W - 4
+            screen.blit(fit_text(small, [f"Laplace FM: depth {float(disp['depth']):.2f}"
+                                         f"   f0 {float(disp['f0']):.0f} Hz"], room, C_DIM), (x, y))
+            screen.blit(fit_text(small, ["depth 0 = the carrier sine alone",
+                                         "depth 0 = carrier sine only"], room, C_DIM), (x, y + 14))
+            screen.blit(fit_text(small, [f"figures {int(disp['sounding'])} of {int(disp['voices'])}"
+                                         f"   modulators {int(disp['modulators'])}"
+                                         f"   tails {int(disp['tails'])}/{int(disp['mod_tails'])}"],
+                                 room, C_DIM), (x, y + 28))
+            screen.blit(fit_text(small, [f"x{int(disp['oversample'])} / {int(disp['taps'])} taps"
+                                         f" / delay {int(disp['delay_samples'])} smp / DC blocked"],
+                                 room, C_DIM), (x, y + 42))
             for k, row in enumerate(disp.get('lines', [])[:self.figure_rows]):
-                ry = y + 48 + k * DISPLAY_ROW_H
-                screen.blit(small.render(f"#{k + 1}  {int(row['n'])} modes   {float(row['f_low']):.0f} Hz"
-                                         f"   A {float(row['a']):.2f}   beta max {float(row['beta']):.2f}",
-                                         True, C_TXT), (x, ry))
+                ry = y + 62 + k * DISPLAY_ROW_H
+                screen.blit(fit_text(small, [f"#{k + 1}  {int(row['n'])} modes   "
+                                             f"{float(row['f_low']):.0f} Hz   A {float(row['a']):.2f}"
+                                             f"   beta max {float(row['beta']):.2f}",
+                                             f"#{k + 1}  {int(row['n'])} modes  A {float(row['a']):.2f}"
+                                             f"  beta {float(row['beta']):.2f}"],
+                                     room, C_TXT), (x, ry))
             return
         if disp.get('carriers'):
             # Laplace carriers (2026-09-20): which law is heard, the wave and how many

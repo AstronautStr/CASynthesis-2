@@ -1,0 +1,1141 @@
+{
+ "format": 3,
+ "id": "20260920-220934-d120d1",
+ "provenance": {
+  "schema": 1,
+  "sound_set": 2,
+  "root": "C:\\Users\\Astro\\Documents\\Projects\\CASynth-2",
+  "manifest": {
+   "casynth_config.py": "836f3e96def1eeabe6f31116f8ec80a0109f85554ed5a0ddfd28b5ef123dcff2",
+   "casynth_core.py": "c4db326a9ebe2c8d06b1505f685782e62be4daee7dc69ef133d0ec4170b03883",
+   "casynth_engine.py": "ede4e4db4fb4181e7afeb92531a35880f49d1701b3ffe0596a26a3168fcf83f8",
+   "casynth_lab/engine_api.py": "2ab95105862e8f2644ab9ed534179e9ffea77142759125eb5fe2b49be5962d1b",
+   "casynth_lab/event_network.py": "629c264e18ea3c6d0336dab5ffe984d80c1b41251d9e0ce8874d9043ecd01668",
+   "casynth_lab/figures.py": "d3e89ff0137ecd69f57f17191c8b73cb16587c9b6fc05459a6b660808ef6d489",
+   "casynth_lab/gutter_controls.py": "f2cb31f79286ec3a9233f5e4733e207b46f87bf3f7b1d5b1a8c6922d8166fb1d",
+   "casynth_lab/gutter_field.py": "9c4e660942771ddc234ab4facb3eb88377e8e846969618727f39e9c4d20c279d",
+   "casynth_lab/gutter_field_n1_config.py": "35b1181daea7e381c8fe8a5d45af989410410bf8e026ff432b54698ceb9c4327",
+   "casynth_lab/gutter_field_periodic.py": "927d7d81cd5203ca2da6b37b7c80b59045e6aaafe998364a980dfc7cea3fca59",
+   "casynth_lab/laplace_carriers.py": "73863a38af350ef6f0e229d238ad6a0be32362b4f7a5313a2fa6d9bd17ee2027",
+   "casynth_lab/laplace_fm.py": "0cb8c1cd41e6a88c12bb0194ef493f0b59270a9422d58ca61bb7a1de7d0e0b43",
+   "casynth_lab/legacy_engine.py": "13494afbe3ceaf31bf4a090cc4e1442fe914c6c074852985516cd01ce6c63652",
+   "casynth_lab/object_resonators.py": "ac3bb5e5a12a25d5734937f087d214e2663ac9a64e47217bffe85672e0b6bf15",
+   "casynth_lab/periodic_readout.py": "fd4853fbde04506f57c0c0024fa0a0b32b23925164ccabe22881dba6bb980590",
+   "casynth_lab/pm_network.py": "7e1fc88b58ef8623ead0194facb59d5a7f14b4e40a66732f99e95a86286f88ce",
+   "casynth_lab/registry.py": "af3141ff734ef3fd281036588f1f6419dc52ddc2e25ddecc1711fdbe01eba902",
+   "casynth_lab/runner.py": "9bdae79b5e89037152ea6709408713f359f6d60dd1a9680f284332ae79a31ce0",
+   "casynth_lab/scan_surface.py": "5cf0a3b28732f23e640861e3c1e1a6bf949c586cfe2b34b69d0d8e6246020e7d",
+   "casynth_lab/scene.py": "77fbbd4a404d9e418e70a90932e6ffe014a2dbba0853d70993f656bdce0ace47",
+   "casynth_lab/snapshot.py": "6886e8dd0d1d2615d836ec1390e6310c27783e42748c0153008ae7f02de30576",
+   "casynth_lab/tuned_events.py": "7e917e2352e1e1108f33829fbe2f563ab0d4d248ea71392398216389309f6fc1"
+  },
+  "digest": "a655a369c787e5d1e74488b8c6e6804ccaf8fb71fe4a04a748cff9d66ddab33d",
+  "repo_id": "22b46903073195905f029c3c587445203c41ebbe",
+  "commit": "e41844909ef1a274cc62d0b12dfb72b9f717e292",
+  "match": "clean",
+  "dirty": [],
+  "reason": "",
+  "environment": {
+   "python": "3.14.5",
+   "executable": "C:\\Users\\Astro\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+   "packages": {
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "pygame": "2.5.7",
+    "sounddevice": "0.5.5"
+   },
+   "os": "Windows",
+   "os_version": "10.0.26100",
+   "machine": "AMD64"
+  },
+  "audio": {},
+  "loaded_from": {
+   "casynth_core": true,
+   "casynth_engine": true,
+   "casynth_config": true,
+   "casynth_lab": true
+  }
+ },
+ "status_reason": "",
+ "pin": {
+  "commit": "e41844909ef1a274cc62d0b12dfb72b9f717e292",
+  "ref": "refs/casynth/pins/e41844909ef1a274cc62d0b12dfb72b9f717e292"
+ },
+ "origin_kind": "fresh",
+ "parent_record_id": null,
+ "snapshot": {
+  "runner_state_version": 1,
+  "end": {
+   "json": "state_end.json",
+   "npz": "state_end.npz"
+  },
+  "end_reason": "",
+  "origin": null,
+  "origin_seq": null,
+  "engine_state_versions": {
+   "A": 1,
+   "B": 1
+  }
+ },
+ "created": "2026-09-20T22:09:34",
+ "title": "3 - Два кандидата: Wave bank / Laplace FM (Jam, 4 поколения/с)",
+ "note": "А — Laplace waves, Wave bank, пила на каждой моде / Б — Laplace FM, FM depth 1: моды фигуры модулируют её синусоидальную несущую. Поле Jam (13 клеток), 32 x 32, тор, B3/S23; 12 с, 4 поколения/с, f0 = 110 Hz. Период 3: фигуры 7+3+3 -> 11+3 -> 16 клеток. Семь настроек спектра одинаковы на обеих сторонах (n 3, spread 1, alpha 0, shape 0, harm 0, full 1, dyn 0); частоты и веса мод у всех вариантов одни и те же. А — та же дорожка пил, что в опыте 2. FM: у каждой фигуры одна синусоидальная несущая на частоте ноты, моды этой фигуры задают частоты модуляторов, их веса — индексы (beta = FM depth * a). Ручка FM depth 0...4; при 0 остаётся синус несущей, а не исходный Laplacian.",
+ "status": "pinned",
+ "scene": {
+  "format": 2,
+  "id": "lfm_saw_bank",
+  "title": "3 - Два кандидата: Wave bank / Laplace FM (Jam, 4 поколения/с)",
+  "grid": {
+   "rows": 32,
+   "cols": 32
+  },
+  "cells": [
+   [
+    7,
+    10
+   ],
+   [
+    7,
+    11
+   ],
+   [
+    8,
+    9
+   ],
+   [
+    8,
+    12
+   ],
+   [
+    9,
+    7
+   ],
+   [
+    9,
+    10
+   ],
+   [
+    9,
+    12
+   ],
+   [
+    10,
+    7
+   ],
+   [
+    10,
+    11
+   ],
+   [
+    11,
+    7
+   ],
+   [
+    12,
+    10
+   ],
+   [
+    13,
+    8
+   ],
+   [
+    13,
+    9
+   ]
+  ],
+  "rule": "B3/S23",
+  "boundary": "torus",
+  "rate_hz": 4.0,
+  "audio": {
+   "f0_hz": 110.0,
+   "level": 1.0,
+   "side_gain": {
+    "A": 0.78,
+    "B": 0.92
+   }
+  },
+  "variants": {
+   "A": {
+    "engine_id": "laplace_carriers",
+    "engine_params": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "laplace_fm",
+    "engine_params": {
+     "fm_depth": 1.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "initial_side": "A",
+  "listen": "1 / 2: А — Laplace waves, Wave bank, пила на каждой моде / Б — Laplace FM, FM depth 1: моды фигуры модулируют её синусоидальную несущую. Notes: hypothesis and your listening result. FM depth is the first knob of the Laplace FM panel (0 = the carrier sine alone, not the Laplacian sum); the seven spectrum settings are shared (\"spectrum A to B\").",
+  "factory_variants": {
+   "A": {
+    "engine_id": "laplace_carriers",
+    "engine_params": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "laplace_fm",
+    "engine_params": {
+     "fm_depth": 1.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "param_memory": {
+   "A": {
+    "laplace_carriers": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "laplace_fm": {
+     "fm_depth": 1.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  }
+ },
+ "demo_scene": {
+  "format": 2,
+  "id": "lfm_saw_bank",
+  "title": "3 - Два кандидата: Wave bank / Laplace FM (Jam, 4 поколения/с)",
+  "grid": {
+   "rows": 32,
+   "cols": 32
+  },
+  "cells": [
+   [
+    7,
+    10
+   ],
+   [
+    7,
+    11
+   ],
+   [
+    8,
+    9
+   ],
+   [
+    8,
+    12
+   ],
+   [
+    9,
+    7
+   ],
+   [
+    9,
+    10
+   ],
+   [
+    9,
+    12
+   ],
+   [
+    10,
+    7
+   ],
+   [
+    10,
+    11
+   ],
+   [
+    11,
+    7
+   ],
+   [
+    12,
+    10
+   ],
+   [
+    13,
+    8
+   ],
+   [
+    13,
+    9
+   ]
+  ],
+  "rule": "B3/S23",
+  "boundary": "torus",
+  "rate_hz": 4.0,
+  "audio": {
+   "f0_hz": 110.0,
+   "level": 1.0,
+   "side_gain": {
+    "A": 0.78,
+    "B": 0.92
+   }
+  },
+  "variants": {
+   "A": {
+    "engine_id": "laplace_carriers",
+    "engine_params": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "laplace_fm",
+    "engine_params": {
+     "fm_depth": 1.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "initial_side": "A",
+  "listen": "1 / 2: А — Laplace waves, Wave bank, пила на каждой моде / Б — Laplace FM, FM depth 1: моды фигуры модулируют её синусоидальную несущую. Notes: hypothesis and your listening result. FM depth is the first knob of the Laplace FM panel (0 = the carrier sine alone, not the Laplacian sum); the seven spectrum settings are shared (\"spectrum A to B\")."
+ },
+ "origin_sample": 0,
+ "origin_state": {
+  "cells": [
+   [
+    7,
+    10
+   ],
+   [
+    7,
+    11
+   ],
+   [
+    8,
+    9
+   ],
+   [
+    8,
+    12
+   ],
+   [
+    9,
+    7
+   ],
+   [
+    9,
+    10
+   ],
+   [
+    9,
+    12
+   ],
+   [
+    10,
+    7
+   ],
+   [
+    10,
+    11
+   ],
+   [
+    11,
+    7
+   ],
+   [
+    12,
+    10
+   ],
+   [
+    13,
+    8
+   ],
+   [
+    13,
+    9
+   ]
+  ],
+  "vol": 0.7,
+  "selected": "A",
+  "settings": {
+   "A": {
+    "engine_id": "laplace_carriers",
+    "engine_params": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "laplace_fm",
+    "engine_params": {
+     "fm_depth": 1.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "param_memory": {
+   "A": {
+    "laplace_carriers": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "laplace_fm": {
+     "fm_depth": 1.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "param_ranges": {},
+  "factory_variants": {
+   "A": {
+    "engine_id": "laplace_carriers",
+    "engine_params": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "laplace_fm",
+    "engine_params": {
+     "fm_depth": 1.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  }
+ },
+ "window_seconds": 30.0,
+ "runner": {
+  "sr": 44100,
+  "block": 352,
+  "channels": 2,
+  "xfade_samples": 882,
+  "vol_initial": 0.7,
+  "master_gain_level": 1.0
+ },
+ "versions": {
+  "python": "3.14.5",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "sounddevice": "0.5.5",
+  "pygame": "2.5.7"
+ },
+ "journal": [
+  {
+   "out_sample": 0,
+   "seq": 1,
+   "kind": "start",
+   "args": {}
+  },
+  {
+   "out_sample": 11264,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 1
+   }
+  },
+  {
+   "out_sample": 22176,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 2
+   }
+  },
+  {
+   "out_sample": 33088,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 3
+   }
+  },
+  {
+   "out_sample": 44352,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 4
+   }
+  },
+  {
+   "out_sample": 55264,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 5
+   }
+  },
+  {
+   "out_sample": 66176,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 6
+   }
+  },
+  {
+   "out_sample": 77440,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 7
+   }
+  },
+  {
+   "out_sample": 88352,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 8
+   }
+  },
+  {
+   "out_sample": 99264,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 9
+   }
+  },
+  {
+   "out_sample": 110528,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 10
+   }
+  },
+  {
+   "out_sample": 121440,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 11
+   }
+  },
+  {
+   "out_sample": 132352,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 12
+   }
+  },
+  {
+   "out_sample": 143616,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 13
+   }
+  },
+  {
+   "out_sample": 154528,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 14
+   }
+  },
+  {
+   "out_sample": 165440,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 15
+   }
+  },
+  {
+   "out_sample": 176704,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 16
+   }
+  },
+  {
+   "out_sample": 187616,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 17
+   }
+  },
+  {
+   "out_sample": 198528,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 18
+   }
+  },
+  {
+   "out_sample": 209792,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 19
+   }
+  },
+  {
+   "out_sample": 220704,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 20
+   }
+  },
+  {
+   "out_sample": 231616,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 21
+   }
+  },
+  {
+   "out_sample": 242880,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 22
+   }
+  },
+  {
+   "out_sample": 253792,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 23
+   }
+  },
+  {
+   "out_sample": 264704,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 24
+   }
+  },
+  {
+   "out_sample": 275968,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 25
+   }
+  },
+  {
+   "out_sample": 286880,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 26
+   }
+  },
+  {
+   "out_sample": 297792,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 27
+   }
+  },
+  {
+   "out_sample": 308704,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 28
+   }
+  },
+  {
+   "out_sample": 319968,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 29
+   }
+  },
+  {
+   "out_sample": 330880,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 30
+   }
+  },
+  {
+   "out_sample": 341792,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 31
+   }
+  },
+  {
+   "out_sample": 353056,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 32
+   }
+  },
+  {
+   "out_sample": 363968,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 33
+   }
+  },
+  {
+   "out_sample": 374880,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 34
+   }
+  },
+  {
+   "out_sample": 386144,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 35
+   }
+  },
+  {
+   "out_sample": 397056,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 36
+   }
+  },
+  {
+   "out_sample": 407968,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 37
+   }
+  },
+  {
+   "out_sample": 419232,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 38
+   }
+  },
+  {
+   "out_sample": 430144,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 39
+   }
+  },
+  {
+   "out_sample": 441056,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 40
+   }
+  },
+  {
+   "out_sample": 452320,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 41
+   }
+  },
+  {
+   "out_sample": 463232,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 42
+   }
+  },
+  {
+   "out_sample": 474144,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 43
+   }
+  },
+  {
+   "out_sample": 485408,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 44
+   }
+  },
+  {
+   "out_sample": 496320,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 45
+   }
+  },
+  {
+   "out_sample": 507232,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 46
+   }
+  },
+  {
+   "out_sample": 518496,
+   "seq": 0,
+   "kind": "step",
+   "args": {
+    "gen": 47
+   }
+  }
+ ],
+ "audio_start_sample": 0,
+ "end_sample": 529408,
+ "audio": {
+  "A": {
+   "file": "A.wav",
+   "samples": 529408,
+   "sha256": "4e8905be7d26beaf232213f2b6fec73a512f16310fe134a373f6313b91224eb1"
+  },
+  "B": {
+   "file": "B.wav",
+   "samples": 529408,
+   "sha256": "73ba50680d3df391f9de3704aeb1a32d22f97ffc92764e3531888a81a5c5bd3c"
+  },
+  "monitor": {
+   "file": "monitor.wav",
+   "samples": 529408,
+   "sha256": "4e8905be7d26beaf232213f2b6fec73a512f16310fe134a373f6313b91224eb1"
+  }
+ },
+ "engines": {
+  "A": "laplace_carriers",
+  "B": "laplace_fm"
+ },
+ "settings_at_end": {
+  "A": {
+   "engine_id": "laplace_carriers",
+   "engine_params": {
+    "method": 1,
+    "waveform": 1,
+    "filter_width_oct": 0.35,
+    "filter_depth_db": 24.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  },
+  "B": {
+   "engine_id": "laplace_fm",
+   "engine_params": {
+    "fm_depth": 1.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  }
+ },
+ "selected_at_end": "A",
+ "state_at_end": {
+  "cells": [
+   [
+    7,
+    10
+   ],
+   [
+    7,
+    11
+   ],
+   [
+    8,
+    9
+   ],
+   [
+    8,
+    12
+   ],
+   [
+    9,
+    8
+   ],
+   [
+    9,
+    10
+   ],
+   [
+    9,
+    12
+   ],
+   [
+    10,
+    7
+   ],
+   [
+    10,
+    8
+   ],
+   [
+    10,
+    9
+   ],
+   [
+    10,
+    11
+   ],
+   [
+    11,
+    9
+   ],
+   [
+    12,
+    8
+   ],
+   [
+    12,
+    9
+   ],
+   [
+    13,
+    8
+   ],
+   [
+    13,
+    9
+   ]
+  ],
+  "vol": 0.7,
+  "selected": "A",
+  "settings": {
+   "A": {
+    "engine_id": "laplace_carriers",
+    "engine_params": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "laplace_fm",
+    "engine_params": {
+     "fm_depth": 1.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "param_memory": {
+   "A": {
+    "laplace_carriers": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "laplace_fm": {
+     "fm_depth": 1.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "param_ranges": {},
+  "factory_variants": {
+   "A": {
+    "engine_id": "laplace_carriers",
+    "engine_params": {
+     "method": 1,
+     "waveform": 1,
+     "filter_width_oct": 0.35,
+     "filter_depth_db": 24.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   },
+   "B": {
+    "engine_id": "laplace_fm",
+    "engine_params": {
+     "fm_depth": 1.0,
+     "n": 3,
+     "spread": 1.0,
+     "alpha": 0.0,
+     "shape": 0.0,
+     "harm": 0.0,
+     "fullshape": 1,
+     "dyn": 0.0
+    }
+   }
+  },
+  "gen": 47,
+  "paused": false,
+  "running": true
+ },
+ "diagnostics": {
+  "device_ok": false,
+  "device_error": "offline build",
+  "underruns": 0,
+  "block_errors": 0,
+  "last_error": null,
+  "clip_blocks": {
+   "A": 0,
+   "B": 0
+  },
+  "record_error": null
+ }
+}
