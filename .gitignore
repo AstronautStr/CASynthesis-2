@@ -32,7 +32,7 @@ ResearchMap.png
 # versioned; audio and transient state are not (WAV is recomputable byte-exact via
 # Check catalog / Check reproducibility from the record's pinned commit).
 lab_catalog/local/
-lab_catalog/worktrees/
+lab_catalog/**/worktrees/
 lab_catalog/**/.verify/
 lab_catalog/**/.tmp/
 lab_catalog/**/replay/
