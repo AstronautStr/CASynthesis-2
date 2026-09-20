@@ -1,0 +1,1239 @@
+{
+  "status": "Researcher stationary mathematical preflight only; no implemented FM engine, temporal renderer, listening, or aliasing acceptance",
+  "date": "2026-09-20",
+  "spectra_source": "memory\\research\\laplace-carriers-preflight-2026-09-20.json",
+  "spectra_source_sha256": "a34a298e0610b3d2f6eedbde569f5eed96b6efc11349fa15ea39536fbaea83c6",
+  "core_sha256": "c4db326a9ebe2c8d06b1505f685782e62be4daee7dc69ef133d0ec4170b03883",
+  "core_hash_matches": true,
+  "formula": "y=A_object*sin(theta_c+sum_j I*a_j*sin(theta_j)); dtheta_c/dt=2*pi*f0; dtheta_j/dt=2*pi*f_j. Standard synthesis FM via phase modulation, beta_j=I*a_j. No division by sum or number of modes.",
+  "method": "Stationary multi-modulator Jacobi-Anger expansion; per-modulator coefficients independently obtained by FFT of exp(i*beta*sin(theta)), 16384 phase samples, orders -18..18. Fold signed frequencies and combine coherent coincidences before energy metrics; all initial phases zero. Frequencies grouped at 1e-7 Hz. A_object=1 for diagnostics.",
+  "steady_phase_convention": "theta_c(0)=theta_j(0)=0; these measurements do not predict all live transient phases",
+  "single_modulator_max_omitted_coefficient_l1_estimate": 7.870964496924519e-12,
+  "time_domain_vs_expansion_max_abs": 2.06722889917188e-08,
+  "depth_zero_exact_carrier": true,
+  "rows": [
+    {
+      "generation": 0,
+      "object_index": 0,
+      "cells": 7,
+      "index": 0.0,
+      "ratios": [
+        1.0,
+        1.8019377358048378,
+        2.246979603717467
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 0.0,
+      "carrier_plus_sum_deviations_hz": 110.0,
+      "rms_at_A_object_1": 0.7071067811865476,
+      "spectral_centroid_hz": 110.0,
+      "noninteger_f0_energy_fraction": 0.0,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 1.0
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 0,
+      "cells": 7,
+      "index": 1.0,
+      "ratios": [
+        1.0,
+        1.8019377358048378,
+        2.246979603717467
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 3.0,
+      "carrier_plus_sum_deviations_hz": 665.3809073474536,
+      "rms_at_A_object_1": 0.7008257486970308,
+      "spectral_centroid_hz": 227.1981709175385,
+      "noninteger_f0_energy_fraction": 0.7741291573993114,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 0.380765137826345
+        },
+        {
+          "hz": 198.2131509,
+          "sine_amplitude": -0.29635267439859325
+        },
+        {
+          "hz": 247.1677564,
+          "sine_amplitude": -0.29635267439859325
+        },
+        {
+          "hz": 137.1677564,
+          "sine_amplitude": 0.2963526743985932
+        },
+        {
+          "hz": 88.2131509,
+          "sine_amplitude": 0.2963526743985932
+        },
+        {
+          "hz": 308.2131509,
+          "sine_amplitude": 0.29635267439859314
+        },
+        {
+          "hz": 357.1677564,
+          "sine_amplitude": 0.29635267439859314
+        },
+        {
+          "hz": 220.0,
+          "sine_amplitude": 0.2691166008703267
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 0,
+      "cells": 7,
+      "index": 2.0,
+      "ratios": [
+        1.0,
+        1.8019377358048378,
+        2.246979603717467
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 6.0,
+      "carrier_plus_sum_deviations_hz": 1220.7618146949071,
+      "rms_at_A_object_1": 0.6865008398384665,
+      "spectral_centroid_hz": 420.76783071338485,
+      "noninteger_f0_energy_fraction": 0.9983048728047211,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 149.2585455,
+          "sine_amplitude": 0.23471331375732674
+        },
+        {
+          "hz": 643.5940583,
+          "sine_amplitude": -0.23471331375732674
+        },
+        {
+          "hz": 296.1223619,
+          "sine_amplitude": 0.2347133137573267
+        },
+        {
+          "hz": 225.3809073,
+          "sine_amplitude": -0.2347133137573267
+        },
+        {
+          "hz": 268.9546055,
+          "sine_amplitude": -0.2347133137573267
+        },
+        {
+          "hz": 171.0453945,
+          "sine_amplitude": -0.2347133137573267
+        },
+        {
+          "hz": 665.3809073,
+          "sine_amplitude": 0.2347133137573267
+        },
+        {
+          "hz": 692.5486638,
+          "sine_amplitude": -0.2347133137573267
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 0,
+      "cells": 7,
+      "index": 4.0,
+      "ratios": [
+        1.0,
+        1.8019377358048378,
+        2.246979603717467
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 12.0,
+      "carrier_plus_sum_deviations_hz": 2331.5236293898142,
+      "rms_at_A_object_1": 0.7082828488691361,
+      "spectral_centroid_hz": 776.7933348794845,
+      "noninteger_f0_energy_fraction": 0.9724027426852759,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 1226.142722,
+          "sine_amplitude": 0.14087258017803347
+        },
+        {
+          "hz": 256.8638164,
+          "sine_amplitude": 0.14087258017803345
+        },
+        {
+          "hz": 1446.142722,
+          "sine_amplitude": -0.14087258017803345
+        },
+        {
+          "hz": 36.8638164,
+          "sine_amplitude": -0.14087258017803345
+        },
+        {
+          "hz": 110.0,
+          "sine_amplitude": -0.12007482768362336
+        },
+        {
+          "hz": 264.6394528,
+          "sine_amplitude": -0.11023736733606349
+        },
+        {
+          "hz": 924.6394528,
+          "sine_amplitude": -0.11023736733606349
+        },
+        {
+          "hz": 1071.5032692,
+          "sine_amplitude": -0.11023736733606349
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 1,
+      "cells": 3,
+      "index": 0.0,
+      "ratios": [
+        1.0,
+        1.7320508075688774
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 0.0,
+      "carrier_plus_sum_deviations_hz": 110.0,
+      "rms_at_A_object_1": 0.7071067811865476,
+      "spectral_centroid_hz": 110.0,
+      "noninteger_f0_energy_fraction": 0.0,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 1.0
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 1,
+      "cells": 3,
+      "index": 1.0,
+      "ratios": [
+        1.0,
+        1.7320508075688774
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 2.0,
+      "carrier_plus_sum_deviations_hz": 410.52558883257655,
+      "rms_at_A_object_1": 0.6786028715035415,
+      "spectral_centroid_hz": 181.02821957023997,
+      "noninteger_f0_energy_fraction": 0.5885646636818368,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 0.4976036186663257
+        },
+        {
+          "hz": 190.5255888,
+          "sine_amplitude": -0.3872890360289183
+        },
+        {
+          "hz": 80.5255888,
+          "sine_amplitude": 0.38728903602891823
+        },
+        {
+          "hz": 300.5255888,
+          "sine_amplitude": 0.3872890360289182
+        },
+        {
+          "hz": 220.0,
+          "sine_amplitude": 0.3516955233893537
+        },
+        {
+          "hz": 29.4744112,
+          "sine_amplitude": -0.1850356526352504
+        },
+        {
+          "hz": 410.5255888,
+          "sine_amplitude": 0.18503565263525035
+        },
+        {
+          "hz": 330.0,
+          "sine_amplitude": 0.0860287624415622
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 1,
+      "cells": 3,
+      "index": 2.0,
+      "ratios": [
+        1.0,
+        1.7320508075688774
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 4.0,
+      "carrier_plus_sum_deviations_hz": 711.0511776651531,
+      "rms_at_A_object_1": 0.7565095583967283,
+      "spectral_centroid_hz": 252.50168027293606,
+      "noninteger_f0_energy_fraction": 0.9721526942954615,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 190.5255888,
+          "sine_amplitude": -0.6652230077644051
+        },
+        {
+          "hz": 300.5255888,
+          "sine_amplitude": 0.33261150388220256
+        },
+        {
+          "hz": 80.5255888,
+          "sine_amplitude": 0.33261150388220256
+        },
+        {
+          "hz": 410.5255888,
+          "sine_amplitude": 0.2582467331175315
+        },
+        {
+          "hz": 29.4744112,
+          "sine_amplitude": -0.2582467331175315
+        },
+        {
+          "hz": 601.0511777,
+          "sine_amplitude": 0.24898370349828133
+        },
+        {
+          "hz": 161.0511777,
+          "sine_amplitude": -0.24898370349828133
+        },
+        {
+          "hz": 520.5255888,
+          "sine_amplitude": 0.22309431229401328
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 1,
+      "cells": 3,
+      "index": 4.0,
+      "ratios": [
+        1.0,
+        1.7320508075688774
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 8.0,
+      "carrier_plus_sum_deviations_hz": 1312.1023553303062,
+      "rms_at_A_object_1": 0.7139310611013692,
+      "spectral_centroid_hz": 517.0769330239059,
+      "noninteger_f0_energy_fraction": 0.8277901052449584,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 0.30234139536611615
+        },
+        {
+          "hz": 901.5767665,
+          "sine_amplitude": 0.27757124540448735
+        },
+        {
+          "hz": 241.5767665,
+          "sine_amplitude": 0.27757124540448735
+        },
+        {
+          "hz": 491.0511777,
+          "sine_amplitude": -0.27720273049289446
+        },
+        {
+          "hz": 271.0511777,
+          "sine_amplitude": 0.27720273049289446
+        },
+        {
+          "hz": 440.0,
+          "sine_amplitude": -0.22330070939321073
+        },
+        {
+          "hz": 652.1023553,
+          "sine_amplitude": 0.21401735986611242
+        },
+        {
+          "hz": 872.1023553,
+          "sine_amplitude": -0.21401735986611242
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 2,
+      "cells": 3,
+      "index": 0.0,
+      "ratios": [
+        1.0,
+        1.7320508075688774
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 0.0,
+      "carrier_plus_sum_deviations_hz": 110.0,
+      "rms_at_A_object_1": 0.7071067811865476,
+      "spectral_centroid_hz": 110.0,
+      "noninteger_f0_energy_fraction": 0.0,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 1.0
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 2,
+      "cells": 3,
+      "index": 1.0,
+      "ratios": [
+        1.0,
+        1.7320508075688774
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 2.0,
+      "carrier_plus_sum_deviations_hz": 410.52558883257655,
+      "rms_at_A_object_1": 0.6786028715035415,
+      "spectral_centroid_hz": 181.02821957023997,
+      "noninteger_f0_energy_fraction": 0.5885646636818368,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 0.4976036186663257
+        },
+        {
+          "hz": 190.5255888,
+          "sine_amplitude": -0.3872890360289183
+        },
+        {
+          "hz": 80.5255888,
+          "sine_amplitude": 0.38728903602891823
+        },
+        {
+          "hz": 300.5255888,
+          "sine_amplitude": 0.3872890360289182
+        },
+        {
+          "hz": 220.0,
+          "sine_amplitude": 0.3516955233893537
+        },
+        {
+          "hz": 29.4744112,
+          "sine_amplitude": -0.1850356526352504
+        },
+        {
+          "hz": 410.5255888,
+          "sine_amplitude": 0.18503565263525035
+        },
+        {
+          "hz": 330.0,
+          "sine_amplitude": 0.0860287624415622
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 2,
+      "cells": 3,
+      "index": 2.0,
+      "ratios": [
+        1.0,
+        1.7320508075688774
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 4.0,
+      "carrier_plus_sum_deviations_hz": 711.0511776651531,
+      "rms_at_A_object_1": 0.7565095583967283,
+      "spectral_centroid_hz": 252.50168027293606,
+      "noninteger_f0_energy_fraction": 0.9721526942954615,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 190.5255888,
+          "sine_amplitude": -0.6652230077644051
+        },
+        {
+          "hz": 300.5255888,
+          "sine_amplitude": 0.33261150388220256
+        },
+        {
+          "hz": 80.5255888,
+          "sine_amplitude": 0.33261150388220256
+        },
+        {
+          "hz": 410.5255888,
+          "sine_amplitude": 0.2582467331175315
+        },
+        {
+          "hz": 29.4744112,
+          "sine_amplitude": -0.2582467331175315
+        },
+        {
+          "hz": 601.0511777,
+          "sine_amplitude": 0.24898370349828133
+        },
+        {
+          "hz": 161.0511777,
+          "sine_amplitude": -0.24898370349828133
+        },
+        {
+          "hz": 520.5255888,
+          "sine_amplitude": 0.22309431229401328
+        }
+      ]
+    },
+    {
+      "generation": 0,
+      "object_index": 2,
+      "cells": 3,
+      "index": 4.0,
+      "ratios": [
+        1.0,
+        1.7320508075688774
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 8.0,
+      "carrier_plus_sum_deviations_hz": 1312.1023553303062,
+      "rms_at_A_object_1": 0.7139310611013692,
+      "spectral_centroid_hz": 517.0769330239059,
+      "noninteger_f0_energy_fraction": 0.8277901052449584,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 0.30234139536611615
+        },
+        {
+          "hz": 901.5767665,
+          "sine_amplitude": 0.27757124540448735
+        },
+        {
+          "hz": 241.5767665,
+          "sine_amplitude": 0.27757124540448735
+        },
+        {
+          "hz": 491.0511777,
+          "sine_amplitude": -0.27720273049289446
+        },
+        {
+          "hz": 271.0511777,
+          "sine_amplitude": 0.27720273049289446
+        },
+        {
+          "hz": 440.0,
+          "sine_amplitude": -0.22330070939321073
+        },
+        {
+          "hz": 652.1023553,
+          "sine_amplitude": 0.21401735986611242
+        },
+        {
+          "hz": 872.1023553,
+          "sine_amplitude": -0.21401735986611242
+        }
+      ]
+    },
+    {
+      "generation": 1,
+      "object_index": 0,
+      "cells": 11,
+      "index": 0.0,
+      "ratios": [
+        1.0,
+        3.6268327495718555,
+        5.070635844473364
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 0.0,
+      "carrier_plus_sum_deviations_hz": 110.0,
+      "rms_at_A_object_1": 0.7071067811865476,
+      "spectral_centroid_hz": 110.0,
+      "noninteger_f0_energy_fraction": 0.0,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 1.0
+        }
+      ]
+    },
+    {
+      "generation": 1,
+      "object_index": 0,
+      "cells": 11,
+      "index": 1.0,
+      "ratios": [
+        1.0,
+        3.6268327495718555,
+        5.070635844473364
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 3.0,
+      "carrier_plus_sum_deviations_hz": 1176.7215453449742,
+      "rms_at_A_object_1": 0.7008257486970307,
+      "spectral_centroid_hz": 438.45881379915494,
+      "noninteger_f0_energy_fraction": 0.7741291573993115,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 0.380765137826345
+        },
+        {
+          "hz": 398.9516025,
+          "sine_amplitude": -0.29635267439859325
+        },
+        {
+          "hz": 557.7699429,
+          "sine_amplitude": -0.29635267439859325
+        },
+        {
+          "hz": 447.7699429,
+          "sine_amplitude": 0.2963526743985932
+        },
+        {
+          "hz": 288.9516025,
+          "sine_amplitude": 0.2963526743985932
+        },
+        {
+          "hz": 508.9516025,
+          "sine_amplitude": 0.29635267439859314
+        },
+        {
+          "hz": 667.7699429,
+          "sine_amplitude": 0.29635267439859314
+        },
+        {
+          "hz": 220.0,
+          "sine_amplitude": 0.2691166008703267
+        }
+      ]
+    },
+    {
+      "generation": 1,
+      "object_index": 0,
+      "cells": 11,
+      "index": 2.0,
+      "ratios": [
+        1.0,
+        3.6268327495718555,
+        5.070635844473364
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 6.0,
+      "carrier_plus_sum_deviations_hz": 2243.4430906899483,
+      "rms_at_A_object_1": 0.6865008398384665,
+      "spectral_centroid_hz": 845.6630426502584,
+      "noninteger_f0_energy_fraction": 0.998304872804721,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 240.133262,
+          "sine_amplitude": 0.23471331375732674
+        },
+        {
+          "hz": 1355.6731478,
+          "sine_amplitude": -0.23471331375732674
+        },
+        {
+          "hz": 736.7215453,
+          "sine_amplitude": -0.2347133137573267
+        },
+        {
+          "hz": 61.1816596,
+          "sine_amplitude": -0.2347133137573267
+        },
+        {
+          "hz": 716.5882833,
+          "sine_amplitude": 0.2347133137573267
+        },
+        {
+          "hz": 1514.4914882,
+          "sine_amplitude": -0.2347133137573267
+        },
+        {
+          "hz": 1176.7215453,
+          "sine_amplitude": 0.2347133137573267
+        },
+        {
+          "hz": 378.8183404,
+          "sine_amplitude": -0.2347133137573267
+        }
+      ]
+    },
+    {
+      "generation": 1,
+      "object_index": 0,
+      "cells": 11,
+      "index": 4.0,
+      "ratios": [
+        1.0,
+        3.6268327495718555,
+        5.070635844473364
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 12.0,
+      "carrier_plus_sum_deviations_hz": 4376.886181379897,
+      "rms_at_A_object_1": 0.7082828488691361,
+      "spectral_centroid_hz": 1615.7434037142389,
+      "noninteger_f0_energy_fraction": 0.972402742685276,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 2760.164636,
+          "sine_amplitude": 0.14087258017803347
+        },
+        {
+          "hz": 2980.164636,
+          "sine_amplitude": -0.14087258017803345
+        },
+        {
+          "hz": 586.4550213,
+          "sine_amplitude": 0.14087258017803345
+        },
+        {
+          "hz": 366.4550213,
+          "sine_amplitude": -0.14087258017803345
+        },
+        {
+          "hz": 110.0,
+          "sine_amplitude": -0.12007482768362336
+        },
+        {
+          "hz": 1343.3098287,
+          "sine_amplitude": -0.11023736733606349
+        },
+        {
+          "hz": 2003.3098287,
+          "sine_amplitude": -0.11023736733606349
+        },
+        {
+          "hz": 866.8548074,
+          "sine_amplitude": -0.11023736733606349
+        }
+      ]
+    },
+    {
+      "generation": 1,
+      "object_index": 1,
+      "cells": 3,
+      "index": 0.0,
+      "ratios": [
+        1.0,
+        1.0
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 0.0,
+      "carrier_plus_sum_deviations_hz": 110.0,
+      "rms_at_A_object_1": 0.7071067811865476,
+      "spectral_centroid_hz": 110.0,
+      "noninteger_f0_energy_fraction": 0.0,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 1.0
+        }
+      ]
+    },
+    {
+      "generation": 1,
+      "object_index": 1,
+      "cells": 3,
+      "index": 1.0,
+      "ratios": [
+        1.0,
+        1.0
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 2.0,
+      "carrier_plus_sum_deviations_hz": 330.0,
+      "rms_at_A_object_1": 0.5638580735202463,
+      "spectral_centroid_hz": 241.70269432158008,
+      "noninteger_f0_energy_fraction": 0.0,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 220.0,
+          "sine_amplitude": 0.7056680572312752
+        },
+        {
+          "hz": 330.0,
+          "sine_amplitude": 0.31883830880806935
+        },
+        {
+          "hz": 440.0,
+          "sine_amplitude": 0.13598287923027377
+        },
+        {
+          "hz": 110.0,
+          "sine_amplitude": -0.12894324947440208
+        },
+        {
+          "hz": 550.0,
+          "sine_amplitude": 0.03279329083577847
+        },
+        {
+          "hz": 660.0,
+          "sine_amplitude": 0.007214573830739982
+        },
+        {
+          "hz": 770.0,
+          "sine_amplitude": 0.0011802494195021
+        },
+        {
+          "hz": 880.0,
+          "sine_amplitude": 0.00017743641830343093
+        }
+      ]
+    },
+    {
+      "generation": 1,
+      "object_index": 1,
+      "cells": 3,
+      "index": 2.0,
+      "ratios": [
+        1.0,
+        1.0
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 4.0,
+      "carrier_plus_sum_deviations_hz": 550.0,
+      "rms_at_A_object_1": 0.7459865013604723,
+      "spectral_centroid_hz": 251.59766813361034,
+      "noninteger_f0_energy_fraction": 0.0,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": -0.7612779557159204
+        },
+        {
+          "hz": 440.0,
+          "sine_amplitude": 0.5622581299227203
+        },
+        {
+          "hz": 220.0,
+          "sine_amplitude": 0.3641281458520728
+        },
+        {
+          "hz": 550.0,
+          "sine_amplitude": 0.2320414898049746
+        },
+        {
+          "hz": 660.0,
+          "sine_amplitude": 0.14726272546915678
+        },
+        {
+          "hz": 330.0,
+          "sine_amplitude": 0.08299908089071262
+        },
+        {
+          "hz": 770.0,
+          "sine_amplitude": 0.045058907335566674
+        },
+        {
+          "hz": 880.0,
+          "sine_amplitude": 0.01611467128327608
+        }
+      ]
+    },
+    {
+      "generation": 1,
+      "object_index": 1,
+      "cells": 3,
+      "index": 4.0,
+      "ratios": [
+        1.0,
+        1.0
+      ],
+      "amplitudes": [
+        1.0,
+        1.0
+      ],
+      "sum_beta": 8.0,
+      "carrier_plus_sum_deviations_hz": 990.0,
+      "rms_at_A_object_1": 0.6378876386396863,
+      "spectral_centroid_hz": 655.4675418934394,
+      "noninteger_f0_energy_fraction": 0.0,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 660.0,
+          "sine_amplitude": 0.5063638501703899
+        },
+        {
+          "hz": 880.0,
+          "sine_amplitude": 0.44690997270220456
+        },
+        {
+          "hz": 550.0,
+          "sine_amplitude": -0.44293333498898224
+        },
+        {
+          "hz": 110.0,
+          "sine_amplitude": 0.2846425275616292
+        },
+        {
+          "hz": 990.0,
+          "sine_amplitude": 0.16268795957684568
+        },
+        {
+          "hz": 1100.0,
+          "sine_amplitude": 0.15191756693559896
+        },
+        {
+          "hz": 770.0,
+          "sine_amplitude": 0.1141209137624898
+        },
+        {
+          "hz": 440.0,
+          "sine_amplitude": -0.10535743487538882
+        }
+      ]
+    },
+    {
+      "generation": 2,
+      "object_index": 0,
+      "cells": 16,
+      "index": 0.0,
+      "ratios": [
+        1.0,
+        4.6491664656096265,
+        5.982670798892318
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 0.0,
+      "carrier_plus_sum_deviations_hz": 110.0,
+      "rms_at_A_object_1": 0.7071067811865476,
+      "spectral_centroid_hz": 110.0,
+      "noninteger_f0_energy_fraction": 0.0,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 1.0
+        }
+      ]
+    },
+    {
+      "generation": 2,
+      "object_index": 0,
+      "cells": 16,
+      "index": 1.0,
+      "ratios": [
+        1.0,
+        4.6491664656096265,
+        5.982670798892318
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 3.0,
+      "carrier_plus_sum_deviations_hz": 1389.502099095214,
+      "rms_at_A_object_1": 0.7008257486970308,
+      "spectral_centroid_hz": 525.9888166253569,
+      "noninteger_f0_energy_fraction": 0.7741291573993114,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 110.0,
+          "sine_amplitude": 0.380765137826345
+        },
+        {
+          "hz": 658.0937879,
+          "sine_amplitude": -0.29635267439859325
+        },
+        {
+          "hz": 511.4083112,
+          "sine_amplitude": -0.29635267439859325
+        },
+        {
+          "hz": 401.4083112,
+          "sine_amplitude": 0.2963526743985932
+        },
+        {
+          "hz": 548.0937879,
+          "sine_amplitude": 0.2963526743985932
+        },
+        {
+          "hz": 768.0937879,
+          "sine_amplitude": 0.29635267439859314
+        },
+        {
+          "hz": 621.4083112,
+          "sine_amplitude": 0.29635267439859314
+        },
+        {
+          "hz": 220.0,
+          "sine_amplitude": 0.2691166008703267
+        }
+      ]
+    },
+    {
+      "generation": 2,
+      "object_index": 0,
+      "cells": 16,
+      "index": 2.0,
+      "ratios": [
+        1.0,
+        4.6491664656096265,
+        5.982670798892318
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 6.0,
+      "carrier_plus_sum_deviations_hz": 2669.004198190428,
+      "rms_at_A_object_1": 0.6865008398384665,
+      "spectral_centroid_hz": 1021.4976923834381,
+      "noninteger_f0_energy_fraction": 0.998304872804721,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 1680.9104103,
+          "sine_amplitude": -0.23471331375732674
+        },
+        {
+          "hz": 364.7228346,
+          "sine_amplitude": 0.23471331375732674
+        },
+        {
+          "hz": 1827.595887,
+          "sine_amplitude": -0.2347133137573267
+        },
+        {
+          "hz": 366.6854767,
+          "sine_amplitude": -0.2347133137573267
+        },
+        {
+          "hz": 1389.5020991,
+          "sine_amplitude": 0.2347133137573267
+        },
+        {
+          "hz": 949.5020991,
+          "sine_amplitude": -0.2347133137573267
+        },
+        {
+          "hz": 804.7792645,
+          "sine_amplitude": 0.2347133137573267
+        },
+        {
+          "hz": 73.3145233,
+          "sine_amplitude": -0.2347133137573267
+        }
+      ]
+    },
+    {
+      "generation": 2,
+      "object_index": 0,
+      "cells": 16,
+      "index": 4.0,
+      "ratios": [
+        1.0,
+        4.6491664656096265,
+        5.982670798892318
+      ],
+      "amplitudes": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "sum_beta": 12.0,
+      "carrier_plus_sum_deviations_hz": 5228.008396380856,
+      "rms_at_A_object_1": 0.7082828488691361,
+      "spectral_centroid_hz": 1939.9407992044198,
+      "noninteger_f0_energy_fraction": 0.9724027426852759,
+      "above_19845_energy_fraction": 0.0,
+      "above_22050_energy_fraction": 0.0,
+      "strongest_lines": [
+        {
+          "hz": 3398.5062973,
+          "sine_amplitude": 0.14087258017803347
+        },
+        {
+          "hz": 3618.5062973,
+          "sine_amplitude": -0.14087258017803345
+        },
+        {
+          "hz": 330.05643,
+          "sine_amplitude": -0.14087258017803345
+        },
+        {
+          "hz": 550.05643,
+          "sine_amplitude": 0.14087258017803345
+        },
+        {
+          "hz": 110.0,
+          "sine_amplitude": -0.12007482768362336
+        },
+        {
+          "hz": 1864.2249337,
+          "sine_amplitude": -0.11023736733606349
+        },
+        {
+          "hz": 2304.2813636,
+          "sine_amplitude": -0.11023736733606349
+        },
+        {
+          "hz": 1644.2813636,
+          "sine_amplitude": -0.11023736733606349
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Cached geometric spectra from the preceding verified preflight, not a new geometry computation.",
+    "Object spectra, not complete Jam voice mixture or transitions.",
+    "Frequency deviation bound is not an alias-free bandwidth bound; FM has infinitely many sidebands.",
+    "Prepared setting I=1 f0=110 n=3 only; high notes, n=20, ramps and arbitrary phases still require renderer validation.",
+    "Do not infer subjective timbre, utility, or state audibility from spectral descriptors.",
+    "Main-table lines below sine amplitude 1e-11 were omitted; reported zero out-of-band energy is below this retained-line resolution, not proof of a strictly finite spectrum.",
+    "High-note results describe the unfiltered continuous-time stationary model. They quantify the need to reject sidebands before output sampling, not the error of an implemented oversampled renderer."
+  ],
+  "high_note_stationary_checks": [
+    {
+      "generation": 0,
+      "f0_hz": 1760,
+      "index": 1.0,
+      "above_output_nyquist_energy_fraction": 6.477226783082746e-07
+    },
+    {
+      "generation": 0,
+      "f0_hz": 1760,
+      "index": 4.0,
+      "above_output_nyquist_energy_fraction": 0.16917438355507902
+    },
+    {
+      "generation": 1,
+      "f0_hz": 1760,
+      "index": 1.0,
+      "above_output_nyquist_energy_fraction": 0.010354211601742727
+    },
+    {
+      "generation": 1,
+      "f0_hz": 1760,
+      "index": 4.0,
+      "above_output_nyquist_energy_fraction": 0.5118111593083117
+    },
+    {
+      "generation": 2,
+      "f0_hz": 1760,
+      "index": 1.0,
+      "above_output_nyquist_energy_fraction": 0.029419753607561633
+    },
+    {
+      "generation": 2,
+      "f0_hz": 1760,
+      "index": 4.0,
+      "above_output_nyquist_energy_fraction": 0.5809387471763562
+    }
+  ]
+}

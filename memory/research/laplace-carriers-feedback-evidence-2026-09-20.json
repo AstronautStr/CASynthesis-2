@@ -1,0 +1,195 @@
+{
+  "date": "2026-09-20",
+  "scope": "Read-only check of saved WAV files and actual Filter mask function. Not a full renderer review or reconstruction of unsaved live knob changes.",
+  "recordings": [
+    {
+      "record": "20260920-164859-4c4922",
+      "scene": "lc_square_filter_bank",
+      "notes_sha256": "a3009115b450300b59fb7f469032223176c1350a7ebe302ca8efc8a29f02a033",
+      "pin": {
+        "commit": "cea51271094bdbbc8f8040bb15f5458d584206d4",
+        "ref": "refs/casynth/pins/cea51271094bdbbc8f8040bb15f5458d584206d4"
+      },
+      "sides": {
+        "A": {
+          "variant": "F_square",
+          "rms_dbfs": -29.912745444777663,
+          "peak": 0.062255859375,
+          "rail_samples": 0,
+          "pcm_sha256": "58ffb35c06c4f20d803d4e7f16a272cd93c998c2f9c33d90b9809369107c9d9f",
+          "sr": 44100,
+          "channels": 2
+        },
+        "B": {
+          "variant": "W_square",
+          "rms_dbfs": -29.9579255105016,
+          "peak": 0.117523193359375,
+          "rail_samples": 0,
+          "pcm_sha256": "59aea725be0b09bc172274482348c48a6db082a8f76217e907c17f5196d722a7",
+          "sr": 44100,
+          "channels": 2
+        }
+      }
+    },
+    {
+      "record": "20260920-164902-181f45",
+      "scene": "lc_saw_filter_bank",
+      "notes_sha256": "3a8daa5b6e81c9b695b657d5483a8e75fae7e8f253a63cc85bf4b76dcb87386f",
+      "pin": {
+        "commit": "cea51271094bdbbc8f8040bb15f5458d584206d4",
+        "ref": "refs/casynth/pins/cea51271094bdbbc8f8040bb15f5458d584206d4"
+      },
+      "sides": {
+        "A": {
+          "variant": "F_saw",
+          "rms_dbfs": -29.91291451610717,
+          "peak": 0.07568359375,
+          "rail_samples": 0,
+          "pcm_sha256": "7bdfb4765a4efbbeeee2bad5edf08fd36c205d69b821c972560b0f40b5c058bc",
+          "sr": 44100,
+          "channels": 2
+        },
+        "B": {
+          "variant": "W_saw",
+          "rms_dbfs": -29.944529273590636,
+          "peak": 0.156219482421875,
+          "rail_samples": 0,
+          "pcm_sha256": "4e8905be7d26beaf232213f2b6fec73a512f16310fe134a373f6313b91224eb1",
+          "sr": 44100,
+          "channels": 2
+        }
+      }
+    },
+    {
+      "record": "20260920-164906-98c8aa",
+      "scene": "lc_square_baseline_bank",
+      "notes_sha256": "1b23e7433176c83a72a5be5e83b7662b4e2c352849e2aa342c3f2b9433f2acbf",
+      "pin": {
+        "commit": "cea51271094bdbbc8f8040bb15f5458d584206d4",
+        "ref": "refs/casynth/pins/cea51271094bdbbc8f8040bb15f5458d584206d4"
+      },
+      "sides": {
+        "A": {
+          "variant": "R",
+          "rms_dbfs": -29.926369241887457,
+          "peak": 0.134857177734375,
+          "rail_samples": 0,
+          "pcm_sha256": "45f7c15050a133cb56143ebcffd35dc090ee12664bef86be907072aee1eb2781",
+          "sr": 44100,
+          "channels": 2
+        },
+        "B": {
+          "variant": "W_square",
+          "rms_dbfs": -29.9579255105016,
+          "peak": 0.117523193359375,
+          "rail_samples": 0,
+          "pcm_sha256": "59aea725be0b09bc172274482348c48a6db082a8f76217e907c17f5196d722a7",
+          "sr": 44100,
+          "channels": 2
+        }
+      }
+    },
+    {
+      "record": "20260920-164910-795d5f",
+      "scene": "lc_square_baseline_filter",
+      "notes_sha256": "0066b1524c2e4bf7f397b727503200a4071d88a877d2cb5cac2a474ccaa383ff",
+      "pin": {
+        "commit": "cea51271094bdbbc8f8040bb15f5458d584206d4",
+        "ref": "refs/casynth/pins/cea51271094bdbbc8f8040bb15f5458d584206d4"
+      },
+      "sides": {
+        "A": {
+          "variant": "R",
+          "rms_dbfs": -29.926369241887457,
+          "peak": 0.134857177734375,
+          "rail_samples": 0,
+          "pcm_sha256": "45f7c15050a133cb56143ebcffd35dc090ee12664bef86be907072aee1eb2781",
+          "sr": 44100,
+          "channels": 2
+        },
+        "B": {
+          "variant": "F_square",
+          "rms_dbfs": -29.912745444777663,
+          "peak": 0.062255859375,
+          "rail_samples": 0,
+          "pcm_sha256": "58ffb35c06c4f20d803d4e7f16a272cd93c998c2f9c33d90b9809369107c9d9f",
+          "sr": 44100,
+          "channels": 2
+        }
+      }
+    },
+    {
+      "record": "20260920-164914-f2dedf",
+      "scene": "lc_saw_baseline_bank",
+      "notes_sha256": "393f501083959f759a4afc03d045ad23f4317f02329eb04ae23c93b7ecee8d72",
+      "pin": {
+        "commit": "cea51271094bdbbc8f8040bb15f5458d584206d4",
+        "ref": "refs/casynth/pins/cea51271094bdbbc8f8040bb15f5458d584206d4"
+      },
+      "sides": {
+        "A": {
+          "variant": "R",
+          "rms_dbfs": -29.926369241887457,
+          "peak": 0.134857177734375,
+          "rail_samples": 0,
+          "pcm_sha256": "45f7c15050a133cb56143ebcffd35dc090ee12664bef86be907072aee1eb2781",
+          "sr": 44100,
+          "channels": 2
+        },
+        "B": {
+          "variant": "W_saw",
+          "rms_dbfs": -29.944529273590636,
+          "peak": 0.156219482421875,
+          "rail_samples": 0,
+          "pcm_sha256": "4e8905be7d26beaf232213f2b6fec73a512f16310fe134a373f6313b91224eb1",
+          "sr": 44100,
+          "channels": 2
+        }
+      }
+    },
+    {
+      "record": "20260920-164918-277956",
+      "scene": "lc_saw_baseline_filter",
+      "notes_sha256": "2bfbf6dec40ad41e463ae29002f9060818b546cd899ac4aa8903d6aabae57181",
+      "pin": {
+        "commit": "cea51271094bdbbc8f8040bb15f5458d584206d4",
+        "ref": "refs/casynth/pins/cea51271094bdbbc8f8040bb15f5458d584206d4"
+      },
+      "sides": {
+        "A": {
+          "variant": "R",
+          "rms_dbfs": -29.926369241887457,
+          "peak": 0.134857177734375,
+          "rail_samples": 0,
+          "pcm_sha256": "45f7c15050a133cb56143ebcffd35dc090ee12664bef86be907072aee1eb2781",
+          "sr": 44100,
+          "channels": 2
+        },
+        "B": {
+          "variant": "F_saw",
+          "rms_dbfs": -29.91291451610717,
+          "peak": 0.07568359375,
+          "rail_samples": 0,
+          "pcm_sha256": "7bdfb4765a4efbbeeee2bad5edf08fd36c205d69b821c972560b0f40b5c058bc",
+          "sr": 44100,
+          "channels": 2
+        }
+      }
+    }
+  ],
+  "variant_pcm_identical_across_pairs": {
+    "F_square": true,
+    "W_square": true,
+    "F_saw": true,
+    "W_saw": true,
+    "R": true
+  },
+  "depth_zero_max_abs_H_minus_1": 0.0,
+  "depth_attenuation_monotone_0_24_36": true,
+  "checked_component_states": 6,
+  "limits": [
+    "Saved WAVs correspond to initial depth 24 dB, not the unrecorded depth changes described in Notes.",
+    "No interpretation of perceived sand/buzz as an audio defect follows from these checks.",
+    "Full engine tests and replay were reported by Developer and were not rerun here."
+  ]
+}
