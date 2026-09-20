@@ -62,7 +62,12 @@ VOL_W = 140
 PANEL_W = 270
 TAB_W, TAB_H = 96, 30
 ARROW_W = 28
-ENG_W, ENG_H = 62, 24        # 4 engine buttons per row (74 / 3 per row until 2026-09-17)
+ENG_W, ENG_H = 62, 21        # 4 engine buttons per row (74 / 3 per row until 2026-09-17);
+                             # 24 px tall with a 6 px row gap until 2026-09-20 -- the 17th
+                             # engine (Laplace FM) needed a 5th row, and 5 x 24 is exactly
+                             # the 4 x 30 the grid used to take: the panel keeps its height
+                             # and the window still fits a 960 px desktop
+ENG_VGAP = 3                 # row gap of the engine grid (6 until 2026-09-20)
 ROW_H = 17                   # 26 until 2026-09-17, 22 until Events / Excitation, 20 until Birth strength, 18 until Decay law (2026-09-18): Objects has 17 knobs + a range row; the window must fit a 960 px desktop
 CHOICE_H = 16                # word button of a named-choice knob (18 until 2026-09-18)
 RANGE_FIELD_H = 17           # Min / Max field of a ranged knob (20 until 2026-09-18, 18 until Decay law)
@@ -218,10 +223,10 @@ class BenchApp:
         specs = registry.specs()
         for i, e in enumerate(specs):
             col, row = i % ENG_PER_ROW, i // ENG_PER_ROW
-            self.engine_btns[e.id] = (px + col * (ENG_W + 6), ey + row * (ENG_H + 6),
+            self.engine_btns[e.id] = (px + col * (ENG_W + 6), ey + row * (ENG_H + ENG_VGAP),
                                          ENG_W, ENG_H)
         self.engine_rows = (len(specs) + ENG_PER_ROW - 1) // ENG_PER_ROW
-        self.params_y = ey + self.engine_rows * (ENG_H + 6) + 12
+        self.params_y = ey + self.engine_rows * (ENG_H + ENG_VGAP) + 12
         self.param_rows_max = max([len(e.params) + len(e.ranges) for e in specs] + [1])
         base_height = self.height
         self.figure_rows = FIGURE_ROWS_MAX
@@ -1270,6 +1275,27 @@ class BenchApp:
         frequency multiplier, tuning mode and decay)."""
         import pygame
         if not disp:
+            return
+        if disp.get('fm'):
+            # Laplace FM (2026-09-20): the depth I, what depth 0 means (the knob stays
+            # editable, so the meaning is said here), the sounding figures and their
+            # modulators, and the output band the sum goes through.
+            screen.blit(small.render(f"Laplace FM: depth {float(disp['depth']):.2f}"
+                                     f"   f0 {float(disp['f0']):.0f} Hz"
+                                     f"   depth 0 = carrier sine only", True, C_DIM), (x, y))
+            screen.blit(small.render(f"figures {int(disp['sounding'])} of {int(disp['voices'])}"
+                                     f"   modulators {int(disp['modulators'])}"
+                                     f"   tails {int(disp['tails'])}/{int(disp['mod_tails'])}",
+                                     True, C_DIM), (x, y + 14))
+            screen.blit(small.render(f"oversample x{int(disp['oversample'])}"
+                                     f"   {int(disp['taps'])} taps"
+                                     f"   delay {int(disp['delay_samples'])} samples"
+                                     f"   DC blocked", True, C_DIM), (x, y + 28))
+            for k, row in enumerate(disp.get('lines', [])[:self.figure_rows]):
+                ry = y + 48 + k * DISPLAY_ROW_H
+                screen.blit(small.render(f"#{k + 1}  {int(row['n'])} modes   {float(row['f_low']):.0f} Hz"
+                                         f"   A {float(row['a']):.2f}   beta max {float(row['beta']):.2f}",
+                                         True, C_TXT), (x, ry))
             return
         if disp.get('carriers'):
             # Laplace carriers (2026-09-20): which law is heard, the wave and how many

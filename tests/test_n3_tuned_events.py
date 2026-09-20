@@ -524,8 +524,8 @@ class BenchTests(unittest.TestCase):
         eng = LiveEngine(runner, sink=lambda m, b: None)
         pygame.init()
         app = db.BenchApp(scene, eng)
-        self.assertEqual(app.engine_rows, 4)          # 4 engines per row since 2026-09-17
-        self.assertEqual(len(app.engine_btns), 16)          # + laplace_carriers (2026-09-20)
+        self.assertEqual(app.engine_rows, 5)          # 4 engines per row; 5 rows since laplace_fm
+        self.assertEqual(len(app.engine_btns), 17)          # + laplace_fm (2026-09-20)
         self.assertIn(te.ENGINE_ID, app.engine_btns)
         self.assertGreater(app.height - app.footer_y, 40)
         data = app._overlay_runs(te.ENGINE_ID, dict(field_tuning=1, decay_s=0.8))

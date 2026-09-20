@@ -971,8 +971,8 @@ class BenchTests(unittest.TestCase):
             eng = LiveEngine(runner, sink=lambda m, b: None)
             pygame.init()
             app = db.BenchApp(scene, eng)
-            self.assertEqual(app.engine_rows, 4)          # 4 engines per row since 2026-09-17 (was 5 rows of 3)
-            self.assertEqual(len(app.engine_btns), 16)          # + laplace_carriers (2026-09-20)
+            self.assertEqual(app.engine_rows, 5)          # 4 engines per row; 5 rows since laplace_fm
+            self.assertEqual(len(app.engine_btns), 17)          # + laplace_fm (2026-09-20)
             self.assertIn(orz.ENGINE_ID, app.engine_btns)
             screen = pygame.Surface((app.width, app.height))
             font, small = pygame.font.SysFont(db.FONT_NAMES, 17), pygame.font.SysFont(db.FONT_NAMES, 14)

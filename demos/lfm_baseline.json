@@ -1,0 +1,103 @@
+{
+ "format": 2,
+ "id": "lfm_baseline",
+ "title": "1 - Моды модулируют несущую: Laplace / Laplace FM (Jam, 4 поколения/с)",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   7,
+   10
+  ],
+  [
+   7,
+   11
+  ],
+  [
+   8,
+   9
+  ],
+  [
+   8,
+   12
+  ],
+  [
+   9,
+   7
+  ],
+  [
+   9,
+   10
+  ],
+  [
+   9,
+   12
+  ],
+  [
+   10,
+   7
+  ],
+  [
+   10,
+   11
+  ],
+  [
+   11,
+   7
+  ],
+  [
+   12,
+   10
+  ],
+  [
+   13,
+   8
+  ],
+  [
+   13,
+   9
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 4.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0,
+  "side_gain": {
+   "A": 1.0,
+   "B": 0.92
+  }
+ },
+ "variants": {
+  "A": {
+   "engine_id": "laplacian",
+   "engine_params": {
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  },
+  "B": {
+   "engine_id": "laplace_fm",
+   "engine_params": {
+    "fm_depth": 1.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: А — существующий Laplace на синусоидах (n 3, spread 1, alpha 0, shape 0, harm 0, full 1, dyn 0) / Б — Laplace FM, FM depth 1: моды фигуры модулируют её синусоидальную несущую. Notes: hypothesis and your listening result. FM depth is the first knob of the Laplace FM panel (0 = the carrier sine alone, not the Laplacian sum); the seven spectrum settings are shared (\"spectrum A to B\")."
+}

@@ -1,0 +1,107 @@
+{
+ "format": 2,
+ "id": "lfm_saw_bank",
+ "title": "3 - Два кандидата: Wave bank / Laplace FM (Jam, 4 поколения/с)",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   7,
+   10
+  ],
+  [
+   7,
+   11
+  ],
+  [
+   8,
+   9
+  ],
+  [
+   8,
+   12
+  ],
+  [
+   9,
+   7
+  ],
+  [
+   9,
+   10
+  ],
+  [
+   9,
+   12
+  ],
+  [
+   10,
+   7
+  ],
+  [
+   10,
+   11
+  ],
+  [
+   11,
+   7
+  ],
+  [
+   12,
+   10
+  ],
+  [
+   13,
+   8
+  ],
+  [
+   13,
+   9
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 4.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0,
+  "side_gain": {
+   "A": 0.78,
+   "B": 0.92
+  }
+ },
+ "variants": {
+  "A": {
+   "engine_id": "laplace_carriers",
+   "engine_params": {
+    "method": 1,
+    "waveform": 1,
+    "filter_width_oct": 0.35,
+    "filter_depth_db": 24.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  },
+  "B": {
+   "engine_id": "laplace_fm",
+   "engine_params": {
+    "fm_depth": 1.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: А — Laplace waves, Wave bank, пила на каждой моде / Б — Laplace FM, FM depth 1: моды фигуры модулируют её синусоидальную несущую. Notes: hypothesis and your listening result. FM depth is the first knob of the Laplace FM panel (0 = the carrier sine alone, not the Laplacian sum); the seven spectrum settings are shared (\"spectrum A to B\")."
+}
