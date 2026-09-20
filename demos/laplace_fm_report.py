@@ -38,7 +38,8 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
 os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 
-from casynth_config import SR, MASTER_GAIN, MAX_MODES_PER_OBJ, AUDIO_LOOKAHEAD_MS  # noqa: E402
+from casynth_config import (SR, MASTER_GAIN, MAX_MODES_PER_OBJ, MAX_VOICES,  # noqa: E402
+                            AUDIO_LOOKAHEAD_MS)
 from casynth_engine import step, events_field, analyse                       # noqa: E402
 from casynth_lab import DemoRunner, scene_from_doc, BLOCK, registry          # noqa: E402
 from casynth_lab.engine_api import EngineContext                             # noqa: E402
@@ -606,6 +607,39 @@ def knob_drag():
     return rows
 
 
+# the settings the "issue" session ended with, where the clicks were recorded
+CLICK_SETTINGS = dict(n=11, spread=1.0, alpha=0.0, shape=1.0, harm=0.958, fullshape=1, dyn=1.0)
+CLICK_DEPTH, CLICK_RATE = 4.0, 4.0
+
+
+def clicks():
+    """The clicks the user recorded on 2026-09-21 while tweaking `harm`: a step in the
+    phase sum whenever a figure's modulator tail pool ran out and a tail that was still
+    sounding got taken for the next one.  Measured at the seam of every block, where the
+    step happens, against the second difference inside the block."""
+    g = np.zeros((ROWS, COLS), np.uint8)
+    for r, c in jam_cells():
+        g[r, c] = 1
+    rows = []
+    for label, n, rate in (('the session settings (n 11)', 11, CLICK_RATE),
+                           ('the widest spectrum, slow field', MAX_MODES_PER_OBJ, 2.0)):
+        e = lfm.LaplaceFMEngine(EngineContext(SR, BLOCK, 2, F0_HZ, 1.0, rate),
+                                dict(fm_depth=CLICK_DEPTH, **dict(CLICK_SETTINGS, n=n)))
+        ratios, e = ref.seam_ratios(e, g, rate, GAIN, blocks=360)
+        asked = sum(int(np.count_nonzero((np.asarray(m[0]) > 0) & (np.asarray(m[1]) > 0)))
+                    for m in e._mods if m is not None)
+        # the ACTIVE channels only: a released carrier still carries its own modulators
+        live = int(((e.src.f_mod[:MAX_VOICES, :MAX_MODES_PER_OBJ] > 0.0)
+                    & (np.abs(e.src.beta_cur[:MAX_VOICES, :MAX_MODES_PER_OBJ]) > lfm.BETA_EPS)).sum())
+        rows.append(dict(case=label, n=n, rate_hz=rate, release_blocks=int(e._release_chunks),
+                         tails_wanted=asked * int(e._release_chunks),
+                         pool=int(lfm.N_MOD_TAILS), worst_seam=float(ratios.max()),
+                         seams_over_3=int((ratios > 3.0).sum()), blocks=int(len(ratios)),
+                         steals=int(e.src.mod_steals), faded_in_place=int(e.src.mod_inplace),
+                         modes_asked=asked, modes_sounding=live))
+    return rows
+
+
 def verify_catalog(root):
     from casynth_lab.catalog import Catalog
     cat = Catalog(str(root))
@@ -752,6 +786,21 @@ def write_markdown(rep, path):
           'cost no longer grows with the number of commands in a block (one analysis per '
           'block instead of one per command), and the occasional late block left in the '
           'table is this desktop scheduling, not the engine.']
+    L += ['', 'Clicks while a knob is dragged (2026-09-21).  A click here is a STEP in the '
+          'phase sum: an index that leaves it at a block boundary instead of being released. '
+          'One figure needs `modes x release` modulator tails at once while a spectrum knob '
+          'moves, and a full pool used to take a tail that was still sounding. The pool now '
+          'holds three times the modes, and beyond it a modulator fades out where it stands '
+          '(one block of glide, the new frequency on the next) -- never a cut.', '',
+          '| case | modes x release | pool | worst seam | seams over x3 | tails taken | faded in place | modes sounding |',
+          '|---|---|---|---|---|---|---|---|']
+    for r in rep['clicks']:
+        L.append(f"| {r['case']} | {r['tails_wanted']} | {r['pool']} | x{r['worst_seam']:.2f} | "
+                 f"{r['seams_over_3']} of {r['blocks']} | {r['steals']} | {r['faded_in_place']} | "
+                 f"{r['modes_sounding']} of {r['modes_asked']} |")
+    L += ['', 'On the recorded session itself the worst seam fell from x33.1 to x1.24, and the '
+          'two renders differ in 11 blocks of 3759 -- the four moments where a tail used to be '
+          'overwritten (15.53, 21.02, 24.01, 27.01 s of the saved window).']
     if rep.get('catalog'):
         L += ['', '## The catalog', '', '| record | title | version | notes |', '|---|---|---|---|']
         for r in rep['catalog']:
@@ -776,6 +825,7 @@ def main(argv=None):
     # spectral work of sections 1-5 reports this machine under load, not the engine
     print('0. knob drag (the reported case) ...', flush=True)
     rep['knob_drag'] = knob_drag()
+    rep['clicks'] = clicks()
     print('1. modes ...', flush=True)
     rep['modes'] = modes()
     print('2. law ...', flush=True)
@@ -821,6 +871,9 @@ def main(argv=None):
         f"worst against the {BUDGET_MS:.2f} ms budget, and no longer grows with the command "
         f"rate; the same runs measured 14.6 ms (4 commands per block) and 23.7 ms (8) before "
         f"the 2026-09-20 speed fixes.",
+        f"Clicks: the modulator tail pool of a figure no longer overwrites a tail that is "
+        f"still sounding (worst block seam x{max(r['worst_seam'] for r in rep['clicks']):.2f} "
+        f"against x33.1 on the recorded session), and the delivered records are unchanged.",
         "Nothing here says the FM sounds useful: that is the listening question of the catalog.",
     ]
     OUT_DIR.mkdir(parents=True, exist_ok=True)

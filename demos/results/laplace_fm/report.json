@@ -17,9 +17,9 @@
    "commands_per_block": 0,
    "figures": 8,
    "modulators": 24,
-   "mean_ms": 1.459555999414685,
-   "p99_ms": 2.6830139957019123,
-   "max_ms": 5.722899979446083,
+   "mean_ms": 1.26227999998567,
+   "p99_ms": 2.429724018147681,
+   "max_ms": 2.5759999989531934,
    "over_budget_blocks": 0,
    "blocks": 300
   },
@@ -27,9 +27,9 @@
    "commands_per_block": 1,
    "figures": 8,
    "modulators": 24,
-   "mean_ms": 3.7940653333983696,
-   "p99_ms": 6.156677015242166,
-   "max_ms": 8.144999999785796,
+   "mean_ms": 3.4996133325815513,
+   "p99_ms": 5.289262975566083,
+   "max_ms": 8.650500007206574,
    "over_budget_blocks": 1,
    "blocks": 300
   },
@@ -37,21 +37,53 @@
    "commands_per_block": 4,
    "figures": 8,
    "modulators": 24,
-   "mean_ms": 3.8423326657114862,
-   "p99_ms": 6.728099003084928,
-   "max_ms": 8.249699982115999,
-   "over_budget_blocks": 1,
+   "mean_ms": 3.4794419993219585,
+   "p99_ms": 4.730402988498099,
+   "max_ms": 5.87459999951534,
+   "over_budget_blocks": 0,
    "blocks": 300
   },
   {
    "commands_per_block": 8,
    "figures": 8,
    "modulators": 24,
-   "mean_ms": 3.6619519984621243,
-   "p99_ms": 6.533508004504255,
-   "max_ms": 7.3370999889448285,
+   "mean_ms": 3.4462899995075227,
+   "p99_ms": 4.527722994971552,
+   "max_ms": 5.156800005352125,
    "over_budget_blocks": 0,
    "blocks": 300
+  }
+ ],
+ "clicks": [
+  {
+   "case": "the session settings (n 11)",
+   "n": 11,
+   "rate_hz": 4.0,
+   "release_blocks": 3,
+   "tails_wanted": 33,
+   "pool": 60,
+   "worst_seam": 1.2969737613270453,
+   "seams_over_3": 0,
+   "blocks": 319,
+   "steals": 0,
+   "faded_in_place": 0,
+   "modes_asked": 11,
+   "modes_sounding": 10
+  },
+  {
+   "case": "the widest spectrum, slow field",
+   "n": 20,
+   "rate_hz": 2.0,
+   "release_blocks": 6,
+   "tails_wanted": 90,
+   "pool": 60,
+   "worst_seam": 1.1674018671730435,
+   "seams_over_3": 0,
+   "blocks": 319,
+   "steals": 0,
+   "faded_in_place": 103,
+   "modes_asked": 15,
+   "modes_sounding": 14
   }
  ],
  "modes": {
@@ -338,8 +370,8 @@
    "preclip_peak_last_block": 0.04524395263132107,
    "pcm_peak": 0.134857177734375,
    "clip_blocks": 0,
-   "p99_ms": 4.069538980838847,
-   "max_ms": 5.802400002721697
+   "p99_ms": 3.369522006832995,
+   "max_ms": 4.490299994358793
   },
   {
    "variant": "W_saw",
@@ -351,8 +383,8 @@
    "preclip_peak_last_block": 0.0728415028114059,
    "pcm_peak": 0.156219482421875,
    "clip_blocks": 0,
-   "p99_ms": 4.8852529935538795,
-   "max_ms": 7.099999987985939
+   "p99_ms": 3.7456100183771923,
+   "max_ms": 4.167999984929338
   },
   {
    "variant": "FM",
@@ -364,8 +396,8 @@
    "preclip_peak_last_block": 0.03273936247334953,
    "pcm_peak": 0.087371826171875,
    "clip_blocks": 0,
-   "p99_ms": 2.4441199935972704,
-   "max_ms": 4.681999998865649
+   "p99_ms": 2.3423939893837122,
+   "max_ms": 4.502100026002154
   }
  ],
  "level_span_db": 0.03438190645018935,
@@ -394,8 +426,8 @@
    },
    "a_minus_b_db": 0.03438190645018935,
    "within_05db": true,
-   "p99_ms": 3.3599119968130258,
-   "max_ms": 4.7660999989602715,
+   "p99_ms": 2.773412002425178,
+   "max_ms": 4.336200014222413,
    "ok": true
   },
   {
@@ -422,8 +454,8 @@
    },
    "a_minus_b_db": 0.016221874747010645,
    "within_05db": true,
-   "p99_ms": 3.632839003112169,
-   "max_ms": 5.0749999936670065,
+   "p99_ms": 3.140320007805713,
+   "max_ms": 3.620600007707253,
    "ok": true
   }
  ],
@@ -452,9 +484,9 @@
    "n": 3,
    "figures": 3,
    "modulators": 7,
-   "p99_ms": 1.3214720186078917,
-   "max_ms": 1.410800003213808,
-   "baseline_p99_ms": 1.9052529847249389,
+   "p99_ms": 1.1659059979137965,
+   "max_ms": 1.1865999840665609,
+   "baseline_p99_ms": 1.829659013892524,
    "within_budget": true
   },
   {
@@ -464,9 +496,9 @@
    "n": 3,
    "figures": 3,
    "modulators": 7,
-   "p99_ms": 1.301131976651959,
-   "max_ms": 1.4640000008512288,
-   "baseline_p99_ms": 2.453199979208875,
+   "p99_ms": 1.1732809926616028,
+   "max_ms": 1.1815000034403056,
+   "baseline_p99_ms": 1.8932240130379792,
    "within_budget": true
   },
   {
@@ -476,9 +508,9 @@
    "n": 3,
    "figures": 3,
    "modulators": 7,
-   "p99_ms": 1.2672270002076393,
-   "max_ms": 1.3807000068482012,
-   "baseline_p99_ms": 2.296586005832068,
+   "p99_ms": 1.200274991279002,
+   "max_ms": 1.3577999779954553,
+   "baseline_p99_ms": 1.8075200010207473,
    "within_budget": true
   },
   {
@@ -488,9 +520,9 @@
    "n": 20,
    "figures": 3,
    "modulators": 10,
-   "p99_ms": 1.635940991400274,
-   "max_ms": 1.736300007905811,
-   "baseline_p99_ms": 2.3507069825427584,
+   "p99_ms": 1.416083005897233,
+   "max_ms": 1.5642000071238726,
+   "baseline_p99_ms": 1.8237459895317418,
    "within_budget": true
   },
   {
@@ -500,9 +532,9 @@
    "n": 3,
    "figures": 24,
    "modulators": 65,
-   "p99_ms": 7.058918006659948,
-   "max_ms": 7.798800012096763,
-   "baseline_p99_ms": 6.401391004037572,
+   "p99_ms": 7.430598009959787,
+   "max_ms": 8.293300023069605,
+   "baseline_p99_ms": 6.123468010046047,
    "within_budget": true
   },
   {
@@ -512,14 +544,22 @@
    "n": 20,
    "figures": 24,
    "modulators": 187,
-   "p99_ms": 14.980875002220271,
-   "max_ms": 15.744800009997562,
-   "baseline_p99_ms": 11.932463019038536,
+   "p99_ms": 12.775311016594058,
+   "max_ms": 12.940200016601011,
+   "baseline_p99_ms": 11.306110991863527,
    "within_budget": false
   }
  ],
  "catalog_root": "lab_catalog\\laplace_fm_2026_09_20",
  "catalog": [
+  {
+   "id": "20260921-002846-f2423a",
+   "title": "1 - Моды модулируют несущую: Laplace / Laplace FM (Jam, 4 поколения/с) 2026-09-21 00:28:37 issue",
+   "version": "Pinned e418449",
+   "commit": "e4184490",
+   "status": "pinned",
+   "has_notes": false
+  },
   {
    "id": "20260920-220936-226416",
    "title": "1 - Моды модулируют несущую: Laplace / Laplace FM (Jam, 4 поколения/с)",
@@ -550,9 +590,10 @@
   "The phase law checks out against an independent Bessel expansion (2e-13), coincident modulators add coherently, and the carrier is modulated JOINTLY (-158 dB against the joint formula, -2 dB against a sum of separate carriers).",
   "Band: the reference converges (worst 16x vs 32x -165 dB, REQ -80 dB) and the shipped x8 is within -155 dB of it on still figures and -89 dB over the whole Jam with its transitions (REQ -60 dB).",
   "Levels: the three tracks sit within 0.03 dB, nothing clips, and R / Wave bank+Saw are byte-identical to the pinned record already listened to.",
-  "Budget: p99 3.63 ms of the 7.98 ms block on both delivered scenes; Continue is exact including a generation change and a pause.",
+  "Budget: p99 3.14 ms of the 7.98 ms block on both delivered scenes; Continue is exact including a generation change and a pause.",
   "Limits (section 6): the delivered scenes, a high note and n = 20 all stay inside the block; a dense random field leaves the budget (as the baseline does on the same field) -- the table says where, and no index or frequency is reduced to hide it.",
-  "A dragged spectrum knob on a live field -- the case the user reported as underruns -- now costs 3.84 ms per block at worst against the 7.98 ms budget, and no longer grows with the command rate; the same runs measured 14.6 ms (4 commands per block) and 23.7 ms (8) before the 2026-09-20 speed fixes.",
+  "A dragged spectrum knob on a live field -- the case the user reported as underruns -- now costs 3.50 ms per block at worst against the 7.98 ms budget, and no longer grows with the command rate; the same runs measured 14.6 ms (4 commands per block) and 23.7 ms (8) before the 2026-09-20 speed fixes.",
+  "Clicks: the modulator tail pool of a figure no longer overwrites a tail that is still sounding (worst block seam x1.30 against x33.1 on the recorded session), and the delivered records are unchanged.",
   "Nothing here says the FM sounds useful: that is the listening question of the catalog."
  ]
 }

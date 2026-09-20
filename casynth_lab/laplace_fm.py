@@ -102,7 +102,13 @@ DC_HZ = 5.0                   # fixed DC blocker pole (no user knob)
 
 # ── pool sizes / thresholds ───────────────────────────────────────────────────
 N_FM_TAILS = MAX_VOICES * 4       # released carriers ringing out (with their modulators)
-N_MOD_TAILS = MAX_MODES_PER_OBJ   # per source: old modulators ringing their index down
+# Per source: old modulators ringing their index down.  Dragging a spectrum knob moves
+# EVERY mode of a figure on EVERY block, and each one rings for `release` blocks, so one
+# figure can want `n x release` tails at once -- 60 at the widest spectrum on a 4
+# generations/s scene.  It was MAX_MODES_PER_OBJ until 2026-09-21, and a full pool used to
+# overwrite a tail that was still sounding: that step is the click heard while tweaking
+# `harm`.  Beyond the pool the engine now fades a modulator out where it stands.
+N_MOD_TAILS = MAX_MODES_PER_OBJ * 3
 N_MODS = MAX_MODES_PER_OBJ + N_MOD_TAILS
 AMP_EPS = 1e-4                    # a source below this on both ends of the block is skipped
 BETA_EPS = 1e-9                   # an index below this is not worth a sine (-180 dB)
@@ -219,7 +225,8 @@ class _FMSources:
         self.m_rel_beta0 = np.zeros((n, N_MODS))
         self.f_prev = np.zeros((MAX_VOICES, MAX_MODES_PER_OBJ))
         self.steals = 0
-        self.mod_steals = 0
+        self.mod_steals = 0        # carriers: the quietest tail taken (never in a delivered scene)
+        self.mod_inplace = 0      # modulators: faded where they stood, the pool being full
 
     # -- envelopes (the SlotPool rule) -------------------------------------------
     @staticmethod
@@ -251,15 +258,17 @@ class _FMSources:
         return quietest
 
     def _acquire_mod_tail(self, s):
-        quietest, quiet_beta = MAX_MODES_PER_OBJ, np.inf
+        """A free modulator tail of source `s`, or -1 when the pool is full.
+
+        A still-sounding tail is NEVER taken: its index would leave the phase sum in one
+        step, which is exactly the click heard on 2026-09-21 while `harm` was dragged
+        (dragging a spectrum knob moves every mode on every block, so one figure needs
+        `n x release` tails at once).  The caller fades the old modulator out in place
+        instead -- see _release_modulator_in_place."""
         for m in range(MAX_MODES_PER_OBJ, N_MODS):
-            b = abs(float(self.beta_cur[s, m]))
-            if self.m_rel_cnt[s, m] == 0 and b < BETA_FREE:
+            if self.m_rel_cnt[s, m] == 0 and abs(float(self.beta_cur[s, m])) < BETA_FREE:
                 return m
-            if b < quiet_beta:
-                quiet_beta, quietest = b, m
-        self.mod_steals += 1
-        return quietest
+        return -1
 
     def _start_source(self, v):
         """A NEW figure on this channel: deterministic zero phases, no leftovers."""
@@ -333,6 +342,16 @@ class _FMSources:
                 # (its phase continues there), start the new one from index 0
                 if abs(self.beta_cur[v, m]) > BETA_TAIL_MIN and self.f_mod[v, m] > 0.0:
                     t = self._acquire_mod_tail(v)
+                    if t < 0:
+                        # the pool is full: fade this modulator out where it is, on the
+                        # OLD frequency, over this one block, and take the new frequency
+                        # on the next one (f_prev is deliberately left alone).  A block
+                        # of glide instead of a step -- never an index cut in two.
+                        self.m_env_phase[v, m] = 0
+                        self.m_env_level[v, m] = 0.0
+                        self.beta_tgt[v, m] = 0.0
+                        self.mod_inplace += 1
+                        continue
                     self.f_mod[v, t] = self.f_mod[v, m]
                     self.th_mod[v, t] = self.th_mod[v, m]
                     self.beta_cur[v, t] = self.beta_cur[v, m]
@@ -517,7 +536,8 @@ class _FMSources:
 class LaplaceFMEngine(SoundEngine):
     """The Laplacian analysis of the baseline, sounded as one FM carrier per figure."""
 
-    STATE_VERSION = 1
+    STATE_VERSION = 2          # 2: the wider modulator tail pool (2026-09-21); a version 1
+                               # state is accepted and widened -- see restore_state
 
     def __init__(self, ctx, params, oversample=OVERSAMPLE):
         """`oversample` is OVERSAMPLE for the registered engine; a gate builds the SAME
@@ -606,6 +626,7 @@ class LaplaceFMEngine(SoundEngine):
                              beta=float(self._index() * np.asarray(am)[live].max()) if live.any() else 0.0,
                              a=float(scale)))
         return dict(fm=True, f0=float(self.ctx.f0), depth=self._index(),
+                    mod_inplace=int(self.src.mod_inplace),
                     oversample=int(self.oversample), taps=int(self.taps),
                     delay_samples=int(FIR_DELAY_OUT),
                     voices=int(len(self.voices)), sounding=sounding, tails=tails,
@@ -628,16 +649,18 @@ class LaplaceFMEngine(SoundEngine):
                   f0=float(self.ctx.f0), dc_r=float(self.dc_r),
                   dc_x=float(self.dc_x), dc_y=float(self.dc_y),
                   fir_hist=self.fir_hist.copy(),
-                  steals=int(self.src.steals), mod_steals=int(self.src.mod_steals))
+                  steals=int(self.src.steals), mod_steals=int(self.src.mod_steals),
+                  mod_inplace=int(self.src.mod_inplace))
         for name in self._SRC_ARRAYS:
             st['src_' + name] = getattr(self.src, name).copy()
         return st
 
     def restore_state(self, grid, exc, state):
-        if not isinstance(state, dict) or state.get('version') != self.STATE_VERSION:
+        if not isinstance(state, dict) or state.get('version') not in (1, self.STATE_VERSION):
             raise ValueError(f"engine {ENGINE_ID}: state version "
                              f"{state.get('version') if isinstance(state, dict) else state!r}"
                              f" != {self.STATE_VERSION}")
+        state = _widen_v1(state)
         if state.get('engine_id') != self.engine_id:
             raise ValueError(f"engine state is for {state.get('engine_id')!r}, not {self.engine_id!r}")
         if (state.get('voices'), state.get('modes'), state.get('tails'), state.get('mod_slots')) != \
@@ -673,6 +696,7 @@ class LaplaceFMEngine(SoundEngine):
             getattr(self.src, name)[:] = arrays['src_' + name]
         self.src.steals = int(state.get('steals', 0))
         self.src.mod_steals = int(state.get('mod_steals', 0))
+        self.src.mod_inplace = int(state.get('mod_inplace', 0))
         self.fir_hist[:] = arrays['fir_hist']
         self.dc_x = float(state['dc_x'])
         self.dc_y = float(state['dc_y'])
@@ -729,6 +753,36 @@ class LaplaceFMEngine(SoundEngine):
             data[:, 1] = R
         self.gain_prev = gain
         return np.ascontiguousarray((data * 32767).astype(np.int16)), peak, n_clip
+
+
+def _widen_v1(state):
+    """A version 1 snapshot (modulator pool of MAX_MODES_PER_OBJ tails) read into this
+    build's wider pool: the active slots are 0..MAX_MODES_PER_OBJ-1 in both, and the old
+    tail slots keep their own indices, so the copy is exact and the sound continues
+    unchanged.  Records made before 2026-09-21 stay continuable."""
+    if state.get('version') == LaplaceFMEngine.STATE_VERSION:
+        return state
+    old_slots = int(state.get('mod_slots', 0))
+    if old_slots > N_MODS:
+        raise ValueError(f"engine {ENGINE_ID}: state carries {old_slots} modulator slots, "
+                         f"this build has {N_MODS}")
+    out = dict(state)
+    for name in ('f_mod', 'th_mod', 'beta_cur', 'beta_tgt', 'm_env_phase', 'm_env_level',
+                 'm_rel_cnt', 'm_rel_len', 'm_rel_beta0'):
+        key = 'src_' + name
+        a = state.get(key)
+        if not isinstance(a, np.ndarray) or a.ndim != 2 or a.shape[1] != old_slots:
+            raise ValueError(f"engine {ENGINE_ID}: version 1 state array {key!r} missing or "
+                             f"shape {getattr(a, 'shape', None)} != (*, {old_slots})")
+        wide = np.zeros((a.shape[0], N_MODS), dtype=a.dtype)
+        if name == 'm_rel_len':
+            wide[:] = 1
+        wide[:, :MAX_MODES_PER_OBJ] = a[:, :MAX_MODES_PER_OBJ]
+        wide[:, MAX_MODES_PER_OBJ:old_slots] = a[:, MAX_MODES_PER_OBJ:]
+        out[key] = wide
+    out['version'] = LaplaceFMEngine.STATE_VERSION
+    out['mod_slots'] = int(N_MODS)
+    return out
 
 
 def inactive(params):

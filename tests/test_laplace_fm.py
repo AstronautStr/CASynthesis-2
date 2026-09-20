@@ -855,6 +855,85 @@ class KnobDragBudget(unittest.TestCase):
         self.assertLess(p99, 1.5 * budget, f"live A/B with a dragged knob: p99 {p99:.2f} ms")
 
 
+class DraggedKnobClicks(unittest.TestCase):
+    """The clicks the user recorded on 2026-09-21 while tweaking `harm`
+    (lab_catalog/laplace_fm_2026_09_20/20260921-002846-f2423a, "issue").
+
+    A click in this engine is a STEP in the phase sum: an index that disappears at a
+    block boundary instead of being released.  It is measured where it happens -- in the
+    OVERSAMPLED sum, before the band limit smears it over the filter's 78 samples -- as
+    the second difference across the seam against the typical second difference inside
+    the block.  A continuous signal keeps that ratio around 1.
+
+    The settings are the ones the session ended with: FM depth 4, n 11, spread 1,
+    alpha 0, shape 1, harm dragged, full on, dyn 1 on the Jam at 4 generations / s.
+    Dragging `harm` moves every mode of every figure on every block, so each figure
+    needs `n x release` modulator tails at once (11 x 3 = 33) -- more than the pool
+    used to hold, and the pool then overwrote tails that were still sounding.
+    """
+
+    SETTINGS = dict(n=11, spread=1.0, alpha=0.0, shape=1.0, harm=0.958, fullshape=1, dyn=1.0)
+    DEPTH = 4.0
+    RATE = 4.0
+    STEP = 0.001
+    COMMANDS_PER_BLOCK = 4
+
+    def _seams(self, blocks=400, warmup=40):
+        """(ratios, engine) of a dragged `harm` on the Jam -- the shared measurement of
+        demos/laplace_fm_reference.py, so the report and this gate read the same number."""
+        e = lfm.LaplaceFMEngine(EngineContext(SR, BLOCK, 2, F0, 1.0, self.RATE),
+                                dict(fm_depth=self.DEPTH, **self.SETTINGS))
+        return ref.seam_ratios(e, jam_grid(), self.RATE, GAIN, blocks=blocks,
+                               commands=self.COMMANDS_PER_BLOCK, step=self.STEP,
+                               drag_from=30, warmup=warmup)
+
+    def test_a_dragged_knob_never_steps_the_phase_sum(self):
+        ratios, e = self._seams()
+        worst = float(ratios.max())
+        over = int((ratios > 3.0).sum())
+        self.assertGreater(len(ratios), 300)
+        self.assertEqual(over, 0,
+                         f"{over} of {len(ratios)} block seams jump (worst x{worst:.1f} the "
+                         f"second difference inside the block): an index vanished instead of "
+                         f"being released")
+        self.assertLess(worst, 3.0)
+
+    def test_no_modulator_is_overwritten_while_it_still_sounds(self):
+        """The mechanism behind the step: the per-figure modulator tail pool running out
+        and a still-sounding tail being taken for the next one."""
+        _ratios, e = self._seams(blocks=300, warmup=40)
+        self.assertEqual(int(e.src.mod_steals), 0,
+                         f"{int(e.src.mod_steals)} modulator tails were overwritten while "
+                         f"they were still sounding")
+
+    def test_an_exhausted_pool_degrades_smoothly(self):
+        """The pool CAN be exhausted -- the widest spectrum on a slow field needs
+        n x release tails per figure (20 x 6 here against 20 slots).  It must then fade
+        modulators out where they stand, not overwrite sounding ones: no step, and the
+        modulation itself must survive (the figure keeps its indices, it does not go
+        quiet)."""
+        keep = (self.SETTINGS, self.RATE)
+        self.SETTINGS = dict(self.SETTINGS, n=MAX_MODES_PER_OBJ)
+        self.RATE = 2.0
+        try:
+            ratios, e = self._seams(blocks=320)
+            over = int((ratios > 3.0).sum())
+            self.assertEqual(int(e.src.mod_steals), 0)
+            self.assertGreater(int(e.src.mod_inplace), 0, "the pool was never actually full")
+            self.assertEqual(over, 0, f"{over} seams jump, worst x{ratios.max():.1f}")
+            live = ((e.src.f_mod[:MAX_VOICES, :MAX_MODES_PER_OBJ] > 0.0)
+                    & (np.abs(e.src.beta_cur[:MAX_VOICES, :MAX_MODES_PER_OBJ]) > lfm.BETA_EPS))
+            asked = sum(int(np.count_nonzero((np.asarray(m[0]) > 0) & (np.asarray(m[1]) > 0)))
+                        for m in e._mods if m is not None)
+            self.assertGreater(asked, 10)
+            self.assertGreaterEqual(int(live.sum()), asked // 2,
+                                    f"only {int(live.sum())} of the {asked} modes the analysis "
+                                    f"asks for are sounding: the figures are being emptied "
+                                    f"instead of waiting one block for a slot")
+        finally:
+            self.SETTINGS, self.RATE = keep
+
+
 class BenchIntegration(unittest.TestCase):
 
     def test_registry_entry(self):

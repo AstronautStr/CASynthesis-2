@@ -1286,9 +1286,13 @@ class BenchApp:
                                          f"   f0 {float(disp['f0']):.0f} Hz"], room, C_DIM), (x, y))
             screen.blit(fit_text(small, ["depth 0 = the carrier sine alone",
                                          "depth 0 = carrier sine only"], room, C_DIM), (x, y + 14))
+            # `+N` = modulators that had to fade where they stood because the tail pool
+            # of that figure was full (a wide spectrum under a knob drag); never a cut
+            held = int(disp.get('mod_inplace', 0))
             screen.blit(fit_text(small, [f"figures {int(disp['sounding'])} of {int(disp['voices'])}"
                                          f"   modulators {int(disp['modulators'])}"
-                                         f"   tails {int(disp['tails'])}/{int(disp['mod_tails'])}"],
+                                         f"   tails {int(disp['tails'])}/{int(disp['mod_tails'])}"
+                                         + (f" +{held}" if held else "")],
                                  room, C_DIM), (x, y + 28))
             screen.blit(fit_text(small, [f"x{int(disp['oversample'])} / {int(disp['taps'])} taps"
                                          f" / delay {int(disp['delay_samples'])} smp / DC blocked"],

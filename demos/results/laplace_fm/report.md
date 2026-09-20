@@ -64,8 +64,8 @@ Energy of the delivered FM track at or above 0.50*sr: -137 dB.
 
 | record | A | B | A RMS | B RMS | A-B | <=0.5 dB | A == pinned | B == the FM track | p99 ms |
 |---|---|---|---|---|---|---|---|---|---|
-| lfm_baseline | R | FM | -29.93 | -29.96 | +0.03 | True | True | True | 3.36 |
-| lfm_saw_bank | W_saw | FM | -29.94 | -29.96 | +0.02 | True | True | True | 3.63 |
+| lfm_baseline | R | FM | -29.93 | -29.96 | +0.03 | True | True | True | 2.77 |
+| lfm_saw_bank | W_saw | FM | -29.94 | -29.96 | +0.02 | True | True | True | 3.14 |
 
 sha256 of the FM track: `73ba50680d3df391` -- the same in both records. R and Wave bank / Saw carry the sha256 of the pinned record `20260920-164914-f2dedf` already listened to.
 
@@ -79,28 +79,38 @@ Cost with the field analysis and the oversampling included; the last column is t
 
 | case | figures | modulators | p99 ms | max ms | within budget | baseline p99 |
 |---|---|---|---|---|---|---|
-| the delivered Jam, f0 110, n 3 | 3 | 7 | 1.32 | 1.41 | True | 1.91 |
-| high note f0 1760, n 3 | 3 | 7 | 1.30 | 1.46 | True | 2.45 |
-| high note f0 1760, I 4 | 3 | 7 | 1.27 | 1.38 | True | 2.30 |
-| the Jam with n 20 | 3 | 10 | 1.64 | 1.74 | True | 2.35 |
-| dense random field, n 3 | 24 | 65 | 7.06 | 7.80 | True | 6.40 |
-| dense random field, n 20 | 24 | 187 | 14.98 | 15.74 | False | 11.93 |
+| the delivered Jam, f0 110, n 3 | 3 | 7 | 1.17 | 1.19 | True | 1.83 |
+| high note f0 1760, n 3 | 3 | 7 | 1.17 | 1.18 | True | 1.89 |
+| high note f0 1760, I 4 | 3 | 7 | 1.20 | 1.36 | True | 1.81 |
+| the Jam with n 20 | 3 | 10 | 1.42 | 1.56 | True | 1.82 |
+| dense random field, n 3 | 24 | 65 | 7.43 | 8.29 | True | 6.12 |
+| dense random field, n 20 | 24 | 187 | 12.78 | 12.94 | False | 11.31 |
 
 The reported case (2026-09-20): the user's live field with `harm` dragged down. Every mode of every figure changes frequency on every block, so every modulator keeps its tails sounding, and the 60 Hz event loop delivers several `set_param` commands into one block.
 
 | set_param per block | figures | modulators | mean ms | p99 ms | max ms | blocks over budget |
 |---|---|---|---|---|---|---|
-| 0 | 8 | 24 | 1.46 | 2.68 | 5.72 | 0 of 300 |
-| 1 | 8 | 24 | 3.79 | 6.16 | 8.14 | 1 of 300 |
-| 4 | 8 | 24 | 3.84 | 6.73 | 8.25 | 1 of 300 |
-| 8 | 8 | 24 | 3.66 | 6.53 | 7.34 | 0 of 300 |
+| 0 | 8 | 24 | 1.26 | 2.43 | 2.58 | 0 of 300 |
+| 1 | 8 | 24 | 3.50 | 5.29 | 8.65 | 1 of 300 |
+| 4 | 8 | 24 | 3.48 | 4.73 | 5.87 | 0 of 300 |
+| 8 | 8 | 24 | 3.45 | 4.53 | 5.16 | 0 of 300 |
 
 The MEAN is what decides: the render thread keeps 40 ms of blocks ahead of the device, so a single late block is absorbed and only a sustained cost above the budget drains that queue. The cost no longer grows with the number of commands in a block (one analysis per block instead of one per command), and the occasional late block left in the table is this desktop scheduling, not the engine.
+
+Clicks while a knob is dragged (2026-09-21).  A click here is a STEP in the phase sum: an index that leaves it at a block boundary instead of being released. One figure needs `modes x release` modulator tails at once while a spectrum knob moves, and a full pool used to take a tail that was still sounding. The pool now holds three times the modes, and beyond it a modulator fades out where it stands (one block of glide, the new frequency on the next) -- never a cut.
+
+| case | modes x release | pool | worst seam | seams over x3 | tails taken | faded in place | modes sounding |
+|---|---|---|---|---|---|---|---|
+| the session settings (n 11) | 33 | 60 | x1.30 | 0 of 319 | 0 | 0 | 10 of 11 |
+| the widest spectrum, slow field | 90 | 60 | x1.17 | 0 of 319 | 0 | 103 | 14 of 15 |
+
+On the recorded session itself the worst seam fell from x33.1 to x1.24, and the two renders differ in 11 blocks of 3759 -- the four moments where a tail used to be overwritten (15.53, 21.02, 24.01, 27.01 s of the saved window).
 
 ## The catalog
 
 | record | title | version | notes |
 |---|---|---|---|
+| 20260921-002846-f2423a | 1 - Моды модулируют несущую: Laplace / Laplace FM (Jam, 4 поколения/с) 2026-09-21 00:28:37 issue | Pinned e418449 | False |
 | 20260920-220936-226416 | 1 - Моды модулируют несущую: Laplace / Laplace FM (Jam, 4 поколения/с) | Pinned e418449 | True |
 | 20260920-220934-d120d1 | 3 - Два кандидата: Wave bank / Laplace FM (Jam, 4 поколения/с) | Pinned e418449 | True |
 | 20260920-164914-f2dedf | 2 - Пила на каждой моде: Laplace / Wave bank (Jam, 4 поколения/с) | Pinned cea5127 | True |
@@ -111,7 +121,8 @@ The MEAN is what decides: the render thread keeps 40 ms of blocks ahead of the d
 - The phase law checks out against an independent Bessel expansion (2e-13), coincident modulators add coherently, and the carrier is modulated JOINTLY (-158 dB against the joint formula, -2 dB against a sum of separate carriers).
 - Band: the reference converges (worst 16x vs 32x -165 dB, REQ -80 dB) and the shipped x8 is within -155 dB of it on still figures and -89 dB over the whole Jam with its transitions (REQ -60 dB).
 - Levels: the three tracks sit within 0.03 dB, nothing clips, and R / Wave bank+Saw are byte-identical to the pinned record already listened to.
-- Budget: p99 3.63 ms of the 7.98 ms block on both delivered scenes; Continue is exact including a generation change and a pause.
+- Budget: p99 3.14 ms of the 7.98 ms block on both delivered scenes; Continue is exact including a generation change and a pause.
 - Limits (section 6): the delivered scenes, a high note and n = 20 all stay inside the block; a dense random field leaves the budget (as the baseline does on the same field) -- the table says where, and no index or frequency is reduced to hide it.
-- A dragged spectrum knob on a live field -- the case the user reported as underruns -- now costs 3.84 ms per block at worst against the 7.98 ms budget, and no longer grows with the command rate; the same runs measured 14.6 ms (4 commands per block) and 23.7 ms (8) before the 2026-09-20 speed fixes.
+- A dragged spectrum knob on a live field -- the case the user reported as underruns -- now costs 3.50 ms per block at worst against the 7.98 ms budget, and no longer grows with the command rate; the same runs measured 14.6 ms (4 commands per block) and 23.7 ms (8) before the 2026-09-20 speed fixes.
+- Clicks: the modulator tail pool of a figure no longer overwrites a tail that is still sounding (worst block seam x1.30 against x33.1 on the recorded session), and the delivered records are unchanged.
 - Nothing here says the FM sounds useful: that is the listening question of the catalog.

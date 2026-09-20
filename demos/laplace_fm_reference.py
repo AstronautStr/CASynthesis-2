@@ -113,6 +113,52 @@ def expansion_signal(amp, f0, th_c, mods, n, sr=SR, order=12, floor=1e-12):
 
 # ── small measurement helpers ─────────────────────────────────────────────────
 
+def seam_ratios(engine, grid, rate_hz, gain, blocks=400, commands=4, step=0.001,
+                param='harm', drag_from=30, warmup=40):
+    """Drag `param` on a live field and measure, for every block, how much the phase sum
+    JUMPS at the block seam relative to how much it moves inside the block.
+
+    A click in this engine is a step in the oversampled sum -- an index that disappears at
+    a boundary instead of being released -- so it is measured there, before the band limit
+    spreads it over the filter's length.  A continuous signal keeps the ratio around 1.
+    Returns (ratios, engine); the engine carries the tail counters afterwards.
+    """
+    from casynth_engine import step as ca_step, events_field
+    from casynth_lab import BLOCK
+    g = np.asarray(grid).copy()
+    exc = None
+    engine.init(g, exc, gain)
+    n_os = BLOCK * engine.oversample
+    value = float(engine.params[param])
+    prev, rows, ca, gen, way = None, [], 0, 0, -1.0
+    for i in range(int(blocks)):
+        if ca >= (gen + 1) * (SR / float(rate_hz)):
+            new = ca_step(g)
+            exc = events_field(g, new)
+            g = new
+            gen += 1
+            engine.update_field(g, exc)
+        if i >= drag_from:
+            for _k in range(int(commands)):
+                value += way * step
+                if not (0.0 <= value <= 1.0):
+                    way = -way
+                    value = min(max(value, 0.0), 1.0)
+                engine.set_params(dict(engine.params, **{param: round(value, 3)}))
+        if engine._pending_analysis:
+            engine._analyse()
+        engine.src.update(engine._mods, engine._index(), engine._release_chunks,
+                          engine._attack_chunks, engine._decay_chunks, engine._sustain)
+        y_os = engine.src.render(n_os, engine._ramp_os)
+        if prev is not None:
+            seam = abs(y_os[0] - 2.0 * prev[-1] + prev[-2])
+            inside = float(np.percentile(np.abs(np.diff(y_os, 2)), 99.9))
+            rows.append(seam / max(inside, 1e-18))
+        prev = y_os[-2:].copy()
+        ca += BLOCK
+    return np.array(rows[warmup:]), engine
+
+
 def rms(x):
     x = np.asarray(x, dtype=np.float64)
     return math.sqrt(float(np.mean(x * x))) if x.size else 0.0
