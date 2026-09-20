@@ -559,6 +559,32 @@ class BandAndTime(unittest.TestCase):
         seam, inside = junction_d2(mono)
         self.assertLess(seam, 6.0 * inside)
 
+    def test_pan_is_centred_and_the_channels_are_identical(self):
+        e = make()
+        e.init(jam_grid(), None, GAIN)
+        _mono, pcm, _pk, _cl = run_blocks(e, 40)
+        self.assertTrue(np.array_equal(pcm[:, 0], pcm[:, 1]))
+        self.assertGreater(int(np.abs(pcm).max()), 0)
+
+    def test_a_figure_that_comes_back_starts_clean(self):
+        """The Jam loses and regains figures every generation: a returning one gets a fresh
+        source (zero phases, no leftover index) and the seam carries no corner."""
+        grid = jam_grid()
+        e = make()
+        e.init(grid, None, GAIN)
+        run_blocks(e, 8)
+        e.update_field(step(step(grid)), None)          # 3 figures -> 1
+        run_blocks(e, 8)
+        e.update_field(grid, None)                      # ... and back to 3
+        mono, _p, _k, _c = run_blocks(e, 8)
+        self.assertEqual(int(np.count_nonzero(e.src.alive)), 3)
+        for v in range(3):
+            live = e.src.f_mod[v, :MAX_MODES_PER_OBJ] > 0
+            self.assertTrue(live.any())
+            self.assertEqual(int(np.count_nonzero(e.src.m_rel_cnt[v] > 0)), 0)
+        seam, inside = junction_d2(mono)
+        self.assertLess(seam, 6.0 * inside)
+
     def test_release_and_block_are_the_baseline_scales(self):
         e = make()
         self.assertEqual(e._attack_chunks, 1)
