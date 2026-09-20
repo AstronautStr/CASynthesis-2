@@ -1,0 +1,110 @@
+{
+ "format": 2,
+ "id": "lc_square_filter_bank",
+ "title": "6 - Два способа с меандром: Filter / Wave bank (Jam, 4 поколения/с)",
+ "grid": {
+  "rows": 32,
+  "cols": 32
+ },
+ "cells": [
+  [
+   7,
+   10
+  ],
+  [
+   7,
+   11
+  ],
+  [
+   8,
+   9
+  ],
+  [
+   8,
+   12
+  ],
+  [
+   9,
+   7
+  ],
+  [
+   9,
+   10
+  ],
+  [
+   9,
+   12
+  ],
+  [
+   10,
+   7
+  ],
+  [
+   10,
+   11
+  ],
+  [
+   11,
+   7
+  ],
+  [
+   12,
+   10
+  ],
+  [
+   13,
+   8
+  ],
+  [
+   13,
+   9
+  ]
+ ],
+ "rule": "B3/S23",
+ "boundary": "torus",
+ "rate_hz": 4.0,
+ "audio": {
+  "f0_hz": 110.0,
+  "level": 1.0,
+  "side_gain": {
+   "A": 0.97,
+   "B": 0.9
+  }
+ },
+ "variants": {
+  "A": {
+   "engine_id": "laplace_carriers",
+   "engine_params": {
+    "method": 0,
+    "waveform": 2,
+    "filter_width_oct": 0.35,
+    "filter_depth_db": 24.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  },
+  "B": {
+   "engine_id": "laplace_carriers",
+   "engine_params": {
+    "method": 1,
+    "waveform": 2,
+    "filter_width_oct": 0.35,
+    "filter_depth_db": 24.0,
+    "n": 3,
+    "spread": 1.0,
+    "alpha": 0.0,
+    "shape": 0.0,
+    "harm": 0.0,
+    "fullshape": 1,
+    "dyn": 0.0
+   }
+  }
+ },
+ "initial_side": "A",
+ "listen": "1 / 2: А — Laplace waves, Filter, меандр (width 0.35 окт, depth 24 dB) / Б — Laplace waves, Wave bank, меандр на каждой моде. Notes: hypothesis and your listening result. Method / Wave are the buttons of the Laplace waves panel; the seven spectrum settings are shared (\"spectrum A to B\")."
+}

@@ -1271,6 +1271,28 @@ class BenchApp:
         import pygame
         if not disp:
             return
+        if disp.get('carriers'):
+            # Laplace carriers (2026-09-20): which law is heard, the wave and how many
+            # harmonics it actually has here; the Filter row adds its mask settings.
+            mix = float(disp.get('mix', 0.0))
+            moving = "" if mix in (0.0, 1.0) else f"   switching {mix:.2f}"
+            screen.blit(small.render(f"Laplace waves: {disp['method_name']}   wave {disp['wave_name']}"
+                                     f"   f0 {float(disp['f0']):.0f} Hz{moving}", True, C_DIM), (x, y))
+            if int(disp.get('method', 1)) == 0:
+                line2 = (f"carrier harmonics {int(disp['carrier_harmonics'])}"
+                         f"   width {float(disp['width_oct']):.2f} oct   depth {float(disp['depth_db']):.0f} dB")
+                line3 = f"figures {int(disp['sounding'])} of {int(disp['voices'])}   tails {int(disp['filter_tails'])}"
+            else:
+                line2 = (f"harmonics per wave {int(disp['harmonics'])} at f0"
+                         f"   lines {int(disp['bank_lines'])}")
+                line3 = f"figures {int(disp['sounding'])} of {int(disp['voices'])}"
+            screen.blit(small.render(line2, True, C_DIM), (x, y + 14))
+            screen.blit(small.render(line3, True, C_DIM), (x, y + 28))
+            for k, row in enumerate(disp.get('lines', [])[:self.figure_rows]):
+                ry = y + 48 + k * DISPLAY_ROW_H
+                screen.blit(small.render(f"#{k + 1}  {int(row['n'])} modes   {float(row['f_low']):.0f} Hz"
+                                         f"   A {float(row['a']):.2f}", True, C_TXT), (x, ry))
+            return
         if 'figures' in disp:
             # N4 ca_object_resonators: one row per sounding figure (colour, id, cells,
             # modes, lowest frequency), the last packet a (bar), the bank level (tick, /5)

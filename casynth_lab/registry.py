@@ -226,3 +226,5 @@ from . import event_network            # noqa: E402,F401
 from . import tuned_events             # noqa: E402,F401
 # N4 (2026-09-16): every figure a resonator bank of its own Laplacian, struck inside its circle.
 from . import object_resonators        # noqa: E402,F401
+# Laplace carriers (2026-09-20): the Laplacian spectrum as a carrier filter / a bank of waves.
+from . import laplace_carriers         # noqa: E402,F401
