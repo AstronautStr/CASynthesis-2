@@ -632,6 +632,44 @@ class BenchIntegration(unittest.TestCase):
         self.assertLessEqual(abs(levels['A'] - levels['B']), 1.0)
         self.assertEqual(runner.snapshot()['clip_blocks'], dict(A=0, B=0))
 
+    def test_headless_draw_panel_and_display(self):
+        """The bench draws the engine's own panel rows for both sides (the display of
+        this engine is a text block, so only that it renders is checked here)."""
+        import time
+        import pygame
+        import demo_bench as db
+        from casynth_lab.audio_out import LiveEngine
+        scene = load_scene(os.path.join(ROOT, 'demos', 'lc_saw_filter_bank.json'))
+        runner = DemoRunner(scene)
+        eng = LiveEngine(runner, sink=lambda m, b: None)
+        pygame.init()
+        app = db.BenchApp(scene, eng)
+        self.assertIn(lc.ENGINE_ID, app.engine_btns)
+        screen = pygame.Surface((app.width, app.height))
+        font = pygame.font.SysFont(db.FONT_NAMES, 17)
+        small = pygame.font.SysFont(db.FONT_NAMES, 14)
+        eng.start()
+        try:
+            eng.post('start')
+            t0 = time.time()
+            while time.time() - t0 < 5 and eng.snapshot()['gen'] < 2:
+                time.sleep(0.02)
+            app.draw(screen, font, small)
+            snap = eng.snapshot()
+            for side in ('A', 'B'):
+                d = snap['display'][side]
+                self.assertTrue(d.get('carriers'))
+                self.assertIn(d['method_name'], lc.METHOD_NAMES)
+                self.assertEqual(d['wave_name'], 'Saw')
+                self.assertEqual(int(d['carrier_harmonics']), lc.carrier_harmonics(F0))
+            eng.post('select', side='B')
+            t0 = time.time()
+            while time.time() - t0 < 5 and eng.snapshot()['selected'] != 'B':
+                time.sleep(0.02)
+            app.draw(screen, font, small)
+        finally:
+            eng.stop()
+
     def test_block_budget_of_the_six_scenes(self):
         import time
         budget_ms = BLOCK / SR * 1000.0
