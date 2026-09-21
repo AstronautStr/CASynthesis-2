@@ -14,6 +14,7 @@ shared piece is the schema, unchanged by this split.
 import numpy as np
 
 from casynth_config import *
+from casynth_core import ENGINE_BY_ID
 from casynth_engine import (SlotPool, analyse, render_chunk_laplacian,
                             midi_to_freq, events_field)
 
@@ -203,6 +204,14 @@ def replay_session(ts, prefix="_session"):
             f"{prefix}_{ts}.npz has no replay_controls log (recorded before "
             "full-control logging was added -- nothing to replay faithfully)")
     grids = d["replay_grids"]
+    engine0 = dict(controls[0])['engine']
+    if engine0 not in ENGINE_BY_ID:
+        # Since 2026-09-21 the prototype hosts the bench's engines, and this path
+        # only knows the five casynth_core mappings.  The SCENE is the faithful
+        # route for everything else -- and unlike this one it reproduces the VCA:
+        raise SystemExit(
+            f"{prefix}_{ts}.npz was played on engine {engine0!r}, which this replay "
+            f"path does not know.  Use the scene instead: python gol_synth.py scene {ts}")
     # Match the recorded run's master gain so old sessions stay faithful even if
     # the MASTER_GAIN constant changes later (live gain = master_gain * vol).
     master_gain = float(d["master_gain"]) if "master_gain" in d.files else MASTER_GAIN

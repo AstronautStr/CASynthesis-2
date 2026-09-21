@@ -84,6 +84,7 @@ from casynth_panel import (panel_rows, shared_first, KIND_CHOICES, KIND_INACTIVE
                            KIND_SLIDER, KIND_TOGGLE)
 from casynth_ui import _make_piano, pattern_preview_surf, draw_frame
 from casynth_engines import registry as engines
+from casynth_engines.engine_api import EngineContext, PAN_FIELD_MODE
 from casynth_tuning import (dissonance_curve, scale_minima, snap_ratio,
                              TUNE_MAX_PARTIALS)
 
@@ -138,11 +139,17 @@ def main(autoplay_midi=None):
     # The synth (render thread) renders chunks ahead into the host's ring; the
     # PortAudio callback pulls samples at the hardware rate.  This decouples audio
     # from the 60 fps frame loop: a frame hitch only shrinks the ring, it never
-    # gaps playback.  amp_cur/phase/pool are touched only by the render thread;
-    # the callback copies finished int16 chunks out of the ring and nothing else.
+    # gaps playback.  The engine's own audio state is touched only by the render
+    # thread; the callback copies finished int16 chunks out of the ring, nothing else.
     # The ring, the callback, the look-ahead pre-roll and the underrun count are
     # the same code the bench runs -- sounddevice is imported inside it, so a
     # machine without it just reports no device here.
+    # The device is opened AFTER the first frame, not here.  Starting up costs a
+    # few hundred milliseconds (pygame, the pattern previews, and importing the
+    # engine modules for the tab row), and a device that is already playing
+    # drains its whole look-ahead in that time -- which used to be the burst of
+    # underruns every session began with.  The render thread starts now and fills
+    # the ring with real audio meanwhile.
     host = AudioHost(int(CHUNK_S * SR), 2, sr=SR, lookahead=AUDIO_LOOKAHEAD_CHUNKS)
     _ur = {'prev': 0}                          # last underrun count shown in the UI
     # Where the render thread is, in output samples (it writes, the UI thread
@@ -151,14 +158,26 @@ def main(autoplay_midi=None):
     # turned into a scene (casynth_session.scene_from_session), instead of being
     # guessed from frame durations.
     _pos = {'cum': 0}
-    audio_ok = host.start()
-    if audio_ok:
-        _lat = ('?' if host.latency is None else f"{host.latency * 1000:.0f}")
-        print(f"[audio] sounddevice out latency={_lat}ms "
-              f"+ {AUDIO_LOOKAHEAD_CHUNKS} chunk look-ahead "
-              f"({AUDIO_LOOKAHEAD_CHUNKS*CHUNK_S*1000:.0f}ms)")
-    else:
-        print(f"[audio disabled: {host.device_error}] - visuals will still run")
+    # What one block of sound COSTS, measured on the render thread (B2): the
+    # smoothed and the worst milliseconds per block against the CHUNK_S budget.
+    # The UI shows it next to the meter -- an instrument that cannot hold real
+    # time must say so out loud, not hide it in an underrun counter.
+    budget = {'ms': 0.0, 'max': 0.0}
+    audio_ok = False
+    _device = {'opened': False}
+
+    def _open_device():
+        """Open the output once the first frame has been drawn and the render
+        thread has something to put in the ring."""
+        ok = host.start()
+        if ok:
+            lat = ('?' if host.latency is None else f"{host.latency * 1000:.0f}")
+            print(f"[audio] sounddevice out latency={lat}ms "
+                  f"+ {AUDIO_LOOKAHEAD_CHUNKS} chunk look-ahead "
+                  f"({AUDIO_LOOKAHEAD_CHUNKS*CHUNK_S*1000:.0f}ms)")
+        else:
+            print(f"[audio disabled: {host.device_error}] - visuals will still run")
+        return ok
 
     W = GRID_W * CELL
     H = GRID_H * CELL + TOOLBAR_H + PIANO_H
@@ -169,18 +188,31 @@ def main(autoplay_midi=None):
     small = pygame.font.SysFont("consolas,menlo,monospace", 13)
     clock = pygame.time.Clock()
 
+    # The engines this instrument offers: the ones that can play a NOTE.  An
+    # engine whose pitch is a delay length or a scan speed refuses a transpose
+    # (casynth_engines/engine_api.py), and an instrument with a piano must not
+    # offer a tab that silently ignores the keyboard.
+    playable = [eid for eid in engines.ids() if engines.get(eid).plays_notes]
+
     grid = np.zeros((GRID_H, GRID_W), np.uint8)
     # exc_field: per-generation event excitation (events_field output).
     # Updated ONLY on step() (both auto and manual); held between steps.
     # None until the first step -> analyse falls back to static deg (dyn path).
     exc_field = None
 
-    # Flat slot pool (audio engine state)
-    pool = SlotPool()
-    sz = TOTAL_SLOTS + 1
-    phase   = np.zeros(sz)
-    amp_cur = np.zeros(sz)
-    pan_cur = np.full(sz, 0.5)
+    # Every change of the field gets a SERIAL.  The render thread owns the engine
+    # and calls update_field exactly once per new serial, at a block boundary --
+    # state['gen'] cannot serve for this, because Clear resets it to 0 and the
+    # engine would then miss the change.  The same number is column 5 of the frame
+    # log, so a recorded session can be placed on it later.
+    _serial = {'n': 0}
+
+    def _touched():
+        _serial['n'] += 1
+
+    # The analysis the VISUALS are drawn from, kept until the field or a knob
+    # moves (the sound has its own, inside the engine on the render thread).
+    _vis = {'key': None, 'out': (None, [], None)}
 
     # Level/clip meter (updated in feed_audio, read in draw -- same thread).
     meter = {'peak': 0.0, 'clip': False}
@@ -220,8 +252,7 @@ def main(autoplay_midi=None):
         kb_base=NOTE_DEFAULT,
         sidebar_open=True,
         engine=ENGINES[0]['id'],
-        engine_params={e['id']: {arg: default for (arg, _l, _lo, _hi, _i, default)
-                                 in e['params']} for e in ENGINES},
+        engine_params={eid: engines.defaults(eid) for eid in playable},
         # GEN ADSR: per-mode envelope on the AUTOMATON clock; A/D/R are FRACTIONS of
         # one step interval (see casynth_config), S is a 0..1 level.
         gen_attack=GEN_ATTACK_DEFAULT,
@@ -315,14 +346,18 @@ def main(autoplay_midi=None):
     _mf_btn      = pygame.Rect(_midi_btn.right + 8, _midi_bar_y, 168, 20)
 
     # ── Engine selector: a row of TABS in the toolbar's bottom strip ──────────
-    # Built from the shared engine registry (casynth_core.ENGINES); a click
-    # switches state['engine'] and rebuilds the knob panel for that engine.
+    # Built from the SHARED ENGINE REGISTRY (casynth_engines) since 2026-09-21:
+    # the prototype hosts the bench's engine instances, so Objects, Laplace waves
+    # and Laplace FM are played here as they are, without a line of their sound
+    # code being copied.  A click switches state['engine'] and rebuilds the knob
+    # panel for that engine.
     _tab_y = GRID_H * CELL + TOOLBAR_H - 24
     engine_tabs = []
     _tx = 12
-    for _e in ENGINES:
-        _tw = small.size(_e['label'])[0] + 18
-        engine_tabs.append(dict(id=_e['id'], label=_e['label'],
+    for _eid in playable:
+        _lbl = engines.label(_eid)
+        _tw = small.size(_lbl)[0] + 18
+        engine_tabs.append(dict(id=_eid, label=_lbl,
                                 rect=pygame.Rect(_tx, _tab_y, _tw, 20)))
         _tx += _tw + 4
 
@@ -602,13 +637,18 @@ def main(autoplay_midi=None):
             grid = step(grid)
             exc_field = events_field(prev, grid)
             state['gen'] += 1
+            _touched()
             # FIX-A: record button-triggered steps with true prev_grid so replay
             # can reconstruct exc_field exactly (button steps were previously missing).
             if rec is not None:
                 rec['steps'].append((state['gen'], grid.copy(), state['note'], prev))
         elif bid == "random":
             grid[:] = (np.random.random((GRID_H, GRID_W)) < RANDOM_DENSITY).astype(np.uint8)
-        elif bid == "clear": grid[:] = 0; state['gen'] = 0
+            _touched()
+        elif bid == "clear":
+            grid[:] = 0
+            state['gen'] = 0
+            _touched()
 
     def hit_piano(pos):
         for rect, m in black_keys:
@@ -714,9 +754,76 @@ def main(autoplay_midi=None):
         r_snapped              = snap_ratio(r_raw, minima, tune)
         state['tuned_f0']      = prev_f0 * r_snapped
 
+    # -- the engine the render thread hosts ------------------------------------
+    # The prototype has no slot pool of its own any more: it holds an INSTANCE of
+    # a casynth_engines SoundEngine, exactly as the bench does, so Objects,
+    # Laplace waves and Laplace FM are played here AS THEY ARE and not one line
+    # of their sound code is copied (memory/req-seam-2026-09-21.md).
+    _SILENT = np.zeros((int(CHUNK_S * SR), 2), np.int16)
+    _XFADE_BLOCKS = max(1, round(ENGINE_XFADE_MS / 1000.0 / CHUNK_S))
+
+    def _engine_ctx():
+        """The render context.  f0 is the ANALYSIS ANCHOR -- the sounding note is
+        a transpose at render -- and the pan is the prototype's own: a voice sits
+        where its figure sits (the bench asks for the centre instead)."""
+        return EngineContext(SR, int(CHUNK_S * SR), 2, REFERENCE_F0, 1.0,
+                             1.0 / _step_interval(), pan=PAN_FIELD_MODE)
+
+    def _engine_tell(e):
+        """The live envelope knobs and the live tempo, on a block boundary.  An
+        engine with envelopes of its own ignores both (the contract)."""
+        e.set_rate(1.0 / _step_interval())
+        e.set_envelope(state['gen_attack'], state['gen_decay'], state['gen_sustain'],
+                       state['gen_release'], state['gen_amp_slew'])
+
+    def _engine_new(eid, spec, gain):
+        e = engines.create(eid, _engine_ctx(), dict(spec['params']))
+        _engine_tell(e)
+        e.init(spec['grid'], spec['exc'], gain)
+        return e
+
+    def _render_block(eng, spec, gain, t_samples, transpose):
+        """One block from the hosted engine.  The field, the excitation and the
+        knobs come from the snapshot the UI thread published, at a BLOCK boundary
+        and never mid-block; update_field runs exactly once per new serial.
+        Switching engine under a held note crossfades: both instances render
+        while the old one fades out, so the switch has no step in it."""
+        if spec is None:                       # nothing analysed yet: silence
+            return _SILENT.copy(), 0.0, 0
+        if eng['id'] != spec['engine']:
+            if eng['obj'] is not None:
+                eng['old'] = eng['obj']
+                eng['fade'] = _XFADE_BLOCKS
+            eng['obj'] = _engine_new(spec['engine'], spec, gain)
+            eng['id'] = spec['engine']
+            eng['params'] = dict(spec['params'])
+            eng['serial'] = spec['serial']
+        else:
+            if eng['serial'] != spec['serial']:
+                eng['obj'].update_field(spec['grid'], spec['exc'])
+                eng['serial'] = spec['serial']
+            if eng['params'] != spec['params']:
+                eng['obj'].set_params(dict(spec['params']))
+                eng['params'] = dict(spec['params'])
+        _engine_tell(eng['obj'])
+        buf, peak, n_clip = eng['obj'].render(gain, t_samples, transpose=transpose)
+        if eng['fade'] > 0 and eng['old'] is not None:
+            old, o_peak, o_clip = eng['old'].render(gain, t_samples, transpose=transpose)
+            k = _XFADE_BLOCKS - eng['fade']
+            x = (np.linspace(k, k + 1, len(buf), endpoint=False) / _XFADE_BLOCKS)[:, None]
+            buf = np.rint(old.astype(np.float64) * (1.0 - x)
+                          + buf.astype(np.float64) * x).astype(np.int16)
+            peak = max(peak, o_peak)
+            n_clip += o_clip
+            eng['fade'] -= 1
+            if eng['fade'] == 0:
+                eng['old'] = None
+        return buf, peak, n_clip
+
     def _render_loop():
-        gain_prev = MASTER_GAIN * state['vol']
         cum = 0                        # cumulative output samples (onset timestamps)
+        eng = {'id': None, 'obj': None, 'params': None, 'serial': None,
+               'old': None, 'fade': 0}
         last_note, last_gate = state['note'], bool(state['gate'])
         # VOICE ADSR (VCA): a scalar 0..1 envelope keyed to note-on/off, multiplying
         # the master gain (a classic articulation over the summed oscillator signal).
@@ -732,37 +839,26 @@ def main(autoplay_midi=None):
             gate = bool(state['gate'])
             # GEN envelope rides the AUTOMATON clock: A/D/R are fractions of one
             # step interval, so the per-mode texture scales with tempo (BPM/division).
-            gen_interval = NOTE_DIVS[state['div_idx']][1] * 60.0 / state['bpm']
-            release_chunks = max(1, round(state['gen_release'] * gen_interval / CHUNK_S))
-            attack_chunks  = max(1, round(state['gen_attack']  * gen_interval / CHUNK_S))
-            decay_chunks   = max(1, round(state['gen_decay']   * gen_interval / CHUNK_S))
-            sustain        = float(state['gen_sustain'])
             # ── VOICE ADSR (VCA): advance one chunk, fold into the master gain ────
             # note-on edge -> (re)trigger attack; note-off edge -> release.  This is
-            # the ONLY articulation gate now: the oscillator (KA field) is fed to the
-            # pool ALWAYS (below), so a note change never retriggers the per-mode GEN
-            # envelope -- it just re-articulates this scalar VCA.
+            # the ONLY articulation gate: the oscillator (the CA field) is fed to the
+            # engine ALWAYS, so a note change never retriggers a per-mode envelope --
+            # it just re-articulates this scalar VCA, which lives OUTSIDE the engine.
             level = venv.block(gate,
                                state['voice_attack_ms'] / 1000.0,
                                state['voice_decay_ms'] / 1000.0,
                                float(state['voice_sustain']),
                                state['voice_release_ms'] / 1000.0)
             gain = MASTER_GAIN * state['vol'] * level
-            # Pool is fed PITCH-NORMALIZED reference voices; the live carrier is a
-            # scalar transpose applied at render (phase-continuous, no retrigger).
-            # The oscillator is FREE-RUNNING: voices flow regardless of gate (note-off
-            # is the VCA release above, not a pool empty) -> no per-mode retrigger on
-            # note changes, no spurious note-driven tails.
+            # The engine is analysed at a FIXED anchor and the live carrier is a
+            # scalar transpose at render: phase accumulates, only the increment
+            # moves, so a note is phase-continuous and retriggers nothing.
             transpose = _transpose(note)
-            voices_in = spec['voices'] if spec is not None else []
-            pool.update(voices_in, phase, amp_cur, pan_cur, release_chunks,
-                        attack_chunks, decay_chunks, sustain,
-                        amp_slew=state['gen_amp_slew'])
-            buf, peak, n_clip = render_chunk_laplacian(phase, amp_cur, pan_cur,
-                                                       pool.amp_tgt, pool.pan_tgt,
-                                                       pool.freq_slots, 2,
-                                                       gain_prev, gain, transpose)
-            gain_prev = gain
+            _t0 = time.perf_counter()
+            buf, peak, n_clip = _render_block(eng, spec, gain, cum, transpose)
+            _dt = (time.perf_counter() - _t0) * 1000.0
+            budget['ms'] += (_dt - budget['ms']) * BUDGET_SMOOTH
+            budget['max'] = max(budget['max'], _dt)
             host.put(buf)
             meter['peak'] = max(peak, meter['peak'] * METER_DECAY)
             meter['clip'] = n_clip > 0
@@ -866,9 +962,8 @@ def main(autoplay_midi=None):
                 _start_midifile(path)
 
     _threads = []
-    if audio_ok:
-        _t = threading.Thread(target=_render_loop, daemon=True, name='render')
-        _t.start(); _threads.append(_t)
+    _t = threading.Thread(target=_render_loop, daemon=True, name='render')
+    _t.start(); _threads.append(_t)
     # CLI autoplay: `python gol_synth.py play <file.mid>` loads + starts at boot.
     if autoplay_midi:
         _start_midifile(autoplay_midi)
@@ -956,7 +1051,9 @@ def main(autoplay_midi=None):
                     rc = cell_at(*e.pos)
                     if rc is not None and e.button in (1, 3):
                         paint = 1 if e.button == 1 else 0
-                        grid[rc] = paint
+                        if grid[rc] != paint:
+                            grid[rc] = paint
+                            _touched()
                     elif e.pos[1] >= piano_top:
                         m = hit_piano(e.pos)
                         if m is not None:
@@ -1010,6 +1107,7 @@ def main(autoplay_midi=None):
                         r0, c0 = drag['snap']
                         for dr, dc in drag['cells']:
                             grid[(r0 + dr) % GRID_H, (c0 + dc) % GRID_W] = 1
+                        _touched()
                     drag.update(active=False, snap=None, cells=[], name='')
                 paint = None
                 dragging_vol = False
@@ -1021,8 +1119,9 @@ def main(autoplay_midi=None):
                     drag['snap'] = cell_at(*e.pos)
                 elif paint is not None:
                     rc = cell_at(*e.pos)
-                    if rc is not None:
+                    if rc is not None and grid[rc] != paint:
                         grid[rc] = paint
+                        _touched()
                 elif dragging_vol:
                     set_vol(e.pos[0])
                 elif dragging_bpm:
@@ -1056,6 +1155,7 @@ def main(autoplay_midi=None):
                 grid = step(grid)
                 exc_field = events_field(prev_grid, grid)
                 state['gen'] += 1
+                _touched()
                 state['next_step_time'] += interval
                 n_steps += 1
                 if rec is not None:
@@ -1085,13 +1185,34 @@ def main(autoplay_midi=None):
 
         _ep = state['engine_params'][state['engine']]
         base_f0 = REFERENCE_F0            # analyse the field as a pitch-normalized oscillator
-        labels, voices, color = analyse(grid, base_f0, state['engine'], _ep,
-                                        exc=exc_field)
+        # The VISUALS (the field's colouring and the spectrum strip) are the
+        # Laplace analysis of the figures -- the analysis every hosted engine is
+        # built on.  The SOUND no longer comes from here: the render thread's
+        # engine instance makes it from the snapshot published below.
+        _vis_engine = state['engine'] if state['engine'] in ENGINE_BY_ID else 'laplacian'
+        _vis_params = (_ep if _vis_engine != 'laplacian'
+                       else {k: _ep[k] for k in engines.SPECTRUM_KEYS if k in _ep})
+        # ... and only when something it depends on actually changed.  Before the
+        # prototype hosted an engine this ran on EVERY frame, 60 times a second,
+        # even on a field standing still; now the render thread analyses for the
+        # sound as well, and paying for it twice is what starves the device.
+        _vis_key = (_serial['n'], _vis_engine, tuple(sorted(_vis_params.items())))
+        if _vis['key'] != _vis_key:
+            _vis['key'] = _vis_key
+            _vis['out'] = analyse(grid, base_f0, _vis_engine, _vis_params, exc=exc_field)
+        labels, voices, color = _vis['out']
         # Publish an immutable render spec for the render thread (atomic ref swap).
         # Voices are pitch-normalized (analysed at REFERENCE_F0); the render thread
         # applies the live carrier as a transpose and the live gate, so note timing
         # follows the device, not this frame.
-        render_spec['cur'] = {'voices': voices, 'base_f0': base_f0}
+        # Everything the render thread needs, in ONE object swapped atomically:
+        # the field and its excitation, the engine and its knobs, and the serial
+        # that says whether the field is new.  The render thread never reaches
+        # into the UI thread's own variables.
+        render_spec['cur'] = {'voices': voices, 'base_f0': base_f0,
+                              'grid': grid.copy(), 'exc': exc_field,
+                              'serial': _serial['n'], 'engine': state['engine'],
+                              'params': dict(_ep)}
         _ur_now = host.underruns
         ur_delta = _ur_now - _ur['prev']
         _ur['prev'] = _ur_now
@@ -1150,11 +1271,19 @@ def main(autoplay_midi=None):
         rt = SimpleNamespace(
             grid=grid, color=color, labels=labels, voices=_disp_voices, drag=drag,
             ghost=_ghost, white_keys=white_keys, black_keys=black_keys,
-            sb_scroll=_sb_scroll, meter=meter, audio_ok=audio_ok, midi_in=midi_in,
+            sb_scroll=_sb_scroll, meter=meter,
+            # "audio disabled" is a COMPLAINT, and there is nothing to complain
+            # about until the device has actually been tried (it is opened after
+            # this first frame -- see _open_device)
+            audio_ok=(audio_ok or not _device['opened']), midi_in=midi_in,
             midi_dropdown_open=_midi_dropdown_open, midi_dd_items=_midi_dd_items,
             midi_dd_rects=_midi_dd_rects, midifile=midifile)
         draw_frame(screen, (font, small), state, lay, rt)
         pygame.display.flip()
+
+        if not _device['opened']:
+            _device['opened'] = True
+            audio_ok = _open_device()
 
         if _dumpframe is not None:
             pygame.image.save(screen, _dumpframe)
@@ -1173,6 +1302,8 @@ def main(autoplay_midi=None):
     midi_in.close()
     host.stop()
 
+    print(f"[budget] {budget['ms']:.2f} ms per block (worst {budget['max']:.2f}) "
+          f"of {CHUNK_S * 1000.0:.2f} ms; underruns {host.underruns}")
     if rec is not None:
         _dump_session(rec)
 

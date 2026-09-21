@@ -315,10 +315,142 @@ class VoiceEnvelopeIsOneLaw(unittest.TestCase):
                                         VOICE_RELEASE_MS_DEFAULT / 1000.0), 1.0)
 
 
+
+# -- B1: the prototype's host path IS the direct path --------------------------------
+class HostPathEqualsDirectPath(unittest.TestCase):
+    """The gate the prototype never had.  golden_master renders through the
+    functions directly, not through the path the prototype actually runs; now
+    that the prototype hosts a SoundEngine, the two must be the same sound.
+    Together they close the chain: host == direct path == the blessed reference."""
+
+    RATE = 4.0
+    GAINS = [0.028, 0.028, 0.031, 0.024]
+    NOTES = [48, 48, 55, 55, 43]
+
+    def field(self):
+        g = np.zeros((30, 52), np.uint8)       # the prototype's own field size
+        g[5, 5:8] = 1
+        g[10:14, 10:14] = 1
+        g[20, 20:23] = 1
+        g[21, 19] = 1
+        return g
+
+    def programme(self):
+        """(step the automaton, gain, transpose) per block -- gains and notes move,
+        so the gain glide and the transpose are exercised, not merely held."""
+        from casynth_engine import midi_to_freq
+        anchor = float(midi_to_freq(48))
+        return [dict(step=bool(i and i % 7 == 0),
+                     gain=self.GAINS[i % len(self.GAINS)],
+                     transpose=float(midi_to_freq(self.NOTES[(i // 5) % len(self.NOTES)])) / anchor)
+                for i in range(48)]
+
+    def direct(self, params, env):
+        """analyse -> SlotPool.update -> render_chunk_laplacian, as gol_synth ran
+        it before it hosted an engine."""
+        from casynth_engine import (analyse, SlotPool, render_chunk_laplacian,
+                                    events_field, step, midi_to_freq)
+        from casynth_config import TOTAL_SLOTS
+        g, exc = self.field(), None
+        pool = SlotPool()
+        sz = TOTAL_SLOTS + 1
+        phase, amp_cur = np.zeros(sz), np.zeros(sz)
+        pan_cur = np.full(sz, 0.5)
+        interval = 1.0 / self.RATE
+        rel = max(1, round(env['release'] * interval / CHUNK_S))
+        att = max(1, round(env['attack'] * interval / CHUNK_S))
+        dec = max(1, round(env['decay'] * interval / CHUNK_S))
+        anchor = float(midi_to_freq(48))
+        _l, voices, _c = analyse(g, anchor, 'laplacian', dict(params), exc=exc)
+        gain_prev = self.GAINS[0]
+        out = []
+        for cmd in self.programme():
+            if cmd['step']:
+                new = step(g)
+                exc = events_field(g, new)
+                g = new
+                _l, voices, _c = analyse(g, anchor, 'laplacian', dict(params), exc=exc)
+            pool.update(voices, phase, amp_cur, pan_cur, rel, att, dec,
+                        float(env['sustain']), amp_slew=env['amp_slew'])
+            buf, _pk, _nc = render_chunk_laplacian(phase, amp_cur, pan_cur, pool.amp_tgt,
+                                                   pool.pan_tgt, pool.freq_slots, 2,
+                                                   gain_prev, cmd['gain'], cmd['transpose'])
+            gain_prev = cmd['gain']
+            out.append(buf)
+        return np.concatenate(out)
+
+    def hosted(self, params, env):
+        """The same programme through the engine instance the prototype holds."""
+        from casynth_engine import events_field, step, midi_to_freq
+        from casynth_engines import EngineContext
+        from casynth_engines.engine_api import PAN_FIELD_MODE
+        ctx = EngineContext(SR, BLOCK, 2, float(midi_to_freq(48)), 1.0, self.RATE,
+                            pan=PAN_FIELD_MODE)
+        e = registry.create('laplacian', ctx, dict(params))
+        e.set_rate(self.RATE)
+        e.set_envelope(env['attack'], env['decay'], env['sustain'], env['release'],
+                       env['amp_slew'])
+        g, exc = self.field(), None
+        e.init(g, exc, self.GAINS[0])
+        out = []
+        for i, cmd in enumerate(self.programme()):
+            if cmd['step']:
+                new = step(g)
+                exc = events_field(g, new)
+                g = new
+                e.update_field(g, exc)
+            buf, _pk, _nc = e.render(cmd['gain'], i * BLOCK, transpose=cmd['transpose'])
+            out.append(buf)
+        return np.concatenate(out)
+
+    def test_the_hosted_engine_equals_the_direct_path(self):
+        env = dict(attack=GEN_ATTACK_DEFAULT, decay=GEN_DECAY_DEFAULT,
+                   sustain=GEN_SUSTAIN_DEFAULT, release=GEN_RELEASE_DEFAULT,
+                   amp_slew=False)
+        params = dict(registry.defaults('laplacian'))
+        np.testing.assert_array_equal(self.hosted(params, env), self.direct(params, env))
+
+    def test_it_still_equals_it_with_live_envelope_knobs_and_a_wider_spectrum(self):
+        env = dict(attack=0.25, decay=0.5, sustain=0.4, release=0.75, amp_slew=True)
+        params = dict(registry.defaults('laplacian'), n=16, spread=0.4, alpha=0.6,
+                      shape=0.5, harm=0.3)
+        np.testing.assert_array_equal(self.hosted(params, env), self.direct(params, env))
+
+    def test_the_prototype_offers_the_engines_that_can_play_a_note(self):
+        from casynth_engines import EngineContext
+        ctx = EngineContext(SR, BLOCK, 2, 110.0, 1.0, 4.0)
+        for eid in registry.ids():
+            spec = registry.get(eid)
+            inst = registry.create(eid, ctx, registry.defaults(eid))
+            self.assertEqual(spec.plays_notes, supports_transpose(inst),
+                             f"{eid}: the registry hint and the engine disagree")
+        playable = [e for e in registry.ids() if registry.get(e).plays_notes]
+        for want in ('laplacian', 'ca_object_resonators', 'laplace_carriers', 'laplace_fm'):
+            self.assertIn(want, playable)
+
+    def test_a_transposed_engine_really_moves_its_pitch(self):
+        from casynth_engines import EngineContext
+        ctx = EngineContext(SR, BLOCK, 2, 110.0, 1.0, 4.0)
+        g = np.zeros((32, 32), np.uint8)
+        g[10:14, 10:14] = 1                      # one still figure: a stable spectrum
+        for eid in ('laplacian', 'ca_object_resonators', 'laplace_carriers', 'laplace_fm'):
+            peaks = []
+            for tr in (1.0, 2.0):
+                e = registry.create(eid, ctx, registry.defaults(eid))
+                e.init(g, None, 0.04)
+                pcm = np.concatenate([e.render(0.04, i * BLOCK, transpose=tr)[0]
+                                      for i in range(60)])
+                x = pcm[:, 0].astype(float)
+                mag = np.abs(np.fft.rfft(x * np.hanning(len(x))))
+                f = np.fft.rfftfreq(len(x), 1.0 / SR)
+                peaks.append(float(f[int(np.argmax(mag))]))
+            self.assertAlmostEqual(peaks[1] / peaks[0], 2.0, delta=0.05, msg=eid)
+
 def main():
     loader = unittest.TestLoader()
     suite = unittest.TestSuite(loader.loadTestsFromTestCase(c) for c in
-                               (SharedPieces, SceneArticulation, VoiceEnvelopeIsOneLaw))
+                               (SharedPieces, SceneArticulation, VoiceEnvelopeIsOneLaw,
+                                HostPathEqualsDirectPath))
     res = unittest.TextTestRunner(verbosity=2).run(suite)
     n = res.testsRun
     print(f"\n{n - len(res.failures) - len(res.errors)}/{n} passed")

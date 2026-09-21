@@ -450,7 +450,7 @@ class _FMSources:
             self.m_rel_cnt[free] = 0
 
     # -- one block of audio --------------------------------------------------------
-    def render(self, n_os, ramp_os):
+    def render(self, n_os, ramp_os, transpose=1.0):
         """Mono FM sum at OVERSAMPLE*sr: sum over the sounding sources of
         A(t)*sin(theta_c + sum_j beta_j(t)*sin(theta_j)), A and every beta glided
         across the block on the pool's own ramp.
@@ -465,7 +465,7 @@ class _FMSources:
         version produced (the pinned records replay unchanged)."""
         act = np.nonzero((self.amp_cur >= AMP_EPS) | (self.amp_tgt >= AMP_EPS))[0]
         if not len(act):
-            self.advance(n_os)
+            self.advance(n_os, transpose)
             return np.zeros(n_os)
         idx = np.arange(n_os, dtype=float)
         fm = self.f_mod[act]
@@ -476,12 +476,15 @@ class _FMSources:
         inc = th_m = bb0 = bdb = None
         if live.any():
             rows, cols = np.nonzero(live)                     # rows ascending
-            inc = (TWO_PI / self.sr_os) * fm[rows, cols]
+            # the note is a scalar on every frequency, carrier and modulators
+            # alike, so the whole FM structure moves with the pitch and the ratio
+            # f_mod / f_c -- the timbre -- is untouched (engine_api)
+            inc = (TWO_PI / self.sr_os) * fm[rows, cols] * transpose
             th_m = self.th_mod[act][rows, cols]
             bb0 = b0[rows, cols]
             bdb = db[rows, cols]
             uniq, starts = np.unique(rows, return_index=True)
-        inc_c = TWO_PI * self.f0 / self.sr_os
+        inc_c = TWO_PI * self.f0 * transpose / self.sr_os
         th_c = self.th_c[act]
         a0 = self.amp_cur[act]
         da = self.amp_tgt[act] - a0
@@ -498,7 +501,7 @@ class _FMSources:
                 acc[uniq] = np.add.reduceat(s, starts, axis=0)
             y[sl] = ((a0[:, None] + da[:, None] * ramp_c[None, :])
                      * np.sin(th_c[:, None] + inc_c * idx_c[None, :] + acc)).sum(axis=0)
-        self.advance(n_os)
+        self.advance(n_os, transpose)
         return y
 
     @staticmethod
@@ -509,14 +512,16 @@ class _FMSources:
             return n_os
         return int(min(n_os, max(CHUNK_MIN, CHUNK_CELLS // n_rows)))
 
-    def advance(self, n_os):
+    def advance(self, n_os, transpose=1.0):
         """Commit the block: every phase moves on (a free-running oscillator per
-        carrier and per modulator), the glided values reach their targets."""
-        self.th_c[:] = (self.th_c + (TWO_PI * self.f0 / self.sr_os) * n_os) % TWO_PI
+        carrier and per modulator), the glided values reach their targets.  The
+        phases KEEP accumulating across a note change -- only the increment moves,
+        so the pitch follows without a click and nothing retriggers."""
+        self.th_c[:] = (self.th_c + (TWO_PI * self.f0 * transpose / self.sr_os) * n_os) % TWO_PI
         m = self.f_mod > 0.0
         if m.any():
             self.th_mod[m] = (self.th_mod[m]
-                              + (TWO_PI / self.sr_os) * self.f_mod[m] * n_os) % TWO_PI
+                              + (TWO_PI / self.sr_os) * self.f_mod[m] * transpose * n_os) % TWO_PI
         self.amp_cur[:] = self.amp_tgt
         self.beta_cur[:] = self.beta_tgt
 
@@ -593,8 +598,9 @@ class LaplaceFMEngine(SoundEngine):
         if self._grid is not None:
             self._pending_analysis = True
 
+    SUPPORTS_TRANSPOSE = True      # the note is a scalar on every frequency
+
     def render(self, gain, t_samples, *, gain_prev=None, transpose=1.0):
-        self._check_transpose(transpose)
         if gain_prev is not None:
             self.gain_prev = float(gain_prev)      # the host overrides the glide start
         n = self.ctx.block
@@ -602,7 +608,7 @@ class LaplaceFMEngine(SoundEngine):
             self._analyse()
         self.src.update(self._mods, self._index(), self._release_chunks,
                         self._attack_chunks, self._decay_chunks, self._sustain)
-        y_os = self.src.render(n * self.oversample, self._ramp_os)
+        y_os = self.src.render(n * self.oversample, self._ramp_os, transpose)
         y, self.fir_hist = decimate(y_os, self.kernel, self.oversample, self.fir_hist)
         y, self.dc_x, self.dc_y = dc_block(y, self.dc_r, self.dc_x, self.dc_y)
         self.mono = y            # read-only diagnostic: the float FM sum of this block,
@@ -806,4 +812,4 @@ def overlay(params, rows, cols):
 
 register(EngineSpec(ENGINE_ID, LABEL, PARAMS,
                     lambda ctx, params: LaplaceFMEngine(ctx, params),
-                    inactive=inactive, overlay=overlay))
+                    inactive=inactive, overlay=overlay, plays_notes=True))

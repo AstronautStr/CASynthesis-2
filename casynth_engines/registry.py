@@ -41,15 +41,21 @@ class EngineSpec:
                  stay the validation bounds (lo <= min < max <= hi).  The bench
                  keeps the edited range per side (runner set_range, scene
                  `param_ranges`); the registry entry itself is never changed.
+      plays_notes : the engine renders the per-block `transpose` of the contract,
+                 so a host with a keyboard may offer it (2026-09-21).  It must
+                 agree with the engine class's SUPPORTS_TRANSPOSE -- a gate checks
+                 that -- and it lives here so a host can ask WITHOUT building an
+                 instance of every engine first.
       validate : validate(params) -> None, raising ValueError for a COMBINATION
                  of values the engine does not define (Objects Decay law,
                  2026-09-18); every single value has already passed its range.
                  The scene loader, the runner (before a command changes anything)
                  and the snapshot call it through validate_params()."""
-    __slots__ = ('id', 'label', 'params', 'factory', 'choices', 'inactive', 'overlay', 'ranges', 'validate')
+    __slots__ = ('id', 'label', 'params', 'factory', 'choices', 'inactive', 'overlay',
+                 'ranges', 'validate', 'plays_notes')
 
     def __init__(self, id, label, params, factory, choices=None, inactive=None, overlay=None,
-                 ranges=None, validate=None):
+                 ranges=None, validate=None, plays_notes=False):
         self.id = id
         self.label = label
         self.params = tuple(tuple(p) for p in params)
@@ -59,6 +65,7 @@ class EngineSpec:
         self.overlay = overlay
         self.ranges = {k: (float(v[0]), float(v[1])) for k, v in (ranges or {}).items()}
         self.validate = validate
+        self.plays_notes = bool(plays_notes)
 
     def defaults(self):
         return {p[0]: p[5] for p in self.params}
@@ -247,7 +254,8 @@ def _legacy_factory(engine_id):
 
 
 for _e in _CORE_ENGINES:
-    register(EngineSpec(_e['id'], _e['label'], _e['params'], _legacy_factory(_e['id'])))
+    register(EngineSpec(_e['id'], _e['label'], _e['params'], _legacy_factory(_e['id']),
+                        plays_notes=True))
 
 # The engine modules after the built-in five, in this ONE place -- the import
 # list as it stood until 2026-09-21, now a map id -> module: the module is

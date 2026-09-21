@@ -736,6 +736,7 @@ class ObjectResonatorsEngine(SoundEngine):
     # -- model state ----------------------------------------------------------------
     def _zero(self):
         S, M = N_SLOTS, N_BANK
+        self._transpose = 1.0          # the sounding pitch / ctx.f0 (the note)
         self.role = np.zeros(S, np.int64)
         self.slot_id = np.zeros(S, np.int64)
         self.smode = np.zeros(S, np.int64)
@@ -1067,8 +1068,8 @@ class ObjectResonatorsEngine(SoundEngine):
         self.zsm[s, n:] = 0.0
         self.zum[s, n:] = 0.0
         self.sqrtlam[s, :n] = sq
-        self.ffreq[s, :n] = freqs
-        c, sn = trig_of(freqs, self.sr)
+        self.ffreq[s, :n] = freqs              # the ANALYSED frequency of the mode
+        c, sn = trig_of(freqs * self._transpose, self.sr)   # what it sounds at
         self.cth[s, :n] = c
         self.sth[s, :n] = sn
         if n > n_old:
@@ -1507,8 +1508,25 @@ class ObjectResonatorsEngine(SoundEngine):
                 self.gg[R_INC] = 0.0
                 self.ints[I_G_LEFT] = 0
 
+    SUPPORTS_TRANSPOSE = True      # the note is a scalar on every mode
+
+    def _retune(self, transpose):
+        """A new note: every mode's resonator is re-derived at the pitch that now
+        sounds.  The complex state z of each mode keeps ringing untouched, so the
+        pitch moves without a click and nothing restarts -- exactly what the
+        engine already does when the field retunes a figure."""
+        self._transpose = float(transpose)
+        for s in range(N_SLOTS):
+            n = int(self.nlive[s])
+            if n <= 0:
+                continue
+            c, sn = trig_of(self.ffreq[s, :n] * self._transpose, self.sr)
+            self.cth[s, :n] = c
+            self.sth[s, :n] = sn
+
     def render(self, gain, t_samples, *, gain_prev=None, transpose=1.0):
-        self._check_transpose(transpose)
+        if transpose != self._transpose:
+            self._retune(transpose)
         if gain_prev is not None:
             g0 = float(gain_prev)                  # the host overrides the glide start
             self.gg[R_CUR] = self.gg[R_TGT] = g0
@@ -1978,4 +1996,5 @@ def overlay(params, rows, cols):
 
 register(EngineSpec(ENGINE_ID, LABEL, PARAMS, lambda ctx, params: ObjectResonatorsEngine(ctx, params),
                     choices=CHOICES, inactive=inactive, overlay=overlay,
-                    ranges={'radius_mul': RADIUS_RANGE}, validate=validate_params))
+                    ranges={'radius_mul': RADIUS_RANGE}, validate=validate_params,
+                    plays_notes=True))

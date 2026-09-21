@@ -75,6 +75,12 @@ CHUNK_S = 0.008          # audio render sub-chunk length (seconds) = MIDI timing
 # by WALL TIME so it stays constant if CHUNK_S changes.
 AUDIO_LOOKAHEAD_MS = 40
 AUDIO_LOOKAHEAD_CHUNKS = max(3, round(AUDIO_LOOKAHEAD_MS / 1000.0 / CHUNK_S))
+# Switching the sound engine under a held note: both instances render while the
+# old one fades out, so the switch has no step in it (2026-09-21, the seam).
+ENGINE_XFADE_MS = 30
+# Smoothing of the per-block cost the toolbar shows (a one-pole on the render
+# thread): slow enough to read, fast enough to see a heavy engine arrive.
+BUDGET_SMOOTH = 0.05
 # Headroom: up to MAX_VOICES objects, each up to MAX_MODES_PER_OBJ partials, plus
 # front+back overlap during cross-fades -> the summed signal can peak well above
 # 1.0 and hard-clip (audible distortion).  Measured raw peak on a dense field is
@@ -291,7 +297,7 @@ __all__ = [
     'GRID_W', 'GRID_H', 'CELL', 'TOOLBAR_H', 'PIANO_H', 'FPS',
     'SR', 'RANDOM_DENSITY',
     'BPM_DEFAULT', 'BPM_MIN', 'BPM_MAX', 'NOTE_DIVS', 'DIV_DEFAULT', 'MAX_VOICES',
-    'CHUNK_S', 'AUDIO_LOOKAHEAD_MS', 'AUDIO_LOOKAHEAD_CHUNKS',
+    'CHUNK_S', 'AUDIO_LOOKAHEAD_MS', 'AUDIO_LOOKAHEAD_CHUNKS', 'ENGINE_XFADE_MS', 'BUDGET_SMOOTH',
     'MASTER_GAIN', 'VOL_DEFAULT', 'VOL_W', 'METER_DECAY',
     'MAX_MODES_PER_OBJ', 'PATCH_SIZE',
     'SPREAD_DEFAULT', 'ALPHA_DEFAULT', 'ALPHA_MIN', 'ALPHA_MAX',

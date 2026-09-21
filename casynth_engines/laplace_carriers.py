@@ -280,9 +280,13 @@ class _BankVoices:
                          release_chunks, attack_chunks, decay_chunks, sustain,
                          amp_slew=False)
 
-    def render(self, waveform, wave_prev, n, sr=SR):
+    def render(self, waveform, wave_prev, n, sr=SR, transpose=1.0):
         """(L, R) of this block; the slot order, ramps and phase bookkeeping are
-        the baseline's (render_chunk_laplacian), only `wave` differs."""
+        the baseline's (render_chunk_laplacian), only `wave` differs.
+
+        `transpose` multiplies every line's frequency: the band limit and the
+        wavetable are then built for the frequency that actually sounds, and the
+        phase keeps accumulating, so a note change is continuous."""
         L = np.zeros(n)
         R = np.zeros(n)
         idx = np.arange(n, dtype=float)
@@ -290,7 +294,7 @@ class _BankVoices:
         for k in range(1, TOTAL_SLOTS + 1):
             if self.amp_cur[k] < AMP_EPS and pool.amp_tgt[k] < AMP_EPS:
                 continue
-            freq = pool.freq_slots[k]
+            freq = pool.freq_slots[k] * transpose
             if freq <= 0.0 or freq >= GUARD:
                 self.amp_cur[k] = 0.0
                 continue
@@ -317,14 +321,14 @@ class _BankVoices:
             self.pan_cur[k] = pool.pan_tgt[k]
         return L, R
 
-    def advance_silent(self, n, sr=SR):
+    def advance_silent(self, n, sr=SR, transpose=1.0):
         """Keep the state moving while this law is not heard (method switched away):
         same bookkeeping as render(), no audio."""
         pool = self.pool
         for k in range(1, TOTAL_SLOTS + 1):
             if self.amp_cur[k] < AMP_EPS and pool.amp_tgt[k] < AMP_EPS:
                 continue
-            freq = pool.freq_slots[k]
+            freq = pool.freq_slots[k] * transpose
             if freq <= 0.0 or freq >= GUARD:
                 self.amp_cur[k] = 0.0
                 continue
@@ -347,6 +351,7 @@ class _FilterVoices:
         self.sr = float(sr)
         self.block = int(block)
         self.K = carrier_harmonics(f0, sr)
+        self.f0_base = float(f0)              # the anchor; self.f0 is what sounds
         n = MAX_VOICES + N_FILTER_TAILS
         self.th = np.zeros(n)                 # carrier phase of every source
         self.amp_cur = np.zeros(n)
@@ -360,6 +365,25 @@ class _FilterVoices:
         self.rel_len = np.ones(n, dtype=int)
         self.rel_amp0 = np.zeros(n)
         self.steals = 0
+
+    def retune(self, f0):
+        """A new sounding carrier (the note).  Phases, amplitudes, envelopes and
+        tails are KEPT -- only the harmonic grid is re-derived, because how many
+        harmonics fit under the band limit depends on the pitch.  The spectra
+        themselves are handed back by the engine's next analysis."""
+        f0 = float(f0)
+        if f0 == self.f0:
+            return
+        K = carrier_harmonics(f0, self.sr)
+        if K != self.K:
+            for name in ('spec_cur', 'spec_tgt'):
+                old = getattr(self, name)
+                new = np.zeros((old.shape[0], K))
+                keep = min(K, self.K)
+                new[:, :keep] = old[:, :keep]
+                setattr(self, name, new)
+            self.K = K
+        self.f0 = f0
 
     # -- envelope (the SlotPool rule) -------------------------------------------
     def _advance_env(self, v, attack_chunks, decay_chunks, sustain):
@@ -514,10 +538,13 @@ class LaplaceCarriersEngine(SoundEngine):
         if self._grid is not None:
             self._analyse()
 
+    SUPPORTS_TRANSPOSE = True      # the note is a scalar on every frequency
+
     def render(self, gain, t_samples, *, gain_prev=None, transpose=1.0):
-        self._check_transpose(transpose)
         if gain_prev is not None:
             self.gain_prev = float(gain_prev)      # the host overrides the glide start
+        if transpose != self._transpose:
+            self._retune(transpose)
         n = self.ctx.block
         self.bank.update(self.voices, self._release_chunks, self._attack_chunks,
                          self._decay_chunks, self._sustain)
@@ -533,19 +560,28 @@ class LaplaceCarriersEngine(SoundEngine):
             self._mix = max(target, self._mix - step)
         mix = self._mix
         if mix_prev >= 1.0 and mix >= 1.0:
-            L, R = self.bank.render(wf, prev, n, self.ctx.sr)
+            L, R = self.bank.render(wf, prev, n, self.ctx.sr, self._transpose)
             self.filt.advance_silent(n, self.ctx.sr)
         elif mix_prev <= 0.0 and mix <= 0.0:
             L, R = self.filt.render(n, self.ctx.sr)
-            self.bank.advance_silent(n, self.ctx.sr)
+            self.bank.advance_silent(n, self.ctx.sr, self._transpose)
         else:
-            Lb, Rb = self.bank.render(wf, prev, n, self.ctx.sr)
+            Lb, Rb = self.bank.render(wf, prev, n, self.ctx.sr, self._transpose)
             Lf, Rf = self.filt.render(n, self.ctx.sr)
             w = mix_prev + (mix - mix_prev) * _RAMP
             L = Lf * (1.0 - w) + Lb * w
             R = Rf * (1.0 - w) + Rb * w
         self._wave_prev = wf
         return self._finish(L, R, gain)
+
+    def _retune(self, transpose):
+        """A new note.  Both laws keep every phase, amplitude and envelope; the
+        Filter's harmonic grid and the analysed spectra are re-derived at the
+        pitch that now sounds."""
+        self._transpose = float(transpose)
+        self.filt.retune(self.ctx.f0 * self._transpose)
+        if self._grid is not None:
+            self._analyse()
 
     def reset(self, gain=0.0):
         self.init(self._grid, self._exc, gain)
@@ -641,6 +677,7 @@ class LaplaceCarriersEngine(SoundEngine):
     # -- internals ---------------------------------------------------------------
     def _clear_audio(self, gain):
         self.bank = _BankVoices()
+        self._transpose = 1.0
         self.filt = _FilterVoices(self.ctx.f0, self.ctx.block, self.ctx.sr)
         self.gain_prev = gain
         self._mix = 1.0 if self._method() == METHOD_BANK else 0.0
@@ -658,10 +695,15 @@ class LaplaceCarriersEngine(SoundEngine):
         self.voices = voices
         sigma = float(self._p('filter_width_oct'))
         depth = float(self._p('filter_depth_db'))
-        g = carrier_coeffs(self._waveform(), self.ctx.f0, self.ctx.sr)
+        # the whole spectrum moves with the note: the carrier AND the modes it
+        # filters, so the mask a figure casts on its carrier is the same shape at
+        # any pitch -- only how many harmonics fit under the band limit changes
+        t = self._transpose
+        f0 = self.ctx.f0 * t
+        g = carrier_coeffs(self._waveform(), f0, self.ctx.sr)
         specs, scales = [None] * MAX_VOICES, [0.0] * MAX_VOICES
         for i, v in enumerate(voices[:MAX_VOICES]):
-            H, A = filter_mask(v['freqs'], v['amps'], self.ctx.f0, sigma, depth, self.ctx.sr)
+            H, A = filter_mask(v['freqs'] * t, v['amps'], f0, sigma, depth, self.ctx.sr)
             if H is None:
                 continue
             specs[i] = g * H
@@ -709,4 +751,5 @@ def overlay(params, rows, cols):
 
 register(EngineSpec(ENGINE_ID, LABEL, PARAMS,
                     lambda ctx, params: LaplaceCarriersEngine(ctx, params),
-                    choices=CHOICES, inactive=inactive, overlay=overlay))
+                    choices=CHOICES, inactive=inactive, overlay=overlay,
+                    plays_notes=True))

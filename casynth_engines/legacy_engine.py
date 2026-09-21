@@ -44,15 +44,44 @@ class LegacySynthEngine(SoundEngine):
     def __init__(self, ctx, params, engine_id):
         super().__init__(ctx, params)
         self.engine_id = engine_id
-        interval = 1.0 / ctx.rate_hz
-        self._release_chunks = _gen_chunks(GEN_RELEASE_DEFAULT, interval)
-        self._attack_chunks = _gen_chunks(GEN_ATTACK_DEFAULT, interval)
-        self._decay_chunks = _gen_chunks(GEN_DECAY_DEFAULT, interval)
+        # GEN A/D/R are FRACTIONS of one automaton tick, so the per-mode texture
+        # scales with the tempo.  Both the fractions and the tempo are LIVE knobs
+        # in the prototype: set_envelope / set_rate hand them over on a block
+        # boundary (2026-09-21).  The defaults reproduce the bench exactly.
+        self._rate_hz = float(ctx.rate_hz)
+        self._attack = float(GEN_ATTACK_DEFAULT)
+        self._decay = float(GEN_DECAY_DEFAULT)
+        self._release = float(GEN_RELEASE_DEFAULT)
         self._sustain = float(GEN_SUSTAIN_DEFAULT)
+        self._amp_slew = False
+        self._recount()
         self.voices = []
         self._grid = None
         self._exc = None
         self._clear_audio(gain=0.0)
+
+    def _recount(self):
+        """Chunk counts of the GEN envelope at the current fractions and tempo --
+        the same arithmetic the prototype ran every block before it hosted this
+        engine (gol_synth._render_loop)."""
+        interval = 1.0 / self._rate_hz
+        self._release_chunks = _gen_chunks(self._release, interval)
+        self._attack_chunks = _gen_chunks(self._attack, interval)
+        self._decay_chunks = _gen_chunks(self._decay, interval)
+
+    def set_envelope(self, attack, decay, sustain, release, amp_slew):
+        self._attack = float(attack)
+        self._decay = float(decay)
+        self._sustain = float(sustain)
+        self._release = float(release)
+        self._amp_slew = bool(amp_slew)
+        self._recount()
+
+    def set_rate(self, rate_hz):
+        rate_hz = float(rate_hz)
+        if rate_hz > 0.0 and rate_hz != self._rate_hz:
+            self._rate_hz = rate_hz
+            self._recount()
 
     # -- SoundEngine ------------------------------------------------------------
     def init(self, grid, exc, gain=0.0):
@@ -73,7 +102,7 @@ class LegacySynthEngine(SoundEngine):
             self.gain_prev = float(gain_prev)      # the host overrides the glide start
         self.pool.update(self.voices, self.phase, self.amp_cur, self.pan_cur,
                          self._release_chunks, self._attack_chunks,
-                         self._decay_chunks, self._sustain, amp_slew=False)
+                         self._decay_chunks, self._sustain, amp_slew=self._amp_slew)
         buf, peak, n_clip = render_chunk_laplacian(
             self.phase, self.amp_cur, self.pan_cur, self.pool.amp_tgt,
             self.pool.pan_tgt, self.pool.freq_slots, self.ctx.channels,
