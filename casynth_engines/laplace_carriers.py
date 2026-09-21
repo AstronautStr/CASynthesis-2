@@ -42,7 +42,19 @@ Implementation notes
     ONE block on the pool's own _RAMP, like a baseline amplitude change; switching
     the METHOD crossfades over the voice release time (both laws are rendered while
     it runs and a new switch turns the crossfade around instead of cutting it).
+
+Speed of the bank (2026-09-21).  On the prototype's own field (52x30 Random) Saw
+cost 24 ms of the 7.98 ms block -- 871 underruns in twelve seconds.  Two things
+paid for it: a table cache that emptied itself WHOLE when it filled (so a few
+hundred sounding slots rebuilt ~69 irffts a block) and a Python loop calling
+numpy once per slot on 352 samples.  The cache is now least-recently-used and
+lives as rows of one array, and the render walks SLABS of slots with the block's
+samples split across casynth_engines.render_pool.  `render_reference` is the old
+loop, kept as what the slab path must equal bit for bit (gate
+test_laplace_carriers.SlabRender) and used for the one block where the waveform
+changes (it renders both waves and crosses them).
 """
+import collections
 import math
 
 import numpy as np
@@ -52,6 +64,7 @@ from casynth_config import (SR, TWO_PI, _RAMP, TOTAL_SLOTS, N_ACTIVE, MAX_VOICES
 from casynth_core import ENGINE_BY_ID
 from casynth_engine import analyse, SlotPool
 from .engine_api import SoundEngine
+from . import render_pool as rp
 from .legacy_engine import (PAN_CENTER, GenEnvelopeKnobs, _SLOT_ARRAYS, _POOL_ARRAYS)
 from .registry import EngineSpec, register
 
@@ -82,10 +95,31 @@ BAND_FLAT = 0.40                  # * sr
 BAND_ZERO = 0.45                  # * sr
 GUARD = BAND_ZERO * SR            # the pool's anti-alias guard, as in render_chunk_laplacian
 TABLE_N = 8192                    # wavetable length (power of two); error << -60 dB
-TABLE_CACHE_MAX = 256             # tables kept (cleared when full); the sound never depends on a hit
+# Tables kept, evicted LEAST-RECENTLY-USED (2026-09-21).  The sound never depends on
+# a hit -- a miss rebuilds the identical table -- but the SPEED does: a table is an
+# irfft of TABLE_N and one sounding block asks for one per live slot.  The cache used
+# to be emptied whole when it filled, so a field of a few hundred slots threw its own
+# working set away every generation and paid ~69 rebuilds a block (45% of the engine's
+# time, and the bank ran at 24 ms of the 8 ms block on the prototype's own field).
+# 512 tables are 32 MB; far more is worse than a miss, because the rebuilt table is
+# cheap next to the cache misses a pool that size costs (measured).
+TABLE_CACHE_MAX = 512
 MASK_FLOOR = 1e-12                # max P at or below this -> the figure is silent
 AMP_EPS = 1e-4                    # a source below this on both ends of the block is skipped
 N_FILTER_TAILS = MAX_VOICES * 4   # frozen Filter carriers ringing out
+# Slots rendered per pass of the wave bank: enough to leave the Python loop behind,
+# few enough that the pass (slots x samples, and its table gather) stays in cache and
+# well under TABLE_CACHE_MAX so a pass never evicts a table it is about to read.
+SLAB = 96
+# The column ranges of one block run on the shared pool; below this much work
+# (slots x samples) the hand-off costs more than it saves.
+RENDER_THREADS = rp.THREADS
+THREAD_CELLS = 30000
+
+
+def render_pool():
+    """The shared worker pool, or None when this engine is asked for one thread."""
+    return rp.pool(RENDER_THREADS)
 
 
 # ── the waveform law ──────────────────────────────────────────────────────────
@@ -149,26 +183,65 @@ def direct_wave(waveform, f, phase0, n, sr=SR):
     return (c[:, None] * np.sin(h[:, None].astype(float) * th[None, :])).sum(axis=0)
 
 
-_TABLES = {}
+# The cached tables live as ROWS OF ONE ARRAY (2026-09-21), so a block can gather
+# the table of every sounding slot with one fancy index instead of one Python call
+# per slot.  The buffer grows by doubling up to TABLE_CACHE_MAX rows and is
+# allocated on the first table (a host that never plays a wave pays nothing).
+_TAB_BUF = None                         # (rows, TABLE_N) float64
+_TAB_ROW = collections.OrderedDict()    # (waveform, f, sr) -> row, least recent FIRST
+_TAB_ROWS0 = 32                         # rows of the first allocation
 
 
-def wavetable(waveform, f, sr=SR):
-    """One period of the band-limited wave of fundamental f, TABLE_N samples
-    (cached by the EXACT frequency: b(h*f) belongs to this wave, not to an octave)."""
-    key = (int(waveform), float(f), float(sr))
-    tab = _TABLES.get(key)
-    if tab is not None:
-        return tab
+def _build_table(waveform, f, sr):
+    """One period of the band-limited wave of fundamental f, TABLE_N samples."""
     h, c = harmonic_coeffs(waveform, f, sr)
     spec = np.zeros(TABLE_N // 2 + 1, dtype=complex)
     keep = h[h <= TABLE_N // 2 - 1]
     if len(keep):
         spec[keep] = -1j * c[:len(keep)] * (TABLE_N / 2.0)
-    tab = np.fft.irfft(spec, TABLE_N)
-    if len(_TABLES) >= TABLE_CACHE_MAX:
-        _TABLES.clear()                    # bounded memory; identical values on a miss
-    _TABLES[key] = tab
-    return tab
+    return np.fft.irfft(spec, TABLE_N)
+
+
+def table_row(waveform, f, sr=SR):
+    """Row of the table buffer holding this wave's table, building it if it is new
+    and evicting the least recently used row when the cache is full.  Rows handed
+    out for ONE block are safe: a block asks for fewer rows than the cache holds,
+    and every row it asks for is moved to the recent end."""
+    global _TAB_BUF
+    key = (int(waveform), float(f), float(sr))
+    row = _TAB_ROW.get(key)
+    if row is not None:
+        _TAB_ROW.move_to_end(key)
+        return row
+    if len(_TAB_ROW) >= TABLE_CACHE_MAX:
+        _old, row = _TAB_ROW.popitem(last=False)     # LRU: reuse its row
+    else:
+        row = len(_TAB_ROW)
+        if _TAB_BUF is None:
+            _TAB_BUF = np.zeros((_TAB_ROWS0, TABLE_N))
+        elif row >= len(_TAB_BUF):
+            grown = np.zeros((min(TABLE_CACHE_MAX, len(_TAB_BUF) * 2), TABLE_N))
+            grown[:len(_TAB_BUF)] = _TAB_BUF
+            _TAB_BUF = grown
+    _TAB_BUF[row] = _build_table(waveform, f, sr)
+    _TAB_ROW[key] = row
+    return row
+
+
+def table_buffer():
+    """The array those rows index.  Read it AFTER asking for every row of a block:
+    a new table can grow the buffer, which replaces the array (never the values)."""
+    return _TAB_BUF
+
+
+def wavetable(waveform, f, sr=SR):
+    """One period of the band-limited wave of fundamental f, TABLE_N samples
+    (cached by the EXACT frequency: b(h*f) belongs to this wave, not to an octave).
+
+    This is a VIEW of the cache's buffer, good for as long as the caller is inside
+    the block that asked for it; anything that outlives that must copy."""
+    row = table_row(waveform, f, sr)         # may grow the buffer -- read it after
+    return _TAB_BUF[row]
 
 
 def table_wave(tab, phase0, inc, n):
@@ -279,6 +352,103 @@ class _BankVoices:
                          amp_slew=False)
 
     def render(self, waveform, wave_prev, n, sr=SR, transpose=1.0):
+        """(L, R) of this block -- the reference loop below, or the SLAB path when
+        the waveform is not changing this block (the same numbers, see render_slabs).
+
+        The slab path is what a live field needs: with a few hundred sounding slots
+        the per-slot loop costs ~10 ms of the 8 ms block, nearly all of it Python
+        around numpy calls on 352 samples."""
+        if wave_prev == waveform:
+            return self.render_slabs(waveform, n, sr, transpose)
+        return self.render_reference(waveform, wave_prev, n, sr, transpose)
+
+    def render_slabs(self, waveform, n, sr=SR, transpose=1.0):
+        """The reference block, computed for SLAB slots at a time -- and the column
+        ranges of the block on several threads.
+
+        Why it is the same bits: the slots are taken in the same ascending order,
+        every sample of a slot is the same expression, and the running L / R ride
+        along as the FIRST ROW of each slab's sum -- so the accumulation is still
+        L + slot1 + slot2 + ... in that order (numpy sums an axis-0 reduction by
+        walking the rows, which the gate pins).  A worker owns a range of SAMPLES
+        and walks the same slabs in the same order inside it, so threading changes
+        nothing either.  A slab is smaller than the table cache, so gathering its
+        tables can never evict one of its own rows."""
+        pool = self.pool
+        amp_cur, amp_tgt, pan_tgt = self.amp_cur, pool.amp_tgt, pool.pan_tgt
+        L = np.zeros(n)
+        R = np.zeros(n)
+        live = (amp_cur[1:] >= AMP_EPS) | (amp_tgt[1:] >= AMP_EPS)
+        k = np.nonzero(live)[0] + 1
+        if not len(k):
+            return L, R
+        freq = pool.freq_slots[k] * transpose
+        dead = (freq <= 0.0) | (freq >= GUARD)
+        if dead.any():
+            amp_cur[k[dead]] = 0.0           # the loop silences these slots too
+            k, freq = k[~dead], freq[~dead]
+            if not len(k):
+                return L, R
+        idx = np.arange(n, dtype=float)
+        inc = TWO_PI * freq / sr
+        phase0 = self.phase[k]
+        amp0, dA = amp_cur[k], amp_tgt[k] - amp_cur[k]
+        pan0, dP = self.pan_cur[k], pan_tgt[k] - self.pan_cur[k]
+        rows_all = tabs = None
+        if waveform != WF_SINE:              # every row first, then the buffer they index
+            rows_all = np.array([table_row(waveform, float(f), sr) for f in freq],
+                                dtype=np.int64)
+            tabs = table_buffer()
+        else:
+            band = band_limit(freq, sr)
+
+        def columns(a, b):
+            """The block's samples [a, b) -- every slab, in order."""
+            idx_c = idx[a:b]
+            ramp_c = _RAMP[a:b]
+            Lc = np.zeros(b - a)
+            Rc = np.zeros(b - a)
+            for s0 in range(0, len(k), SLAB):
+                sl = slice(s0, min(s0 + SLAB, len(k)))
+                ph = phase0[sl][:, None] + inc[sl][:, None] * idx_c[None, :]
+                if waveform == WF_SINE:
+                    wave = np.sin(ph)
+                    if (band[sl] != 1.0).any():   # b == 1.0 is the bit-exact legacy path
+                        wave = np.where(band[sl][:, None] == 1.0, wave,
+                                        band[sl][:, None] * wave)
+                else:
+                    x = ph * (TABLE_N / TWO_PI)
+                    base = np.floor(x)
+                    frac = x - base
+                    i0 = base.astype(np.int64) % TABLE_N
+                    i1 = (i0 + 1) % TABLE_N
+                    rws = rows_all[sl][:, None]
+                    wave = tabs[rws, i0] * (1.0 - frac) + tabs[rws, i1] * frac
+                amp = amp0[sl][:, None] + dA[sl][:, None] * ramp_c[None, :]
+                pan = pan0[sl][:, None] + dP[sl][:, None] * ramp_c[None, :]
+                wave *= amp
+                rowsum = np.empty((wave.shape[0] + 1, b - a))
+                rowsum[0] = Lc
+                np.multiply(wave, np.cos(pan * np.pi / 2.0), out=rowsum[1:])
+                Lc = rowsum.sum(axis=0)
+                rowsum[0] = Rc
+                np.multiply(wave, np.sin(pan * np.pi / 2.0), out=rowsum[1:])
+                Rc = rowsum.sum(axis=0)
+            L[a:b] = Lc
+            R[a:b] = Rc
+
+        pool_ = render_pool() if len(k) * n >= THREAD_CELLS else None
+        if pool_ is None:
+            columns(0, n)
+        else:
+            for _ in pool_.map(lambda ab: columns(*ab), rp.ranges(n, RENDER_THREADS)):
+                pass
+        self.phase[k] = (phase0 + inc * n) % TWO_PI
+        amp_cur[k] = amp_tgt[k]
+        self.pan_cur[k] = pan_tgt[k]
+        return L, R
+
+    def render_reference(self, waveform, wave_prev, n, sr=SR, transpose=1.0):
         """(L, R) of this block; the slot order, ramps and phase bookkeeping are
         the baseline's (render_chunk_laplacian), only `wave` differs.
 

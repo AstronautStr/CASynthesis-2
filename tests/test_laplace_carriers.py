@@ -18,6 +18,8 @@
     silent, Continue (also from the middle of a crossfade) is byte-exact
   - the six scenes: variants, per-variant side gain, levels within 1 dB, no clip, and the
     block budget of both sides after warm-up
+  - speed: the slab render (slots in slabs, the block's samples split across threads) is
+    the per-slot reference loop byte for byte, at 1, 2 and 4 threads (2026-09-21)
 
     python tests/test_laplace_carriers.py
 
@@ -553,6 +555,102 @@ class TimeBehaviour(unittest.TestCase):
         other = EngineContext(SR, BLOCK, 2, 55.0, 1.0, RATE_HZ)
         with self.assertRaises(ValueError):
             registry.create(lc.ENGINE_ID, other, dict(e.params)).restore_state(grid, None, st)
+
+
+class SlabRender(unittest.TestCase):
+    """The wave bank renders SLABS of slots, on a pool of threads -- and that must be
+    a change of speed only (2026-09-21).
+
+    WHY: on the prototype's own field (52x30 Random) the bank with Saw cost 24 ms of
+    the 7.98 ms block -- 871 underruns in twelve seconds -- almost all of it Python
+    around numpy calls on 352 samples, one call per sounding slot, plus a table cache
+    that emptied itself whole whenever it filled and so rebuilt ~69 irffts a block.
+
+    WHY IT IS STILL THE SAME SOUND: the slabs take the slots in the same ascending
+    order, the running L / R ride along as the first row of each slab's sum (so the
+    accumulation order of the loop survives), and a worker owns a range of SAMPLES
+    and walks the same slabs inside it.  This gate renders a live field through BOTH
+    paths -- the reference loop and the slab path at 1, 2 and 4 threads -- and
+    compares the blocks, the phases and the amplitudes byte for byte."""
+
+    BLOCKS = 60
+    STEP_EVERY = 12          # generations inside the run: new frequencies, tails, evictions
+
+    def _blocks(self, waveform, threads, pooled=None):
+        old, old_pool = lc.RENDER_THREADS, lc.render_pool
+        lc.RENDER_THREADS = int(threads)
+        if pooled is not None:
+            def counted():
+                p = old_pool()
+                if p is not None:
+                    pooled['n'] += 1
+                return p
+            lc.render_pool = counted
+        try:
+            e = make(lc.METHOD_BANK, waveform, dict(SPECTRUM, n=12))
+            # the prototype's own field: 52x30 at the Random density, which is where
+            # the loop cost 24 ms a block -- a handful of figures would prove nothing
+            g = (np.random.default_rng(7).random((30, 52)) < 0.28).astype(np.uint8)
+            exc = None
+            e.init(g, exc, GAIN)
+            out = []
+            for i in range(self.BLOCKS):
+                if i and i % self.STEP_EVERY == 0:
+                    new = step(g)
+                    exc = events_field(g, new)
+                    g = new
+                    e.update_field(g, exc)
+                out.append(e.render(GAIN, i * BLOCK, transpose=1.25)[0])
+            bank = e.bank
+            return out, bank.phase.copy(), bank.amp_cur.copy(), bank.pan_cur.copy()
+        finally:
+            lc.RENDER_THREADS = old
+            lc.render_pool = old_pool
+
+    def test_the_slab_block_is_the_reference_block(self):
+        for waveform, name in ((lc.WF_SINE, 'Sine'), (lc.WF_SAW, 'Saw'),
+                               (lc.WF_SQUARE, 'Square')):
+            ref = self._reference(waveform)
+            for threads in (1, 2, 4):
+                pooled = {'n': 0}
+                got = self._blocks(waveform, threads, pooled if threads > 1 else None)
+                if threads > 1:
+                    self.assertGreater(pooled['n'], self.BLOCKS // 2,
+                                       f"{name}: only {pooled['n']} blocks used the pool")
+                for i, (a, b) in enumerate(zip(ref[0], got[0])):
+                    self.assertTrue(np.array_equal(a, b),
+                                    f"{name}: block {i} differs at {threads} threads")
+                for what, a, b in zip(('phase', 'amp', 'pan'), ref[1:], got[1:]):
+                    self.assertTrue(np.array_equal(a, b),
+                                    f"{name}: slot {what} differs at {threads} threads")
+
+    def _reference(self, waveform):
+        """The same run through the per-slot loop the slabs replaced."""
+        slabs = lc._BankVoices.render
+
+        def loop(self, wf, wave_prev, n, sr=SR, transpose=1.0):
+            return lc._BankVoices.render_reference(self, wf, wave_prev, n, sr, transpose)
+        lc._BankVoices.render = loop
+        try:
+            return self._blocks(waveform, 1)
+        finally:
+            lc._BankVoices.render = slabs
+
+    def test_a_waveform_change_still_blends(self):
+        """The one block where the waveform changes goes through the reference loop
+        (it renders BOTH waves and crosses them) -- and must still be a blend."""
+        e = make(lc.METHOD_BANK, lc.WF_SINE)
+        g = jam_grid()
+        e.init(g, None, GAIN)
+        for i in range(4):
+            e.render(GAIN, i * BLOCK)
+        e.set_params(dict(e.params, waveform=lc.WF_SAW))
+        blend = e.render(GAIN, 4 * BLOCK)[0].astype(np.float64)
+        after = e.render(GAIN, 5 * BLOCK)[0].astype(np.float64)
+        self.assertTrue(np.any(blend != 0.0))
+        head = np.abs(blend[:BLOCK // 8]).max()
+        self.assertLess(head, max(1.0, np.abs(after).max()) * 4.0,
+                        "the waveform change stepped instead of blending")
 
 
 class BenchIntegration(unittest.TestCase):

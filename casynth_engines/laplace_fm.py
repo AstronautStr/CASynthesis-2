@@ -74,8 +74,6 @@ over sources never crosses two passes, so the sound is bit-for-bit what one
 thread produced whatever the thread count is (gate: test_laplace_fm.ThreadedRender).
 """
 import math
-import os
-import threading
 
 import numpy as np
 
@@ -84,6 +82,7 @@ from casynth_config import (SR, TWO_PI, _RAMP, MAX_VOICES, MAX_MODES_PER_OBJ,
 from casynth_core import ENGINE_BY_ID
 from casynth_engine import analyse
 from .engine_api import SoundEngine
+from . import render_pool as rp
 from .legacy_engine import PAN_CENTER, GenEnvelopeKnobs
 from .registry import EngineSpec, register
 
@@ -134,32 +133,17 @@ CHUNK_MIN = 128
 # so the block is bit-for-bit what one thread produced (gate: test_laplace_fm
 # ThreadedRender).  WHY: this engine costs ~6.5 ms of the 7.98 ms block on a live
 # random field, which leaves the device no headroom at all; one core cannot make
-# that cheaper, four can.  CASYNTH_RENDER_THREADS overrides the count (1 = off).
-_CPUS = os.cpu_count() or 1
-RENDER_THREADS = max(1, min(4, _CPUS // 2))
-try:
-    RENDER_THREADS = max(1, int(os.environ.get('CASYNTH_RENDER_THREADS', RENDER_THREADS)))
-except ValueError:
-    pass
+# that cheaper, four can.  The pool itself is casynth_engines.render_pool, shared
+# with the wave bank; CASYNTH_RENDER_THREADS overrides the count (1 = off).
+RENDER_THREADS = rp.THREADS
 # Below this much work (modulator+carrier rows x samples) a hand-off costs more
 # than it saves, and the block stays on the render thread.
 THREAD_CELLS = 60000
 
-_pool_lock = threading.Lock()
-_pool = None
-
 
 def render_pool():
-    """The worker pool of the FM render, built on first use (never at import: a
-    host that only draws the UI must not pay for threads it will not use)."""
-    global _pool
-    if RENDER_THREADS <= 1:
-        return None
-    with _pool_lock:
-        if _pool is None:
-            from concurrent.futures import ThreadPoolExecutor
-            _pool = ThreadPoolExecutor(RENDER_THREADS, thread_name_prefix='fm-render')
-        return _pool
+    """The shared worker pool, or None when this engine is asked for one thread."""
+    return rp.pool(RENDER_THREADS)
 
 
 # ── the output filter ─────────────────────────────────────────────────────────
@@ -555,9 +539,8 @@ class _FMSources:
             # RUNS of samples and a worker walks its own run in cache-sized passes,
             # so the queue is paid once per thread instead of once per pass and the
             # threads finish together.  A worker writes only its own slices.
-            edge = [round(i * n_os / RENDER_THREADS) for i in range(RENDER_THREADS + 1)]
             runs = [[slice(c0, min(c0 + chunk, b)) for c0 in range(a, b, chunk)]
-                    for a, b in zip(edge, edge[1:]) if b > a]
+                    for a, b in rp.ranges(n_os, RENDER_THREADS)]
             for _ in pool.map(lambda run: [one_pass(sl) for sl in run], runs):
                 pass
         self.advance(n_os, transpose)
