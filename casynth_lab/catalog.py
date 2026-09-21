@@ -266,7 +266,7 @@ class Record:
         """(ok, reason) -- whether "Continue" is offered.  A light check
         (files, versions, engines); the full validation happens on load."""
         for side, eid in self.meta.get('engines', {}).items():
-            if eid not in registry.REGISTRY:
+            if not registry.has(eid):
                 return False, f"engine {eid!r} ({side}) is not registered"
         snap = self.meta.get('snapshot') or {}
         end = snap.get('end')

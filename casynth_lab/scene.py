@@ -171,7 +171,7 @@ def validate(d):
             if not isinstance(per_engine, dict):
                 _fail(f"scene: param_ranges.{k} must be an object")
             for eid, rr in per_engine.items():
-                if eid not in registry.REGISTRY:
+                if not registry.has(eid):
                     _fail(f"scene: param_ranges.{k}: unknown engine {eid!r}")
                 if not isinstance(rr, dict):
                     _fail(f"scene: param_ranges.{k}.{eid} must be an object")
@@ -214,7 +214,7 @@ def validate(d):
 
 
 def _validate_engine(eid, params, where):
-    if eid not in registry.REGISTRY:
+    if not registry.has(eid):
         _fail(f"scene: unknown {where}engine_id {eid!r} (registered: {registry.ids()})")
     spec = {p[0]: p for p in registry.get(eid).params}
     if not isinstance(params, dict):

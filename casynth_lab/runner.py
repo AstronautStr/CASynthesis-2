@@ -154,21 +154,21 @@ class DemoRunner:
         self._memory = {}
         for name, per_engine in getattr(scene, 'param_memory', {}).items():
             for eid, pp in per_engine.items():
-                if eid in registry.REGISTRY:
+                if registry.has(eid):
                     self._memory[(name, eid)] = dict(pp)
         # per (side, engine) slider ranges of ranged parameters (registry EngineSpec.ranges,
         # 2026-09-17): edited by the user, never a sound change; absent = the registry default
         self._ranges = {}
         for name, per_engine in getattr(scene, 'param_ranges', {}).items():
             for eid, rr in per_engine.items():
-                if eid in registry.REGISTRY:
+                if registry.has(eid):
                     for pname, (lo, hi) in rr.items():
                         self._ranges.setdefault((name, eid), {})[pname] = registry.validate_range(
                             eid, pname, lo, hi)
         self.sides = {}
         for name in SIDES:
             eid, params = scene.variants[name]
-            if eid not in registry.REGISTRY:
+            if not registry.has(eid):
                 raise ValueError(f"scene variant {name}: unknown engine {eid!r}")
             self.sides[name] = SideState(name, eid, params, self.ctx)
             self._memory[(name, eid)] = dict(params)
@@ -246,7 +246,7 @@ class DemoRunner:
                 dst_p[k] = src_p[k]
             registry.validate_params(eids[args['dst']], dst_p)
         if kind == 'set_engine':
-            if args.get('engine_id') not in registry.REGISTRY:
+            if not registry.has(args.get('engine_id')):
                 raise ValueError(f"unknown engine {args.get('engine_id')!r} "
                                  f"(registered: {registry.ids()})")
         elif kind == 'set_param':
@@ -592,7 +592,7 @@ class DemoRunner:
             raise ValueError("snapshot: sides must be A and B")
         for n in SIDES:
             eid = sides[n].get('engine_id')
-            if eid not in registry.REGISTRY:
+            if not registry.has(eid):
                 raise ValueError(f"snapshot: side {n}: engine {eid!r} is not registered")
             spec = registry.get(eid)
             params = sides[n].get('params')
@@ -616,7 +616,7 @@ class DemoRunner:
             raise ValueError("snapshot: ranges must be a mapping of sides A/B")
         for n, per_engine in ranges.items():
             for eid, rr in per_engine.items():
-                if eid not in registry.REGISTRY or not isinstance(rr, dict):
+                if not registry.has(eid) or not isinstance(rr, dict):
                     raise ValueError(f"snapshot: ranges of side {n}: engine {eid!r} / not a mapping")
                 for pname, pair in rr.items():
                     if not isinstance(pair, (list, tuple)) or len(pair) != 2:
@@ -640,7 +640,7 @@ class DemoRunner:
         r._memory = {}
         for n, per_engine in state['memory'].items():
             for eid, pp in per_engine.items():
-                if eid in registry.REGISTRY:
+                if registry.has(eid):
                     r._memory[(n, eid)] = dict(pp)
         r._ranges = {}
         for n, per_engine in ranges.items():

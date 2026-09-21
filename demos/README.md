@@ -109,10 +109,11 @@ always starts from its unchanged snapshot and creates no record by itself.
 
 Every Save also records **which code produced it**: the **sound set** --
 the files that can change the PCM of an experiment given its embedded
-conditions (`casynth_core.py`, `casynth_engine.py`, `casynth_config.py` and
-the casynth_lab modules that turn a scene + journal + snapshot into blocks:
-`runner`, `engine_api`, `registry`, `legacy_engine`, the engine modules,
-`scene`, `snapshot`) with per-file fingerprints, the Git commit, whether the
+conditions (`casynth_core.py`, `casynth_engine.py`, `casynth_config.py`, the
+`casynth_engines/` package -- `engine_api`, `registry`, `legacy_engine`, the
+engine modules -- the casynth_lab modules that turn a scene + journal +
+snapshot into blocks: `runner`, `scene`, `snapshot`, and the shims casynth_lab
+keeps on the moved engine names) with per-file fingerprints, the Git commit, whether the
 set's CONTENT equals that commit (staged, unstaged and new sound files all
 count; the bench UI `demo_bench.py`, `audio_out` / `catalog` / `recorder` /
 `verify` / `versions` / `provenance`, `requirements.txt`, `demos/*.json`,
@@ -120,9 +121,11 @@ docs / tests / memory do NOT -- editing them never re-pins an experiment;
 CRLF checkouts are fine), and the environment (Python, exact package
 versions, OS).  It is captured once per process for the code that was
 imported -- not the HEAD at Save time; workers and version benches report
-their own.  Records made before 2026-09-14 (set 1, which also fingerprinted
-the bench) are compared by the content of the sound set at their commit, so
-they stay continuable here when only non-sound files changed.  Diagnosis:
+their own.  Records made with an older definition of the set -- set 1 (before 2026-09-14,
+which also fingerprinted the bench) and set 2 (before the engines moved into
+`casynth_engines/` on 2026-09-21) -- are compared by the content of the sound
+set at their commit, so they stay continuable here when only non-sound files
+changed.  Diagnosis:
 `python -m casynth_lab.provenance` (this checkout) and
 `python -m casynth_lab.provenance why lab_catalog/<root> [id...]` (per record:
 same sound code, or which sound files differ).
@@ -159,7 +162,7 @@ window).  The first stdout line is the process's provenance (JSON).
 
 Engines take part through two optional methods of the S3 interface
 (`export_state()` / `restore_state(grid, exc, state)` + a class
-`STATE_VERSION`, see `casynth_lab/engine_api.py`); the five built-in methods
+`STATE_VERSION`, see `casynth_engines/engine_api.py`); the five built-in methods
 get them from the shared adapter.  An engine without them still works and
 saves WAVs, but its records are honestly marked as not continuable.
 Formats: `record.json` `format` 2 (1 = S4, still read), runner state version
@@ -256,7 +259,7 @@ Demo catalog for the acceptance: `python tests/s7_demo_catalog.py`, then
 Two engines from `memory/req-sonification-sn-demos-2026-09-14.md`, both
 treating the WHOLE field as one sound object (no per-object segmentation):
 
-- **Scan** (`scan_surface`, `casynth_lab/scan_surface.py`): the mask becomes
+- **Scan** (`scan_surface`, `casynth_engines/scan_surface.py`): the mask becomes
   a surface (`Surface`: **Smooth** = 2*Gaussian(g, width)-1, periodic;
   **Distance** = tanh((d_dead - d_live)/width) on the torus) and a fixed
   closed path reads it once per note period (`Path`: **Ellipse**,
@@ -268,7 +271,7 @@ treating the WHOLE field as one sound object (no per-object segmentation):
   coefficient vectors over 20 ms.  The path is drawn over the field for the
   listened side (start dot + arrow = direction), with the same geometry the
   engine reads.
-- **Network** (`pm_network`, `casynth_lab/pm_network.py`): four generators at
+- **Network** (`pm_network`, `casynth_engines/pm_network.py`): four generators at
   ratios 1..4 of f0 on one phase; six directed phase-modulation links (higher
   index modulates lower, same sample, no feedback) whose depths W are the
   field's mass under six fixed Gaussian masks (two rows x three columns, drawn
@@ -317,10 +320,10 @@ Smooth tails -- F3 is prepared with Raster only.
 
 ## N1 -- the Gutter Synthesis network driven by the field (2026-09-15)
 
-`gutter_field` (`casynth_lab/gutter_field.py`, REQ
+`gutter_field` (`casynth_engines/gutter_field.py`, REQ
 `memory/req-network-ca-n1-2026-09-15.md`): the eight-node Gutter Synthesis
 network of the N0 reference (`demos/network_reference_n0/`) as a live bench
-engine.  The model is FIXED by `casynth_lab/gutter_field_n1_config.py`
+engine.  The model is FIXED by `casynth_engines/gutter_field_n1_config.py`
 (= the Researcher's fixtures `memory/research/network-n1-fixtures-2026-09-15.json`:
 44.1 kHz, explicit 8 x 24 bank frequencies, N0 node values, matrix delay
 2000 + 64 samples, SVF q = 0.99, all-to-all links, the review-R1 output routes
@@ -380,15 +383,15 @@ p95 / p99 offline and on the device): `python demos/gutter_field_n1_report.py`
 ## N2 -- field events excite a delay network (2026-09-16)
 
 REQ `memory/req-network-events-n2-2026-09-16.md`: one live field, two sides
-that read it through the SAME periodic weights (`casynth_lab/periodic_readout.py`:
+that read it through the SAME periodic weights (`casynth_engines/periodic_readout.py`:
 eight overlapping raised-cosine weights K_i, a partition of unity, continuous
 on the torus -- no region borders).
 
-- **A `gutter_field_periodic`** ("Gutter K", `casynth_lab/gutter_field_periodic.py`):
+- **A `gutter_field_periodic`** ("Gutter K", `casynth_engines/gutter_field_periodic.py`):
   the N1 Gutter model unchanged (source, routes, states, controls, snapshot)
   with the weighted count n_i = sum(K_i G) instead of the 2 x 4 regions and a
   fixed output trim of -16.5 dB after the x20.
-- **B `ca_event_network`** ("Events", `casynth_lab/event_network.py`): a NEW model
+- **B `ca_event_network`** ("Events", `casynth_engines/event_network.py`): a NEW model
   (not a Gutter port).  At every block boundary the cells that changed since
   the previous render, weighted by K_i and saturated (a = e / (e + 2)), strike
   a fast / slow pulse pair per node (0.25 / 2 ms, strength 0.75) that feeds
@@ -416,7 +419,7 @@ reference bit-exactly).  Measurements: `python demos/n2_events_report.py` ->
 ## N3 -- the field tunes the resonances, its events strike them (2026-09-16)
 
 REQ `memory/req-network-combined-n3-2026-09-16.md`: one NEW engine
-`ca_tuned_events` ("Tuned", `casynth_lab/tuned_events.py`) that joins the N2
+`ca_tuned_events` ("Tuned", `casynth_engines/tuned_events.py`) that joins the N2
 channels -- the events of the field strike, the live cells tune:
 
     cell changes -> pulses + the N2-B delay network -> eight tuned banks -> sound
@@ -463,8 +466,8 @@ keeps scenes and stress probes apart and lists the limitations).
 ## N4 -- every figure a resonator bank of its own Laplacian (2026-09-16)
 
 REQ `memory/req-object-resonators-n4-2026-09-16.md`: one NEW engine
-`ca_object_resonators` ("Objects", `casynth_lab/object_resonators.py`, geometry
-in `casynth_lab/figures.py`).  Every 8-connected figure of the field (across the
+`ca_object_resonators` ("Objects", `casynth_engines/object_resonators.py`, geometry
+in `casynth_engines/figures.py`).  Every 8-connected figure of the field (across the
 torus seam) owns a bank of up to 24 decaying complex resonators at
 `f_j = frequency_scale * sqrt(lambda_j)` of its own Laplacian `L = D - A` (full
 8-connectivity graph, zero mode dropped, multiplicities kept, no crop / decimation,
@@ -722,10 +725,11 @@ The bench owns the field, clocks, command queue/journal, transport, the A/B
 instances, the monitor and WAV export.  An engine is one class per side that
 turns the field into stereo blocks.
 
-1. **Module** — put it under `casynth_lab/` (e.g. `casynth_lab/my_engine.py`)
-   and subclass `casynth_lab.SoundEngine`:
+1. **Module** — put it under `casynth_engines/` (e.g.
+   `casynth_engines/my_engine.py`) and subclass `casynth_engines.SoundEngine`
+   (`casynth_lab.SoundEngine` is the same class, re-exported):
    ```python
-   from casynth_lab import SoundEngine
+   from casynth_engines import SoundEngine
    class MyEngine(SoundEngine):
        def init(self, grid, exc, gain): ...        # (re)start on the CURRENT field, silent
        def update_field(self, grid, exc): ...      # field changed (step / painting)
@@ -738,10 +742,12 @@ turns the field into stereo blocks.
    ```
    `self.ctx` gives `sr`, `block`, `channels`, `f0`, `level`, `rate_hz`.  Apply
    `gain` once (pre-clip).  No wall-clock time, never write to `grid`.
-2. **Register** — explicitly, in one place (`casynth_lab/registry.py`, after the
-   built-in five, or in your module imported from there):
+2. **Register** — explicitly, in one place: the `_LAZY` map at the bottom of
+   `casynth_engines/registry.py` (id -> your module, after the built-in five).
+   The module is imported by the first `registry.get(id)`, so listing it costs
+   a host nothing until it plays that engine.  In the module itself:
    ```python
-   from casynth_lab import EngineSpec, register
+   from casynth_engines import EngineSpec, register
    register(EngineSpec('my_engine', 'My', [('depth', 'depth', 0.0, 1.0, False, 0.5)],
                        lambda ctx, params: MyEngine(ctx, params)))
    ```

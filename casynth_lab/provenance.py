@@ -2,12 +2,14 @@
 a Git revision.
 
 A provenance document (schema 1) describes:
-  - the SOUND SET actually executed (`sound_set` = 2 since 2026-09-14): the
-    files that can change the PCM of an experiment given its embedded
-    conditions -- the shared DSP modules (casynth_core / casynth_engine /
-    casynth_config) and the casynth_lab modules that turn a scene + journal +
-    snapshot into blocks (runner, engine_api, registry, legacy_engine, the
-    engine modules, scene, snapshot).  NOT in the set: the bench UI
+  - the SOUND SET actually executed (`sound_set` = 3 since 2026-09-21, when the
+    engines moved out into casynth_engines/): the files that can change the PCM
+    of an experiment given its embedded conditions -- the shared DSP modules
+    (casynth_core / casynth_engine / casynth_config), the casynth_engines
+    package (engine_api, registry, legacy_engine, the engine modules) and the
+    casynth_lab modules that turn a scene + journal + snapshot into blocks
+    (runner, scene, snapshot).  The shims casynth_lab keeps on the moved names
+    are in the set too: a shim decides which module a bench name resolves to.  NOT in the set: the bench UI
     (demo_bench.py), device / thread plumbing (audio_out), catalog storage
     and replay orchestration (catalog, recorder), checking and versioning
     (verify, versions, provenance), requirements.txt (the environment block
@@ -50,12 +52,14 @@ import subprocess
 import sys
 
 PROVENANCE_SCHEMA = 1
-SOUND_SET_VERSION = 2                       # 1 = S6 runtime set (bench + lab + demos + reqs)
+SOUND_SET_VERSION = 3                       # 1 = S6 runtime set (bench + lab + demos + reqs),
+                                            # 2 = the sound-only set, 3 = + casynth_engines/
 PIN_REF_PREFIX = 'refs/casynth/pins/'      # one permanent ref per pinned commit
 # the SOUND set (fingerprinted): explicit, no import analysis -- see the module doc
 SOUND_FILES = ('casynth_core.py', 'casynth_engine.py', 'casynth_config.py')
-SOUND_DIRS = (('casynth_lab', '.py'),)
-SOUND_EXCLUDE = frozenset(('casynth_lab/__init__.py', 'casynth_lab/audio_out.py',
+SOUND_DIRS = (('casynth_lab', '.py'), ('casynth_engines', '.py'))
+SOUND_EXCLUDE = frozenset(('casynth_lab/__init__.py', 'casynth_engines/__init__.py',
+                           'casynth_lab/audio_out.py',
                            'casynth_lab/catalog.py', 'casynth_lab/recorder.py',
                            'casynth_lab/verify.py', 'casynth_lab/versions.py',
                            'casynth_lab/provenance.py', 'casynth_lab/textedit.py',
@@ -64,8 +68,9 @@ SOUND_EXCLUDE = frozenset(('casynth_lab/__init__.py', 'casynth_lab/audio_out.py'
 # the S7 demo repo): the sound set plus the bench, its resources and deps
 RUNTIME_FILES = ('demo_bench.py', 'patterns.py', 'casynth_core.py', 'casynth_engine.py',
                  'casynth_config.py', 'requirements.txt')
-RUNTIME_DIRS = (('casynth_lab', '.py'), ('demos', '.json'))
-RUNTIME_MODULES = ('casynth_core', 'casynth_engine', 'casynth_config', 'casynth_lab')
+RUNTIME_DIRS = (('casynth_lab', '.py'), ('casynth_engines', '.py'), ('demos', '.json'))
+RUNTIME_MODULES = ('casynth_core', 'casynth_engine', 'casynth_config', 'casynth_lab',
+                   'casynth_engines')
 PACKAGES = ('numpy', 'scipy', 'pygame', 'sounddevice')
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
