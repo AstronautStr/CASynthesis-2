@@ -53,9 +53,9 @@ def click(x, y):
 
 def drive():
     time.sleep(1.5)
-    click(250, BY + 20)            # Random: a field to sound
+    click(207, BY + 20)            # Random: a field to sound
     time.sleep(0.4)
-    click(40, BY + 20)             # Play: let it live
+    click(52, BY + 20)             # Play: let it live
     print("[probe] Random + Play", flush=True)
 
 threading.Thread(target=drive, daemon=True).start()

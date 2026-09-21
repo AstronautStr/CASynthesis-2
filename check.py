@@ -46,6 +46,9 @@ Gates (any FAIL -> exit 1):
   3e. panel rows       python tests/ui_panel_probe.py             (a knob that decides
                        whether ANOTHER row acts -- Laplace+ `shape` over `dyn` --
                        must make that row appear, without clicking anything else)
+  3f. save an experiment python tests/ui_save_probe.py           (play, click Save,
+                       and ask the BENCH whether the record it wrote is one it can
+                       list, replay byte-exact and continue from)
   3d. articulation     python tests/ui_articulation_probe.py      (letting a key go
                        releases the note; HOLD lit keeps it sounding; and a played
                        MIDI line re-articulates note by note although its gate
@@ -57,10 +60,16 @@ fancy glyphs, and agents run this a lot.
 import os
 import subprocess
 import sys
+import time
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 UI_REF = os.path.join(ROOT, "tests", "golden", "ui_frame.png")
 UI_OUT = os.path.join(ROOT, "artifacts", "_ui_check.png")
+
+
+# How long each gate took, so "the tests are slow" can be answered with numbers
+# instead of a guess (2026-09-22).  Printed per gate and again in the summary.
+TIMES = {}
 
 
 def _run(name, argv, env=None, timeout=180):
@@ -68,13 +77,16 @@ def _run(name, argv, env=None, timeout=180):
     e = dict(os.environ)
     if env:
         e.update(env)
+    t0 = time.perf_counter()
     try:
         r = subprocess.run(argv, cwd=ROOT, env=e, timeout=timeout)
         ok = (r.returncode == 0)
     except subprocess.TimeoutExpired:
+        TIMES[name] = time.perf_counter() - t0
         print(f"[FAIL] {name}: timed out after {timeout}s")
         return False
-    print(f"[{'PASS' if ok else 'FAIL'}] {name}")
+    TIMES[name] = time.perf_counter() - t0
+    print(f"[{'PASS' if ok else 'FAIL'}] {name}  ({TIMES[name]:.1f}s)")
     return ok
 
 
@@ -270,6 +282,12 @@ def main():
                               "PYTHONUTF8": "1"},
                          timeout=300)))
 
+    results.append(("Save turns a session into an experiment the bench can open",
+                    _run("save probe", [py, os.path.join("tests", "ui_save_probe.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"},
+                         timeout=600)))
+
     results.append(("the VOICE envelope is audible (note off, HOLD, a played line)",
                     _run("articulation probe",
                          [py, os.path.join("tests", "ui_articulation_probe.py")],
@@ -281,6 +299,10 @@ def main():
     failed = [n for (n, ok) in results if not ok]
     for n, ok in results:
         print(f"  {'PASS' if ok else 'FAIL'}  {n}")
+    total = sum(TIMES.values())
+    print(f"--- time: {total:.0f}s total, slowest first ---")
+    for n, t in sorted(TIMES.items(), key=lambda kv: -kv[1])[:12]:
+        print(f"  {t:6.1f}s  {100.0 * t / max(total, 1e-9):4.1f}%  {n}")
     if failed:
         print(f"RESULT: FAIL ({', '.join(failed)})")
         return 1

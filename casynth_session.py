@@ -85,6 +85,7 @@ def _dump_session(rec, prefix="_session"):
     print(f"[session saved] {base}.wav ({len(rec['chunks'])} chunks) + {base}.npz "
           f"({len(rec['steps'])} steps, {len(midi_onsets)} midi onsets)  "
           f"underruns={rec['underruns']}")
+    return base[len(prefix) + 1:]        # the timestamp the read side asks for
 
 
 # ──────────────────────────────────────────────────────────────────────────────

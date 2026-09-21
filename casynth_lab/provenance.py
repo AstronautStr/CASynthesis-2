@@ -63,6 +63,7 @@ SOUND_EXCLUDE = frozenset(('casynth_lab/__init__.py', 'casynth_engines/__init__.
                            'casynth_lab/catalog.py', 'casynth_lab/recorder.py',
                            'casynth_lab/verify.py', 'casynth_lab/versions.py',
                            'casynth_lab/provenance.py', 'casynth_lab/textedit.py',
+                           'casynth_lab/offline_record.py',
                            'casynth_lab/notes_window.py'))
 # the files a working checkout of the bench needs (isolated copies in tests,
 # the S7 demo repo): the sound set plus the bench, its resources and deps

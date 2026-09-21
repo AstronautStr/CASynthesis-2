@@ -14,11 +14,13 @@ _Снапшот живого состояния (консолидирован /d
 
 | Файл | Что это |
 |---|---|
-| `gol_synth.py` | **Активный прототип**: event-loop, layout, MIDI, VCA; ХОСТИТ экземпляр `SoundEngine` из `casynth_engines` (вкладки — движки, умеющие играть ноту) |
+| `gol_synth.py` | **Активный прототип**: event-loop, layout, MIDI, VCA; ХОСТИТ экземпляр `SoundEngine` из `casynth_engines` (вкладки — движки, умеющие играть ноту). **2026-09-22** (лог `memory/log/2026-09-22-instrument-panel-and-save.md`): открывается на `DEFAULT_ENGINE = laplace_unified` и на `START_SPECTRUM` (n 20, spread 1, alpha 0, shape 1, harm 1, full on, dyn 1 — накладывается на дефолты реестра у всех движков с полным лапласовым спектром; сами дефолты реестра не трогаются: они — нейтральная точка чужих гейтов и таблиц ТЗ); у каждого слайдера поля Min/Max (значение переехало внутрь трека), панель перестраивается, когда слайдер меняет набор неактивных рядов; кнопка **Save** превращает сыгранное в запись каталога; журнал сессии пишется всегда (аудио-чанки — только при `CASYNTH_RECORD=1`, `CASYNTH_NO_RECORD=1` выключает журнал), тестовый хук `CASYNTH_PANEL_LOG` |
 | `casynth_engines/` | **Движки как продукт**: `engine_api` (контракт: `render(gain, t, *, gain_prev, transpose)`, `set_envelope`/`set_rate`, `EngineContext(pan=)`), `registry` (ленивая регистрация: `import casynth_engines` не тянет numba), `legacy_engine`, `figures` + 12 модулей движков |
 | `casynth_host.py` | Устройство и кольцо блоков для ОБОИХ хостов: `BlockRing`, `AudioHost`, `open_output_stream` |
 | `casynth_engines/render_pool.py` | **Общий пул потоков рендера (2026-09-21, лог `memory/log/2026-09-21-render-budget.md`)**: `THREADS` (половина ядер, максимум 4; `CASYNTH_RENDER_THREADS`, 1 = выключено и поток не создаётся), `pool()` (ленивый, демоны), `ranges(n, parts)`. Движку раздаётся диапазон СЕМПЛОВ блока — сумма по источникам никогда не пересекает границу воркера, поэтому звук побитово тот же при любом числе потоков (гейты `ThreadedRender`, `SlabRender`). Используют `laplace_fm` и `_BankVoices` из `laplace_carriers` |
-| `casynth_panel.py` | Какой виджет у параметра (`panel_rows`) — одно решение для панели прототипа и стенда |
+| `casynth_panel.py` | Какой виджет у параметра (`panel_rows`) — одно решение для панели прототипа и стенда; с 2026-09-22 знает про диапазон ЛЮБОГО слайдера (`ranges`, `bound_lo/bound_hi`) и про то, как пишется его конец (`range_text`) |
+| `casynth_textedit.py` | Модель текстового поля (каретка, выделение, Ctrl+A/C/V/X) — **общая для стенда и прототипа** (переехала из `casynth_lab/textedit.py` 2026-09-22, там шим); прототипу нельзя импортировать стенд |
+| `casynth_lab/offline_record.py` | **Сцена → запись каталога оффлайн** (2026-09-22): `DemoRunner` + `Recorder` + `Catalog.save` — один путь для `demos/build_*` и для кнопки Save прототипа; в `SOUND_EXCLUDE` (отпечаток звука не трогает) |
 | `casynth_config.py` | ВСЕ константы (геометрия/аудио/слоты/ADSR/палитра); pygame-free |
 | `casynth_engine.py` | `step/analyse/events_field/SlotPool/render_chunk_laplacian/midi_to_freq` |
 | `casynth_core.py` | Либа маппинга форма→(freqs,amps): 5 `map_*` + реестр `ENGINES` (чистые данные) |

@@ -45,6 +45,7 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 from casynth_config import SR                                          # noqa: E402
+from casynth_lab import offline_record
 from casynth_lab import scene_from_doc, DemoRunner, BLOCK              # noqa: E402
 from casynth_lab.catalog import Catalog                                # noqa: E402
 from casynth_lab.recorder import Recorder                              # noqa: E402
@@ -158,27 +159,8 @@ def seconds_for(kind):
 
 # -- recording (offline, same Recorder / Cut / Catalog.save path as the live bench) --
 def record_offline(catalog, doc, seconds, commands, title, note):
-    """Drive a DemoRunner block by block (no device, no wall clock) with 'start' at
-    block 0 plus `commands` [(kind, at_samples, args)], feed the same Recorder the
-    live bench uses, cut at the last block boundary and save."""
-    runner = DemoRunner(scene_from_doc(doc))
-    rec = Recorder(runner, None)
-    runner.post('start', at=0)
-    for kind, at, args in commands:
-        runner.post(kind, at=at, **args)
-    n_blocks = int(np.ceil(seconds * SR / BLOCK))
-    for _ in range(n_blocks):
-        before = runner.out_samples
-        blk = runner.next_block()
-        rec.on_block(blk, runner.running, before)
-    snap = runner.snapshot()
-    diagnostics = dict(device_ok=False, device_error='offline build', underruns=0,
-                       block_errors=0, last_error=None, clip_blocks=dict(snap['clip_blocks']),
-                       record_error=None)
-    cut = rec.cut(diagnostics)
-    assert cut is not None and cut.n_frames == n_blocks * BLOCK
-    rid = catalog.save(cut, title, note)
-    return rid, snap
+    """The shared offline path (casynth_lab.offline_record)."""
+    return offline_record.record(catalog, doc, seconds, title, note, commands=commands)
 
 
 def build(root):

@@ -77,7 +77,7 @@ from casynth_engine import (midi_to_freq, note_name, step, hsv, analyse,
                             render_chunk_laplacian, SlotPool, events_field,
                             VoiceEnvelope)
 from casynth_session import (_dump_session, replay_session, _replay_cli,
-                             _scene_cli)
+                             _scene_cli, scene_from_session, SessionError)
 from casynth_midi import MidiInput, MIDI_AVAILABLE
 from casynth_midifile import MidiFilePlayer, MIDIFILE_AVAILABLE
 from casynth_host import (AudioHost, open_output_stream, output_device_name,
@@ -91,6 +91,14 @@ from casynth_textedit import TextEdit
 from casynth_tuning import (dissonance_curve, scale_minima, snap_ratio,
                              TUNE_MAX_PARTIALS)
 
+
+# Where a saved experiment lands and which session files it is built from.  The
+# catalog root is the bench's own default (lab_catalog/local), so a record saved
+# in the instrument opens in the bench with no argument at all.
+_SESSION_PREFIX = '_session'
+_EXPERIMENT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                'lab_catalog', 'local')
+_MESSAGE_S = 12.0                 # how long the toolbar keeps the last message
 
 # The tab the instrument opens on; any playable engine id (see `playable`).
 DEFAULT_ENGINE = 'laplace_unified'
@@ -306,8 +314,16 @@ def main(autoplay_midi=None):
     # (grid + note + every live knob + how many chunks were rendered) so the
     # session can be re-rendered deterministically offline and a fix verified on
     # the user's exact snapshot (see _render_probe.py session mode).
+    # SAVE (2026-09-22) records ALWAYS, so a session can become an experiment the
+    # moment the player likes what they hear -- there is no "start recording"
+    # decision to forget.  CASYNTH_RECORD stays what it was: it adds the AUDIO the
+    # prototype produced (`chunks`), which is what a byte-exact session dump needs
+    # and what costs the memory; the Save path re-renders the scene offline
+    # instead, and is unaffected by CPU dips.  CASYNTH_NO_RECORD switches the log
+    # off entirely (a probe that only wants the frame loop).
+    _rec_audio = bool(os.environ.get('CASYNTH_RECORD'))
     rec = None
-    if os.environ.get('CASYNTH_RECORD'):
+    if not os.environ.get('CASYNTH_NO_RECORD'):
         rec = dict(chunks=[], frames=[], steps=[], underruns=0,
                    replay=[], replay_grids=[], replay_engines=[],
                    replay_controls=[],
@@ -323,8 +339,9 @@ def main(autoplay_midi=None):
                    # input jitter (USB-MIDI / arp / swing) from render jitter.
                    midi_in=[],
                    bpm=BPM_DEFAULT, div_idx=DIV_DEFAULT)
-        print("[CASYNTH_RECORD on] capturing audio + field + all knobs; "
-              "quit (Esc) to save")
+        if _rec_audio:
+            print("[CASYNTH_RECORD on] capturing audio + field + all knobs; "
+                  "quit (Esc) to save")
 
     state = dict(
         run=False, gen=0,
@@ -427,8 +444,13 @@ def main(autoplay_midi=None):
     by     = GRID_H * CELL + 8
     div_y  = by + 46            # note-division button row
     info_y = GRID_H * CELL + 76 # status / volume row (shifted down for div row)
-    defs = [("play", None, 96), ("step", "Step", 70),
-            ("random", "Random", 96), ("clear", "Clear", 78)]
+    # Save (2026-09-22): what was just played becomes an EXPERIMENT in the catalog
+    # the bench reads -- see _save_experiment.  The row was re-cut to fit it in the
+    # SAME width: everything to the right of it (the BPM widget, Lib, and with them
+    # the whole knob panel and its two columns) keeps the pixels it had, because
+    # the panel is measured from Lib's right edge.
+    defs = [("play", None, 80), ("step", "Step", 58),
+            ("random", "Random", 82), ("clear", "Clear", 58), ("save", "Save", 54)]
     buttons, bx = [], 12
     for bid, label, bw in defs:
         buttons.append(dict(id=bid, label=label, rect=pygame.Rect(bx, by, bw, 40)))
@@ -906,6 +928,8 @@ def main(autoplay_midi=None):
                     return c, which
         return None
 
+    _message = {'text': '', 'at': 0.0}
+
     def do(bid):
         nonlocal grid, exc_field
         if bid == "play":
@@ -931,6 +955,68 @@ def main(autoplay_midi=None):
             grid[:] = 0
             state['gen'] = 0
             _touched()
+        elif bid == "save":
+            _save_experiment()
+
+    def _say(text):
+        """One line in the toolbar (and the console): what the last Save did."""
+        _message['text'] = text
+        _message['at'] = time.perf_counter()
+        print(f"[save] {text}")
+
+    def _save_experiment():
+        """What has been played becomes an EXPERIMENT in the catalog the bench
+        reads: a record with its scene, its WAV, its end snapshot to Continue
+        from, and its pin on this commit.
+
+        The path is entirely existing code (the user asked for the reuse):
+        _dump_session writes the session the prototype has been logging all
+        along, scene_from_session turns it into a scene document -- the
+        conversion that was already proved byte-exact against a live run -- and
+        casynth_lab.offline_record renders that scene through the SAME
+        DemoRunner / Recorder / Catalog.save the bench uses, so the record is
+        indistinguishable from one saved at the bench.
+
+        The bench is imported HERE, not at the top: an instrument on a machine
+        without it still plays (the seam), it simply cannot save an experiment.
+
+        The offline render is not the audio that came out of the speakers -- it
+        is what the scene produces without the dips of a busy machine, which is
+        what an experiment is for; the live WAV stays with the session dump."""
+        if rec is None:
+            _say("Save: this run keeps no session log (CASYNTH_NO_RECORD)")
+            return
+        if not rec['replay_controls']:
+            _say("Save: nothing played yet")
+            return
+        try:
+            from casynth_lab import catalog as _catalog, offline_record as _offrec
+        except Exception as exc:                       # noqa: BLE001
+            _say(f"Save: the bench is not available here ({exc})")
+            return
+        try:
+            ts = _dump_session(rec, prefix=_SESSION_PREFIX)
+            doc, info = scene_from_session(ts, prefix=_SESSION_PREFIX,
+                                           title=f"session {ts}")
+        except SessionError as exc:
+            _say(f"Save: {exc}")
+            return
+        except Exception as exc:                       # noqa: BLE001
+            _say(f"Save failed: {exc}")
+            return
+        seconds = max(0.5, info['samples'] / float(SR))
+        try:
+            cat = _catalog.Catalog(root=_EXPERIMENT_ROOT)
+            rid, _snap = _offrec.record(
+                cat, doc, seconds, title=f"Session {ts}",
+                note=(f"Played in the prototype on {engines.label(info['engine'])}; "
+                      f"{info['steps']} automaton steps, {info['onsets']} note events."))
+        except Exception as exc:                       # noqa: BLE001
+            _say(f"Save failed: {exc}")
+            return
+        clipped = sum(int(v) for v in dict(_snap.get('clip_blocks') or {}).values())
+        _say(f"Saved experiment {rid} ({seconds:.1f}s)"
+             + (f", {clipped} clipped blocks -- lower the volume" if clipped else ''))
 
     def hit_piano(pos):
         for rect, m in black_keys:
@@ -1197,7 +1283,8 @@ def main(autoplay_midi=None):
             meter['peak'] = max(peak, meter['peak'] * METER_DECAY)
             meter['clip'] = n_clip > 0
             if rec is not None:
-                rec['chunks'].append(buf)
+                if _rec_audio:
+                    rec['chunks'].append(buf)   # the WAV of a full session dump
                 # An onset with the SAME note under a held gate changes neither of
                 # them, and used to leave no trace at all -- so a scene built from
                 # the session re-articulated fewer times than the prototype did.
@@ -1739,6 +1826,8 @@ def main(autoplay_midi=None):
             audio_name=_out_name(),
             # the Min / Max field being typed into, if any (see range_edit)
             range_edit=range_edit, range_error=_range_error['at'],
+            message=(_message['text']
+                     if time.perf_counter() - _message['at'] < _MESSAGE_S else ''),
             # 'ok' it plays there / 'pending' not opened yet / 'failed' it refused
             audio_state=('ok' if audio_ok else
                          ('pending' if not _device['opened'] else 'failed')),
@@ -1781,7 +1870,7 @@ def main(autoplay_midi=None):
     print(f"[budget] {budget['ms']:.2f} ms per block (worst {budget['max']:.2f}) "
           f"of {CHUNK_S * 1000.0:.2f} ms; look-ahead {budget['lookahead']} chunks "
           f"({budget['lookahead'] * CHUNK_S * 1000.0:.0f} ms); underruns {host.underruns}")
-    if rec is not None:
+    if rec is not None and _rec_audio:
         _dump_session(rec)
 
     pygame.quit()

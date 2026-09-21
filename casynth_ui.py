@@ -287,6 +287,13 @@ def draw_frame(screen, fonts, state, lay, rt):
     screen.blit(mode_surf, (sx, info_y + 19))
     kbd_surf = small.render(f"kbd:{note_name(state['kb_base'])}", True, C_DIM)
     screen.blit(kbd_surf, (sx + mode_surf.get_width() + 10, info_y + 21))
+    # what the last Save did (2026-09-22); absent until something is saved, so a
+    # frame dump of a fresh window is unchanged
+    _msg = getattr(rt, 'message', '')
+    if _msg:
+        screen.blit(small.render(_msg[:96], True, C_DIM),
+                    (sx + mode_surf.get_width() + 10 + kbd_surf.get_width() + 14,
+                     info_y + 21))
 
     # info row: volume (right column, below level meter)
     screen.blit(small.render(f"vol {int(state['vol'] * 100)}%", True, C_DIM),

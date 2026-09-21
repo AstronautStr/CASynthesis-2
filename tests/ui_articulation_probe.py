@@ -59,9 +59,9 @@ def click(x, y):
 
 def drive():
     time.sleep(1.5)
-    click(250, BY + 20)                 # Random: a field to sound
+    click(207, BY + 20)                 # Random: a field to sound
     time.sleep(0.3)
-    click(40, BY + 20)                  # Play
+    click(52, BY + 20)                  # Play
     time.sleep(0.3)
     click(1176, BY + 20 + 3 * 22 + 4)   # VOICE R to its maximum
     if HOLD:

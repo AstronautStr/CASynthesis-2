@@ -53,11 +53,11 @@ VOL_SECTION_Y = BY + 228
 
 # (x, y, what it is) -- every branch of the MOUSEBUTTONDOWN chain in gol_synth
 CLICKS = [
-    (40, BY + 20, 'play button'),
-    (160, BY + 20, 'step button'),
-    (250, BY + 20, 'random button'),
-    (350, BY + 20, 'clear button'),
-    (440, BY + 20, 'BPM slider'),
+    (52, BY + 20, 'play button'),
+    (129, BY + 20, 'step button'),
+    (207, BY + 20, 'random button'),
+    (285, BY + 20, 'clear button'),
+    (450, BY + 20, 'BPM slider'),
     (20, DIV_Y + 9, 'note division'),
     (600, BY + 20, 'pattern library button'),
     (RC_X, VOL_SECTION_Y + 66, 'volume slider'),
