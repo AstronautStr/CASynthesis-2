@@ -24,15 +24,47 @@ import numpy as np
 from casynth_config import SR, AUDIO_LOOKAHEAD_CHUNKS
 
 
-def open_output_stream(callback, sr=SR, channels=2):
+def open_output_stream(callback, sr=SR, channels=2, device=None):
     """A started sounddevice OutputStream (int16, low latency) -- the one device
     both hosts open.  sounddevice is imported here: an offline render never
-    needs it."""
+    needs it.
+
+    `device` = None means the system default, which is not always the thing the
+    person is listening to: a machine can have a headset, a monitor and onboard
+    speakers all at once, and "no sound" usually means the stream opened
+    somewhere else.  An index or a name substring picks one (see
+    output_devices())."""
     import sounddevice as sd
     stream = sd.OutputStream(samplerate=sr, channels=channels, dtype='int16',
-                             latency='low', callback=callback)
+                             latency='low', callback=callback, device=device)
     stream.start()
     return stream
+
+
+def output_device_name(device=None):
+    """Human name of the output that would be opened (never raises)."""
+    try:
+        import sounddevice as sd
+        info = sd.query_devices(device, kind='output')
+        api = sd.query_hostapis(info['hostapi'])['name']
+        return f"{info['name']} [{api}]"
+    except Exception as e:                    # noqa: BLE001
+        return f"unknown ({e})"
+
+
+def output_devices():
+    """[(index, name, host api, channels)] of every output -- for a person who
+    cannot hear anything and needs to know where the sound went."""
+    try:
+        import sounddevice as sd
+        out = []
+        for i, d in enumerate(sd.query_devices()):
+            if d['max_output_channels'] > 0:
+                out.append((i, d['name'], sd.query_hostapis(d['hostapi'])['name'],
+                            int(d['max_output_channels'])))
+        return out
+    except Exception:                         # noqa: BLE001
+        return []
 
 
 class BlockRing:
@@ -61,9 +93,11 @@ class BlockRing:
         return self._q.qsize() >= lookahead
 
     def prefill(self, n):
-        """n blocks of silence: the look-ahead the callback starts on."""
+        """Top the ring UP TO n blocks with silence: the look-ahead the callback
+        starts on.  Only what is missing -- a host whose render thread has already
+        put real audio in must not have silence queued behind it."""
         silent = np.zeros((self.block, self.channels), np.int16)
-        for _ in range(int(n)):
+        for _ in range(max(0, int(n) - self._q.qsize())):
             self._q.put(silent.copy())
 
     def flush(self):

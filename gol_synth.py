@@ -80,7 +80,8 @@ from casynth_session import (_dump_session, replay_session, _replay_cli,
                              _scene_cli)
 from casynth_midi import MidiInput, MIDI_AVAILABLE
 from casynth_midifile import MidiFilePlayer, MIDIFILE_AVAILABLE
-from casynth_host import AudioHost
+from casynth_host import (AudioHost, open_output_stream, output_device_name,
+                          output_devices)
 from casynth_panel import (panel_rows, shared_first, KIND_CHOICES, KIND_INACTIVE,
                            KIND_SLIDER, KIND_TOGGLE)
 from casynth_ui import _make_piano, pattern_preview_surf, draw_frame
@@ -151,7 +152,38 @@ def main(autoplay_midi=None):
     # drains its whole look-ahead in that time -- which used to be the burst of
     # underruns every session began with.  The render thread starts now and fills
     # the ring with real audio meanwhile.
-    host = AudioHost(int(CHUNK_S * SR), 2, sr=SR, lookahead=AUDIO_LOOKAHEAD_CHUNKS)
+    # CASYNTH_AUDIO_DEVICE picks the output by index or by a piece of its name;
+    # without it the system default is used.  A machine can have a headset, a
+    # monitor and onboard speakers at once, and "no sound" is usually a stream
+    # that opened somewhere the person is not listening -- so the name of the
+    # device that was opened is printed, every time.
+    _dev = os.environ.get('CASYNTH_AUDIO_DEVICE') or None
+    if _dev is not None and _dev.strip().lstrip('-').isdigit():
+        _dev = int(_dev)
+    _opened = {'device': _dev}
+
+    def _open_out(cb):
+        """Open the requested output; if it cannot be opened, say why, list what
+        there is, and fall back to the system default -- somebody who names a
+        device wants SOUND, not silence with a reason."""
+        try:
+            s = open_output_stream(cb, sr=SR, channels=2, device=_dev)
+            _opened['device'] = _dev
+            return s
+        except Exception as exc:                  # noqa: BLE001
+            if _dev is None:
+                raise
+            print(f"[audio] CASYNTH_AUDIO_DEVICE={_dev!r} did not open: {exc}")
+            print("[audio] outputs on this machine:")
+            for i, name, api, ch in output_devices():
+                print(f"          {i:3d}  {name}  [{api}]  {ch} ch")
+            print("[audio] falling back to the system default")
+            s = open_output_stream(cb, sr=SR, channels=2)
+            _opened['device'] = None
+            return s
+
+    host = AudioHost(int(CHUNK_S * SR), 2, sr=SR, lookahead=AUDIO_LOOKAHEAD_CHUNKS,
+                     output_factory=_open_out)
     _ur = {'prev': 0}                          # last underrun count shown in the UI
     # Where the render thread is, in output samples (it writes, the UI thread
     # reads).  A recorded frame stores it, so an event the UI logs per frame --
@@ -173,9 +205,11 @@ def main(autoplay_midi=None):
         ok = host.start()
         if ok:
             lat = ('?' if host.latency is None else f"{host.latency * 1000:.0f}")
-            print(f"[audio] sounddevice out latency={lat}ms "
+            print(f"[audio] playing into: {output_device_name(_opened['device'])}")
+            print(f"[audio] latency={lat}ms "
                   f"+ {AUDIO_LOOKAHEAD_CHUNKS} chunk look-ahead "
-                  f"({AUDIO_LOOKAHEAD_CHUNKS*CHUNK_S*1000:.0f}ms)")
+                  f"({AUDIO_LOOKAHEAD_CHUNKS*CHUNK_S*1000:.0f}ms)"
+                  f"   (CASYNTH_AUDIO_DEVICE=<index|name> picks another output)")
         else:
             print(f"[audio disabled: {host.device_error}] - visuals will still run")
         return ok
