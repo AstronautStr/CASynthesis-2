@@ -81,7 +81,7 @@ from casynth_session import (_dump_session, replay_session, _replay_cli,
 from casynth_midi import MidiInput, MIDI_AVAILABLE
 from casynth_midifile import MidiFilePlayer, MIDIFILE_AVAILABLE
 from casynth_host import (AudioHost, open_output_stream, output_device_name,
-                          output_devices)
+                          output_devices, audio_choice_load, audio_choice_save)
 from casynth_panel import (panel_rows, shared_first, KIND_CHOICES, KIND_INACTIVE,
                            KIND_SLIDER, KIND_TOGGLE)
 from casynth_ui import _make_piano, pattern_preview_surf, draw_frame
@@ -157,33 +157,54 @@ def main(autoplay_midi=None):
     # monitor and onboard speakers at once, and "no sound" is usually a stream
     # that opened somewhere the person is not listening -- so the name of the
     # device that was opened is printed, every time.
-    _dev = os.environ.get('CASYNTH_AUDIO_DEVICE') or None
-    if _dev is not None and _dev.strip().lstrip('-').isdigit():
-        _dev = int(_dev)
-    _opened = {'device': _dev}
+    # WHICH OUTPUT.  A machine can have a headset, a monitor and onboard speakers
+    # at once, and the system default is not always the one a person is listening
+    # to -- on this machine the default endpoint accepts the stream and plays
+    # nothing audible at all.  So the choice is the player's: it is remembered
+    # between runs (audio_device.json), overridable with CASYNTH_AUDIO_DEVICE, and
+    # changeable from the toolbar while the synth runs.
+    _req = {'device': audio_choice_load()}
+    _env_dev = os.environ.get('CASYNTH_AUDIO_DEVICE') or None
+    if _env_dev is not None:
+        _req['device'] = (int(_env_dev) if _env_dev.strip().lstrip('-').isdigit()
+                          else _env_dev)
+    _opened = {'device': _req['device']}
+    # The name is asked of the sound system, which costs about 3 ms -- fine once,
+    # ruinous 60 times a second.  It only changes when the device does.
+    _name_cache = {'device': object(), 'name': ''}
+
+    def _out_name():
+        if _name_cache['device'] != _opened['device']:
+            _name_cache['device'] = _opened['device']
+            _name_cache['name'] = output_device_name(_opened['device'])
+        return _name_cache['name']
 
     def _open_out(cb):
         """Open the requested output; if it cannot be opened, say why, list what
         there is, and fall back to the system default -- somebody who names a
         device wants SOUND, not silence with a reason."""
+        want = _req['device']
         try:
-            s = open_output_stream(cb, sr=SR, channels=2, device=_dev)
-            _opened['device'] = _dev
+            s = open_output_stream(cb, sr=SR, channels=2, device=want)
+            _opened['device'] = want
             return s
         except Exception as exc:                  # noqa: BLE001
-            if _dev is None:
+            if want is None:
                 raise
-            print(f"[audio] CASYNTH_AUDIO_DEVICE={_dev!r} did not open: {exc}")
+            print(f"[audio] output {want!r} did not open: {exc}")
             print("[audio] outputs on this machine:")
             for i, name, api, ch in output_devices():
                 print(f"          {i:3d}  {name}  [{api}]  {ch} ch")
             print("[audio] falling back to the system default")
             s = open_output_stream(cb, sr=SR, channels=2)
+            _req['device'] = None
             _opened['device'] = None
             return s
 
+    # pace=True: with no device at all the synth still advances at real time (the
+    # bench has always done this) instead of stalling after one look-ahead.
     host = AudioHost(int(CHUNK_S * SR), 2, sr=SR, lookahead=AUDIO_LOOKAHEAD_CHUNKS,
-                     output_factory=_open_out)
+                     output_factory=_open_out, pace=True)
     _ur = {'prev': 0}                          # last underrun count shown in the UI
     # Where the render thread is, in output samples (it writes, the UI thread
     # reads).  A recorded frame stores it, so an event the UI logs per frame --
@@ -196,6 +217,10 @@ def main(autoplay_midi=None):
     # The UI shows it next to the meter -- an instrument that cannot hold real
     # time must say so out loud, not hide it in an underrun counter.
     budget = {'ms': 0.0, 'max': 0.0, 'underruns': 0, 'lookahead': AUDIO_LOOKAHEAD_CHUNKS}
+    # CASYNTH_DEBUG_AUDIO=1: one line a second from the render thread saying what
+    # the synth thinks it is doing.  "No sound" has half a dozen causes and they
+    # look identical from outside -- this says WHICH one, without guessing.
+    _dbg = bool(os.environ.get('CASYNTH_DEBUG_AUDIO'))
     audio_ok = False
     _device = {'opened': False}
 
@@ -326,6 +351,7 @@ def main(autoplay_midi=None):
 
     midi_in = MidiInput()
     _midi_dropdown_open = False
+    _audio_dropdown_open = False
 
     # ── MIDI-file player: reads a .mid and drives the carrier note over time ──
     # Reuses the entire live-MIDI audio path (writes the same state['note']/gate
@@ -382,6 +408,12 @@ def main(autoplay_midi=None):
     _midi_btn    = pygame.Rect(12, _midi_bar_y, _MIDI_BTN_W, 20)
     # "Play MIDI file" toggle button, just right of the device selector.
     _mf_btn      = pygame.Rect(_midi_btn.right + 8, _midi_bar_y, 168, 20)
+    # OUTPUT selector, right of it: which device the sound actually goes to.  A
+    # machine can have a headset, a monitor and onboard speakers at once, and the
+    # system default may accept the stream and play nothing audible -- so this is
+    # the player's choice, visible without opening a console.
+    _AUDIO_BTN_W = 300
+    _audio_btn   = pygame.Rect(_mf_btn.right + 8, _midi_bar_y, _AUDIO_BTN_W, 20)
 
     # ── Engine selector: a row of TABS in the toolbar's bottom strip ──────────
     # Built from the SHARED ENGINE REGISTRY (casynth_engines) since 2026-09-21:
@@ -597,7 +629,8 @@ def main(autoplay_midi=None):
         gen_hdr_rc_y=_GEN_HDR_RC_Y, slew_btn=_slew_btn, ctrls=ctrls,
         meter_track=meter_track, midi_btn=_midi_btn, midi_btn_w=_MIDI_BTN_W,
         mf_btn=_mf_btn,
-        midi_dd_ith=_MIDI_DD_ITH, engine_tabs=engine_tabs, sb_items=_sb_items,
+        midi_dd_ith=_MIDI_DD_ITH, audio_btn=_audio_btn, audio_btn_w=_AUDIO_BTN_W,
+        engine_tabs=engine_tabs, sb_items=_sb_items,
         sb_content_h=_sb_content_h, sb_scroll_min=_sb_scroll_min,
         spec_rect=_spec_rect)
 
@@ -932,6 +965,13 @@ def main(autoplay_midi=None):
                 host.lookahead += 1
                 budget['lookahead'] = host.lookahead
             budget['underruns'] = host.underruns
+            if _dbg and cum // int(CHUNK_S * SR) % 125 == 0:
+                _cells = int(spec['grid'].sum()) if spec is not None else -1
+                _v = len(spec['voices']) if spec is not None else -1
+                print(f"[dbg] engine={eng['id']} obj={'yes' if eng['obj'] else 'NONE'} "
+                      f"cells={_cells} voices={_v} gate={int(gate)} note={note} "
+                      f"vol={state['vol']:.2f} vca={level:.3f} gain={gain:.4f} "
+                      f"peak={peak:.3f} clip={n_clip} ring={host.qsize()}", flush=True)
             host.put(buf)
             meter['peak'] = max(peak, meter['peak'] * METER_DECAY)
             meter['clip'] = n_clip > 0
@@ -1067,6 +1107,18 @@ def main(autoplay_midi=None):
                         _MIDI_BTN_W - 4, _MIDI_DD_ITH)
             for di in range(len(_midi_dd_items))
         ]
+        # outputs: (device or None = system default, label)
+        if _audio_dropdown_open:
+            _audio_dd_items = [(None, 'System default')] + [
+                (i, f"{i:3d}  {name}  [{api}]") for i, name, api, _ch in output_devices()]
+        else:
+            _audio_dd_items = []
+        _audio_dd_rects = [
+            pygame.Rect(_audio_btn.left + 2,
+                        _audio_btn.bottom + 2 + di * _MIDI_DD_ITH,
+                        _AUDIO_BTN_W - 4, _MIDI_DD_ITH)
+            for di in range(len(_audio_dd_items))
+        ]
 
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
@@ -1101,7 +1153,26 @@ def main(autoplay_midi=None):
                     state['div_idx'] = max(0, state['div_idx'] - 1)
 
             elif e.type == pygame.MOUSEBUTTONDOWN:
-                if _midi_dropdown_open:
+                if _audio_dropdown_open:
+                    # any click closes it; a click on an item moves the sound there
+                    for di, item_rect in enumerate(_audio_dd_rects):
+                        if item_rect.collidepoint(e.pos):
+                            _req['device'] = _audio_dd_items[di][0]
+                            if host.reopen():
+                                # CASYNTH_NO_PERSIST: a probe may drive this menu
+                                # without overwriting the player's own choice
+                                if not os.environ.get('CASYNTH_NO_PERSIST'):
+                                    audio_choice_save(_opened['device'])
+                                audio_ok = True
+                                print(f"[audio] playing into: "
+                                      f"{output_device_name(_opened['device'])}")
+                            else:
+                                audio_ok = False
+                                print(f"[audio] {_req['device']!r} did not open: "
+                                      f"{host.device_error}")
+                            break
+                    _audio_dropdown_open = False
+                elif _midi_dropdown_open:
                     # Any click closes the dropdown; item click also selects.
                     for di, item_rect in enumerate(_midi_dd_rects):
                         if item_rect.collidepoint(e.pos):
@@ -1137,6 +1208,8 @@ def main(autoplay_midi=None):
                                         if t['rect'].collidepoint(e.pos)), None)
                         if MIDIFILE_AVAILABLE and _mf_btn.collidepoint(e.pos):
                             _toggle_midifile()
+                        elif _audio_btn.collidepoint(e.pos):
+                            _audio_dropdown_open = not _audio_dropdown_open
                         elif MIDI_AVAILABLE and _midi_btn.collidepoint(e.pos):
                             _midi_dropdown_open = not _midi_dropdown_open
                         elif tab_hit is not None:
@@ -1352,6 +1425,12 @@ def main(autoplay_midi=None):
             # this first frame -- see _open_device)
             audio_ok=(audio_ok or not _device['opened']), midi_in=midi_in,
             midi_dropdown_open=_midi_dropdown_open, midi_dd_items=_midi_dd_items,
+            audio_dropdown_open=_audio_dropdown_open, audio_dd_items=_audio_dd_items,
+            audio_dd_rects=_audio_dd_rects,
+            audio_name=_out_name(),
+            # 'ok' it plays there / 'pending' not opened yet / 'failed' it refused
+            audio_state=('ok' if audio_ok else
+                         ('pending' if not _device['opened'] else 'failed')),
             midi_dd_rects=_midi_dd_rects, midifile=midifile)
         draw_frame(screen, (font, small), state, lay, rt)
         pygame.display.flip()

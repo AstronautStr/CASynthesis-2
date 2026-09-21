@@ -83,6 +83,28 @@ class SharedPieces(unittest.TestCase):
                 with self.assertRaises(ValueError, msg=eid):
                     e.render(0.04, BLOCK, transpose=1.5)
 
+    def test_every_engine_makes_a_signal_on_a_living_field(self):
+        """The cheap half of the "no sound" question: an engine handed a field
+        with figures in it and a gain must return a level, not silence.  The
+        prototype-level half is tests/ui_sound_probe.py."""
+        from casynth_engines import EngineContext
+        ctx = EngineContext(SR, BLOCK, 2, 110.0, 1.0, 4.0)
+        g = np.zeros((32, 32), np.uint8)
+        g[5, 5:8] = 1
+        g[10:14, 10:14] = 1
+        g[20, 20:23] = 1
+        g[21, 19] = 1
+        for eid in registry.ids():
+            e = registry.create(eid, ctx, registry.defaults(eid))
+            e.init(g, None, 0.04)
+            peak, loud = 0.0, 0
+            for i in range(30):
+                buf, pk, _nc = e.render(0.04, i * BLOCK)
+                peak = max(peak, float(pk))
+                loud = max(loud, int(np.abs(buf).max()))
+            self.assertGreater(peak, 0.0, f"{eid}: rendered no level at all")
+            self.assertGreater(loud, 0, f"{eid}: every sample it returned was zero")
+
     def test_importing_the_engines_does_not_drag_the_bench_in(self):
         """A1: a host imports casynth_engines without numba or the resonator bank."""
         import subprocess

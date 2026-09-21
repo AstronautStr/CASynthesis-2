@@ -29,6 +29,8 @@ Extracted 1:1 from mapping_bench.py; the Laplacian path matches the (newer,
 researcher-fixed) gol_life_synth_laplacian.py copy.  Both apps import from here.
 """
 
+import threading
+
 import numpy as np
 from scipy import ndimage, linalg
 
@@ -42,6 +44,24 @@ _GUARD = 0.45 * SR         # anti-alias guard frequency (Hz)
 
 
 # ── Shape extraction ──────────────────────────────────────────────────────────
+
+
+# numpy's symmetric eigenVECTOR routine is not safe to call from two threads at
+# once on this build: two concurrent np.linalg.eigh calls corrupt the heap and
+# the process dies with an access violation -- no Python traceback, the window
+# simply closes.  Found 2026-09-21, when the prototype began analysing on the
+# RENDER thread (it hosts the engine now) while the UI thread analysed for the
+# display: dragging `shape`, which is exactly what turns the eigenvector path on,
+# killed the synth within seconds.  np.linalg.eigvalsh (values only) is safe and
+# is left alone, as is scipy's eigh; only this one is serialized.
+# The lock changes no arithmetic and no ordering -- the bytes are the same.
+_EIGH_LOCK = threading.Lock()
+
+
+def eigh_sym(a):
+    """np.linalg.eigh, serialized across threads (see _EIGH_LOCK)."""
+    with _EIGH_LOCK:
+        return np.linalg.eigh(a)
 
 def extract(grid, size=PATCH_SIZE):
     """Return a size×size patch centered on the centroid of live cells.
@@ -279,7 +299,7 @@ def laplacian_modes(L, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.
     # sqrt(lambda) is proportional to resonant mode frequency (membrane analogy).
     # shape>0 needs eigenvectors; shape==0 uses the faster eigvalsh-only path.
     if shape > 0.0:
-        eigs, vecs = np.linalg.eigh(L)
+        eigs, vecs = eigh_sym(L)
     else:
         eigs = np.linalg.eigvalsh(L)
     nonzero_mask = eigs > 1e-6

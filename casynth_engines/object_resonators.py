@@ -260,7 +260,8 @@ import math
 
 import numpy as np
 
-from casynth_core import (ENGINE_BY_ID, PATCH_SIZE, extract, laplacian_modes, map_laplacian)
+from casynth_core import (ENGINE_BY_ID, PATCH_SIZE, extract, laplacian_modes, map_laplacian,
+                          eigh_sym)
 from casynth_engine import _crop_like_extract
 from .engine_api import SoundEngine
 from .registry import EngineSpec, register
@@ -390,7 +391,7 @@ def mode_participation(L, idx, tol=DEGEN_TOL):
     m = int(len(idx))
     if m == 0:
         return np.zeros((0, N))
-    lam, vecs = np.linalg.eigh(L)
+    lam, vecs = eigh_sym(L)                  # serialized: see casynth_core._EIGH_LOCK
     sq = vecs * vecs
     P = np.empty((m, N))
     for t, group in enumerate(degenerate_groups(lam, idx, tol)):
@@ -525,7 +526,7 @@ def birth_position_weights(L, idx, born):
     m = int(len(idx))
     if m == 0:
         return np.zeros(0), 0.0
-    lam, vecs = np.linalg.eigh(np.asarray(L, np.float64))
+    lam, vecs = eigh_sym(np.asarray(L, np.float64))   # serialized (casynth_core)
     born = np.asarray(born, bool)
     part = (vecs[born, :] ** 2).sum(axis=0) if born.any() else np.zeros(len(lam))
     p = np.empty(m)

@@ -34,6 +34,9 @@ Gates (any FAIL -> exit 1):
   3b. ui clicks        python tests/ui_click_probe.py             (every branch of the
                        prototype's mouse chain: buttons, sliders, knob rows, tabs,
                        piano, painting -- the frame dump sends no events at all)
+  3c. it makes a sound python tests/ui_sound_probe.py             (Random + Play with the
+                       MOUSE on every engine the prototype offers, then: did the level
+                       move and was anything recorded -- the question a player asks)
 
 Keep stdout ASCII-only: the default Windows console codepage (cp1251) chokes on
 fancy glyphs, and agents run this a lot.
@@ -229,6 +232,12 @@ def main():
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"},
                          timeout=300)))
+
+    results.append(("it makes a sound (Random + Play on every engine)",
+                    _run("sound probe", [py, os.path.join("tests", "ui_sound_probe.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"},
+                         timeout=900)))
 
     print("--- summary ---")
     failed = [n for (n, ok) in results if not ok]

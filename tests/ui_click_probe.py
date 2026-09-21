@@ -29,7 +29,8 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
 os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
-os.environ.setdefault('CASYNTH_RUN_SECONDS', '9')
+os.environ.setdefault('CASYNTH_RUN_SECONDS', '11')
+os.environ['CASYNTH_NO_PERSIST'] = '1'      # never overwrite the player's output choice
 
 import pygame                                                    # noqa: E402
 from casynth_config import (GRID_W, GRID_H, CELL, TOOLBAR_H, PIANO_H)  # noqa: E402
@@ -38,7 +39,9 @@ import gol_synth                                                 # noqa: E402
 W = GRID_W * CELL
 BY = GRID_H * CELL + 8                      # the toolbar's first row
 TAB_Y = GRID_H * CELL + TOOLBAR_H - 24      # the engine tabs
-MIDI_Y = GRID_H * CELL + TOOLBAR_H - 48     # the MIDI bar
+MIDI_Y = GRID_H * CELL + TOOLBAR_H - 48     # the MIDI bar / the OUT selector
+OUT_X = 620                                 # inside the OUT button
+OUT_ITEM_Y = MIDI_Y + 20 + 2 + 9            # the first row of its dropdown
 DIV_Y = BY + 46                             # the note-division buttons
 INFO_Y = GRID_H * CELL + 76
 PIANO_Y = GRID_H * CELL + TOOLBAR_H + PIANO_H // 2
@@ -85,6 +88,12 @@ def click(x, y, button=1, drag=0):
 
 def drive():
     time.sleep(1.2)                       # let the first frame publish and the device open
+    click(OUT_X, MIDI_Y + 10)             # OUT: open the output list
+    print("[probe] OUT dropdown opened", flush=True)
+    time.sleep(0.2)
+    click(OUT_X, OUT_ITEM_Y)              # pick the first entry (the system default)
+    print("[probe] output switched from the menu", flush=True)
+    time.sleep(0.4)
     for x, y, what in CLICKS:
         click(x, y, button=(3 if 'erase' in what else 1), drag=(12 if 'slider' in what else 0))
         print(f"[probe] {what}", flush=True)

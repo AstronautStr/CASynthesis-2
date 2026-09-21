@@ -15,6 +15,8 @@ Threads: the render thread only calls put() / full(); the audio callback only
 calls ring.fill() / ring.drain().  A queue.Queue is the only shared object, so
 nothing but finished int16 blocks crosses the boundary.
 """
+import json
+import os
 import queue
 import threading
 import time
@@ -65,6 +67,59 @@ def output_devices():
         return out
     except Exception:                         # noqa: BLE001
         return []
+
+
+# -- which output, remembered between runs --------------------------------------
+# The system default is not always the device a person is listening to: a machine
+# can have a headset, a monitor and onboard speakers at once, and an endpoint can
+# accept a stream and render nothing audible.  So the choice is the player's, and
+# it outlives the session.  Stored by NAME (indices move when devices come and
+# go) with the index as a fallback hint.
+AUDIO_CHOICE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 'audio_device.json')
+
+
+def audio_choice_save(device, path=AUDIO_CHOICE_FILE):
+    """Remember the chosen output (None = follow the system default)."""
+    doc = {'device': None}
+    if device is not None:
+        try:
+            import sounddevice as sd
+            info = sd.query_devices(device, kind='output')
+            doc = {'device': {'name': info['name'],
+                              'hostapi': sd.query_hostapis(info['hostapi'])['name'],
+                              'index': int(device) if isinstance(device, int) else None}}
+        except Exception:                        # noqa: BLE001
+            doc = {'device': {'name': str(device), 'hostapi': None, 'index': None}}
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(doc, f, indent=1, ensure_ascii=False)
+    except OSError:
+        pass
+    return doc
+
+
+def audio_choice_load(path=AUDIO_CHOICE_FILE):
+    """The remembered output as an index, or None to follow the system default.
+    A device that is gone (unplugged, renamed) resolves to None rather than to
+    somebody else's speakers."""
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
+    except (OSError, ValueError):
+        return None
+    want = (doc or {}).get('device')
+    if not isinstance(want, dict):
+        return None
+    name, api, idx = want.get('name'), want.get('hostapi'), want.get('index')
+    for i, dev_name, dev_api, _ch in output_devices():
+        if dev_name == name and (api is None or dev_api == api):
+            return i
+    if isinstance(idx, int):
+        for i, _n, _a, _c in output_devices():
+            if i == idx:
+                return i
+    return None
 
 
 class BlockRing:
@@ -224,6 +279,34 @@ class AudioHost:
             if self._pace:
                 self._pacer = threading.Thread(target=self._pace_loop, daemon=True)
                 self._pacer.start()
+        return self.device_ok
+
+    def reopen(self):
+        """Open the output again -- after the host's factory has been pointed at
+        another device.  The render thread and the ring are untouched: only who
+        DRAINS the ring changes.  Whatever the old device had queued is dropped,
+        because it belongs to a stream nobody is listening to any more.
+
+        Returns device_ok; the reason for a failure is in device_error, and the
+        host keeps running silently rather than dying on a bad choice."""
+        if self._stream is not None:
+            try:
+                self._stream.stop()
+                self._stream.close()
+            except Exception:                     # noqa: BLE001
+                pass
+            self._stream = None
+        self.device_ok = False
+        self.device_error = None
+        self.latency = None
+        self.ring.flush()
+        try:
+            self.ring.prefill(self.lookahead)
+            self._stream = self._factory(self._callback)
+            self.device_ok = True
+            self.latency = getattr(self._stream, 'latency', None)
+        except Exception as e:                    # noqa: BLE001
+            self.device_error = str(e) or type(e).__name__
         return self.device_ok
 
     def stop(self):

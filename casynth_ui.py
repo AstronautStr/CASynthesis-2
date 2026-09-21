@@ -135,6 +135,8 @@ def draw_frame(screen, fonts, state, lay, rt):
     meter_track    = lay.meter_track
     _midi_btn      = lay.midi_btn
     _mf_btn        = lay.mf_btn
+    _audio_btn     = getattr(lay, 'audio_btn', None)
+    _AUDIO_BTN_W   = getattr(lay, 'audio_btn_w', 0)
     _MIDI_BTN_W    = lay.midi_btn_w
     _MIDI_DD_ITH   = lay.midi_dd_ith
     engine_tabs    = lay.engine_tabs
@@ -158,6 +160,11 @@ def draw_frame(screen, fonts, state, lay, rt):
     midifile            = rt.midifile
     _midi_dropdown_open = rt.midi_dropdown_open
     _midi_dd_items      = rt.midi_dd_items
+    _audio_dropdown_open = getattr(rt, 'audio_dropdown_open', False)
+    _audio_dd_items      = getattr(rt, 'audio_dd_items', [])
+    _audio_dd_rects      = getattr(rt, 'audio_dd_rects', [])
+    _audio_name          = getattr(rt, 'audio_name', None)
+    _audio_state         = getattr(rt, 'audio_state', 'pending')
     _midi_dd_rects      = rt.midi_dd_rects
 
     # ── draw field ──────────────────────────────────────────────────────
@@ -376,6 +383,25 @@ def draw_frame(screen, fonts, state, lay, rt):
                     (_mf_btn.left + 6,
                      _mf_btn.centery - _mf_lbl.get_height() // 2))
 
+    # ── OUTPUT selector (right of the MIDI-file button) ───────────────────
+    # Where the sound actually goes.  A machine can have a headset, a monitor and
+    # onboard speakers at once, and an endpoint can accept the stream and play
+    # nothing audible -- so the device is named here, in the window, not only in
+    # a console nobody has open.
+    if _audio_btn is not None:
+        hot_out = _audio_btn.collidepoint(mouse)
+        pygame.draw.rect(screen, C_BTN_HOT if hot_out else C_BTN,
+                         _audio_btn, border_radius=3)
+        _out_dot = {'ok': (80, 200, 120), 'failed': (212, 76, 76)}.get(_audio_state, C_DIM)
+        pygame.draw.circle(screen, _out_dot,
+                           (_audio_btn.left + 8, _audio_btn.centery), 4)
+        _out_disp = _audio_name or "no device"
+        if len(_out_disp) > 34:
+            _out_disp = _out_disp[:33] + "…"
+        _out_lbl = small.render(f"OUT: {_out_disp}  ▾", True, C_TXT)
+        screen.blit(_out_lbl, (_audio_btn.left + 18,
+                               _audio_btn.centery - _out_lbl.get_height() // 2))
+
     # ── engine selector tabs (bottom strip of the toolbar) ────────────────
     for t in engine_tabs:
         active = (t['id'] == state['engine'])
@@ -438,6 +464,21 @@ def draw_frame(screen, fonts, state, lay, rt):
         screen.blit(dlbl, (mx + 14, my - dlbl.get_height() // 2))
 
     # ── MIDI dropdown overlay (drawn last so it floats above everything) ──
+    if _audio_dropdown_open and _audio_dd_items and _audio_btn is not None:
+        _odd = pygame.Rect(_audio_btn.left, _audio_btn.bottom + 1, _AUDIO_BTN_W,
+                           len(_audio_dd_items) * _MIDI_DD_ITH + 4)
+        pygame.draw.rect(screen, C_PANEL, _odd, border_radius=4)
+        pygame.draw.rect(screen, C_EDGE, _odd, 1, border_radius=4)
+        for item_rect, (dev, label) in zip(_audio_dd_rects, _audio_dd_items):
+            if item_rect.collidepoint(mouse):
+                pygame.draw.rect(screen, C_BTN_HOT, item_rect, border_radius=3)
+            disp = label if len(label) <= 40 else label[:39] + "…"
+            chosen = (_audio_state == 'ok' and _audio_name is not None
+                      and dev is not None and _audio_name.split(' [')[0][:20] in label)
+            screen.blit(small.render(disp, True, C_ACCENT if chosen else C_TXT),
+                        (item_rect.left + 4,
+                         item_rect.centery - small.get_height() // 2))
+
     if _midi_dropdown_open and MIDI_AVAILABLE and _midi_dd_items:
         _dd_rect = pygame.Rect(_midi_btn.left,
                                _midi_btn.bottom + 1,
