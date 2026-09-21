@@ -13,7 +13,12 @@ So this drives the real prototype, drags `shape` down and back up, and reads the
 rows the panel actually built (CASYNTH_PANEL_LOG, a test hook like
 CASYNTH_DUMPFRAME).
 
-Run: python tests/ui_panel_probe.py        (exit 0 = the row came back by itself)
+It then TYPES A RANGE into the Max field of `part` (2026-09-22: every slider has
+a Min / Max pair and the track spans between them) and checks the slider took it,
+that a refused value leaves the old range standing, and that a right click gives
+the whole registry range back.
+
+Run: python tests/ui_panel_probe.py        (exit 0 = the panel obeyed)
 """
 import os
 import subprocess
@@ -27,7 +32,8 @@ if ROOT not in sys.path:
 from casynth_config import GRID_H, CELL                            # noqa: E402
 
 BY = GRID_H * CELL + 8                     # the toolbar's first row
-CTRL_X = 740                               # inside column A's slider track
+CTRL_X = 790                               # inside column A's slider track
+MAX_FIELD_X = 860                          # inside the Max field of that row
 ROW_H = 22                                 # the panel's row pitch
 SHAPE_ROW = 3                              # n, spread, alpha, SHAPE, harm, full, dyn
 SECONDS = 8
@@ -51,6 +57,19 @@ def drag(x, y, to):
                                          buttons=(1, 0, 0), rel=(to - x, 0)))
     pygame.event.post(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=(to, y), button=1))
 
+PART_Y = BY + 2 + 0 * ROW_H + 4            # the `part` row (first of the panel)
+
+def click(x, y, button=1):
+    pygame.event.post(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(x, y), button=button))
+    pygame.event.post(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=(x, y), button=button))
+
+def typed(text, key=pygame.K_RETURN):
+    for ch in text:
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=ord(ch), mod=0,
+                                             unicode=ch, scancode=0))
+    pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=key, mod=0,
+                                         unicode='', scancode=0))
+
 def drive():
     time.sleep(1.5)
     print("[probe] shape -> 0", flush=True)
@@ -59,6 +78,19 @@ def drive():
     print("[probe] shape -> 1", flush=True)
     drag(CTRL_X, Y, CTRL_X + 400)          # off the right end -> full
     time.sleep(0.6)
+    print("[probe] part: max -> 8", flush=True)
+    click(%(maxx)d, PART_Y)                # the Max field of `part`
+    time.sleep(0.2)
+    typed("8")                             # replaces the selected text
+    time.sleep(0.4)
+    print("[probe] part: max -> 999 (refused)", flush=True)
+    click(%(maxx)d, PART_Y)
+    time.sleep(0.2)
+    typed("999")                           # above the registry bound: refused
+    time.sleep(0.4)
+    print("[probe] part: right click resets", flush=True)
+    click(%(maxx)d, PART_Y, button=3)
+    time.sleep(0.4)
     print("[probe] done", flush=True)
 
 threading.Thread(target=drive, daemon=True).start()
@@ -71,7 +103,7 @@ def main():
     env = dict(os.environ, PYTHONUTF8='1', CASYNTH_PANEL_LOG=log,
                CASYNTH_ENGINE='laplace_unified')
     code = DRIVER % {'seconds': SECONDS, 'root': ROOT, 'by': BY, 'x': CTRL_X,
-                     'row_h': ROW_H, 'shape_row': SHAPE_ROW}
+                     'row_h': ROW_H, 'shape_row': SHAPE_ROW, 'maxx': MAX_FIELD_X}
     out = subprocess.run([sys.executable, '-c', code], cwd=ROOT, env=env,
                          capture_output=True, text=True, encoding='utf-8',
                          timeout=SECONDS + 120)
@@ -88,7 +120,8 @@ def main():
     if not rows:
         print("[FAIL] the panel was never built")
         return 1
-    has_dyn = ['dyn' in r[1:] for r in rows]
+    names = [[t.split('=')[0] for t in r[1:]] for r in rows]
+    has_dyn = ['dyn' in n for n in names]
     if not has_dyn[0]:
         print("[FAIL] Laplace+ opened WITHOUT the dyn row: " + ' '.join(rows[0][1:]))
         return 1
@@ -103,8 +136,23 @@ def main():
         for r in rows:
             print("   ", ' '.join(r))
         return 1
-    print(f"[PASS] the panel followed the knob ({len(rows)} rebuilds; "
-          f"dyn hidden at shape 0, back at shape 1)")
+    # ... and the typed range: `part` spans 1..8, keeps it when 999 is refused,
+    # and goes back to the registry range on the right click
+    spans = [dict(t.split('=', 1) for t in r[1:] if '=' in t).get('n') for r in rows]
+    if '1..8' not in spans:
+        print(f"[FAIL] typing 8 into Max never reached the slider: {spans}")
+        for r in rows:
+            print("   ", ' '.join(r))
+        return 1
+    after = spans[spans.index('1..8'):]
+    if after[-1] != '1..20':
+        print(f"[FAIL] the right click did not restore the registry range: {spans}")
+        return 1
+    if any(s and s not in ('1..8', '1..20') for s in after):
+        print(f"[FAIL] a refused range changed the slider anyway: {spans}")
+        return 1
+    print(f"[PASS] the panel followed the knobs ({len(rows)} rebuilds; dyn hidden at "
+          f"shape 0 and back at shape 1; part typed to 1..8, 999 refused, reset to 1..20)")
     return 0
 
 

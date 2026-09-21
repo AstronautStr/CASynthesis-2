@@ -201,15 +201,20 @@ def create(engine_id, ctx, params):
     return get(engine_id).factory(ctx, params)
 
 
-def validate_range(engine_id, name, lo, hi):
-    """A user range of a ranged parameter (EngineSpec.ranges): finite numbers with
-    spec lo <= lo < hi <= spec hi; returns (lo, hi) as floats or raises ValueError."""
+def slider_range(engine_id, name, lo, hi):
+    """A slider range for ANY numeric parameter: finite numbers with
+    spec lo <= lo < hi <= spec hi; returns (lo, hi) as floats or raises ValueError.
+
+    The bench only lets a RANGED parameter have one (validate_range below adds
+    that check); the prototype gives the pair to every slider it draws, so the
+    arithmetic and the messages live here once."""
     if not has(engine_id):
         raise ValueError(f"unknown engine {engine_id!r}")
     spec = get(engine_id)
-    if name not in spec.ranges:
-        raise ValueError(f"{engine_id}.{name}: not a parameter with a user range")
-    _arg, _label, slo, shi, _integer, _default = spec.spec_of(name)
+    p = spec.spec_of(name)
+    if p is None:
+        raise ValueError(f"{engine_id}: no parameter {name!r}")
+    _arg, _label, slo, shi, _integer, _default = p
     out = []
     for label, v in (('min', lo), ('max', hi)):
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
@@ -223,6 +228,14 @@ def validate_range(engine_id, name, lo, hi):
     if not (lo < hi):
         raise ValueError(f"{engine_id}.{name} range: min {lo!r} must be below max {hi!r}")
     return lo, hi
+
+
+def validate_range(engine_id, name, lo, hi):
+    """A user range of a RANGED parameter (EngineSpec.ranges) -- the bench's rule:
+    the parameter must be one that declares a user-editable sub-range."""
+    if has(engine_id) and name not in get(engine_id).ranges:
+        raise ValueError(f"{engine_id}.{name}: not a parameter with a user range")
+    return slider_range(engine_id, name, lo, hi)
 
 
 def default_range(engine_id, name):

@@ -14,6 +14,7 @@ like what they are, and unifying them would move pixels.
     for row in panel_rows(spec, params, ranges=..., inactive=...):
         row.kind    -- 'slider' | 'toggle' | 'choices' | 'inactive'
         row.lo, row.hi   -- the bounds the widget spans (the user range if any)
+        row.bound_lo, row.bound_hi -- what the spec allows (a range stays inside)
         row.value   -- the applied value
         row.choices -- the words of a named-choice parameter (else ())
         row.text    -- why an inactive parameter does not act (else '')
@@ -28,15 +29,17 @@ KIND_INACTIVE = 'inactive'
 class PanelRow:
     """One parameter of one engine, ready to be drawn."""
     __slots__ = ('arg', 'label', 'kind', 'lo', 'hi', 'integer', 'value',
-                 'choices', 'text', 'ranged')
+                 'choices', 'text', 'ranged', 'bound_lo', 'bound_hi')
 
     def __init__(self, arg, label, kind, lo, hi, integer, value,
-                 choices=(), text='', ranged=False):
+                 choices=(), text='', ranged=False, bounds=None):
         self.arg = arg
         self.label = label
         self.kind = kind
         self.lo = lo
         self.hi = hi
+        # what the SPEC allows, which a user range may narrow but never leave
+        self.bound_lo, self.bound_hi = bounds if bounds is not None else (lo, hi)
         self.integer = bool(integer)
         self.value = value
         self.choices = tuple(choices)
@@ -46,6 +49,13 @@ class PanelRow:
     def __repr__(self):              # diagnostics only
         return (f"PanelRow({self.arg!r}, {self.kind}, {self.lo}..{self.hi}, "
                 f"value={self.value!r})")
+
+
+def range_text(value, integer):
+    """How an end of a slider's range is written: whole for an integer knob,
+    shortest exact form otherwise (0, 0.5, 1.97).  Both panels print it and the
+    prototype's Min / Max fields parse what they print."""
+    return f"{int(round(value)):d}" if integer else f"{float(value):g}"
 
 
 def is_toggle(spec_tuple):
@@ -81,8 +91,12 @@ def panel_rows(spec, params, ranges=None, inactive=None, order=None):
         value = params[arg]
         # the bounds a parameter's widget spans do not depend on whether it acts:
         # a ranged parameter keeps the user's sub-range even while shown as text
+        bounds = (lo, hi)
         ranged = arg in spec.ranges
-        if ranged:
+        if ranged or arg in ranges:
+            # the bench gives a sub-range to the parameters that declare one; the
+            # prototype gives every slider a Min / Max pair (2026-09-22), and both
+            # arrive here as `ranges`
             rlo, rhi = ranges.get(arg) or spec.ranges[arg]
             lo, hi = float(rlo), float(rhi)
         if arg in inactive:
@@ -94,7 +108,7 @@ def panel_rows(spec, params, ranges=None, inactive=None, order=None):
         else:
             kind, extra = KIND_SLIDER, {}
         out.append(PanelRow(arg, label, kind, lo, hi, integer, value,
-                            ranged=ranged, **extra))
+                            ranged=ranged, bounds=bounds, **extra))
     return out
 
 

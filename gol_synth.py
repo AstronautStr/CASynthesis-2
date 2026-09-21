@@ -82,11 +82,12 @@ from casynth_midi import MidiInput, MIDI_AVAILABLE
 from casynth_midifile import MidiFilePlayer, MIDIFILE_AVAILABLE
 from casynth_host import (AudioHost, open_output_stream, output_device_name,
                           output_devices, audio_choice_load, audio_choice_save)
-from casynth_panel import (panel_rows, shared_first, KIND_CHOICES, KIND_INACTIVE,
-                           KIND_SLIDER, KIND_TOGGLE)
+from casynth_panel import (panel_rows, shared_first, range_text as panel_range_text,
+                           KIND_CHOICES, KIND_INACTIVE, KIND_SLIDER, KIND_TOGGLE)
 from casynth_ui import _make_piano, pattern_preview_surf, draw_frame
 from casynth_engines import registry as engines
 from casynth_engines.engine_api import EngineContext, PAN_FIELD_MODE
+from casynth_textedit import TextEdit
 from casynth_tuning import (dissonance_curve, scale_minima, snap_ratio,
                              TUNE_MAX_PARTIALS)
 
@@ -344,6 +345,11 @@ def main(autoplay_midi=None):
         engine=(os.environ.get('CASYNTH_ENGINE') if os.environ.get('CASYNTH_ENGINE') in playable
                 else (DEFAULT_ENGINE if DEFAULT_ENGINE in playable else playable[0])),
         engine_params={eid: _start_params(eid) for eid in playable},
+        # What each slider SPANS, per engine: {arg: (min, max)} for the knobs the
+        # player has narrowed; anything absent spans the registry bounds.  The
+        # value itself is never touched by a range -- a value outside it simply
+        # sits at the end of the track, the rule the bench uses.
+        engine_ranges={eid: {} for eid in playable},
         # GEN ADSR: per-mode envelope on the AUTOMATON clock; A/D/R are FRACTIONS of
         # one step interval (see casynth_config), S is a 0..1 level.
         gen_attack=GEN_ATTACK_DEFAULT,
@@ -495,7 +501,16 @@ def main(autoplay_midi=None):
     # note-on/off) over GEN ADSR (per-mode, automaton clock) + a Tune row.
     # Engine-attribute sliders write state['engine_params'][engine]; VOICE sliders
     # write state['voice_*'], GEN sliders write state['gen_*'].
-    CTRL_LABEL_W, CTRL_TRACK_W = 56, 120
+    # A knob row is  label | MIN field | track | MAX field  (2026-09-22, the user
+    # played a bench that had them: "the slider blends between the two").  The
+    # pair is what the track SPANS, so a knob can be given the resolution the
+    # music needs -- the registry lo/hi stay the bounds a range may not leave.
+    # The value moves INSIDE the track: the two fields cost 74 px of a 218 px
+    # column and there is nowhere else for it to go.
+    RANGE_FIELD_W = 34
+    RANGE_GAP = 3
+    # Column A is 218 px: 44 label + 34 min + 3 + 96 track + 3 + 34 max + 4.
+    CTRL_LABEL_W, CTRL_TRACK_W = 44, 96
     _ctrl_x  = _pat_btn.right + 16
     _ctrl_y0 = by + 2
     _CTRL_ROW_H = 22
@@ -505,8 +520,9 @@ def main(autoplay_midi=None):
     # -> 13 rows per column and a 172 px gap between the columns.  Column A keeps
     # its pixels, so the four harmonic engines look exactly as before.
     _ctrl2_x       = _ctrl_x + 218                # 884
-    CTRL2_LABEL_W  = 40                           # track 924..996
-    CTRL2_TRACK_W  = 72                           # value 1002..1044, 4 px to _rc_x
+    # ... and column B is 164 px: 34 label + 34 min + 3 + 52 track + 3 + 34 max + 4
+    CTRL2_LABEL_W  = 34
+    CTRL2_TRACK_W  = 52
     _CTRL_ROWS_MAX = 13
     # Right column, top to bottom: VOICE ADSR block, GEN ADSR block, Tune row.
     # VOICE header at _ctrl_y0; its 4 knobs at _VOICE_RC_Y0 + row*22.
@@ -587,7 +603,8 @@ def main(autoplay_midi=None):
         off = spec.inactive(params) if spec.inactive is not None else {}
         _panel['off'] = frozenset(off)
         _panel['n'] += 1
-        rows = [r for r in panel_rows(spec, params, order=order, inactive=off)
+        rows = [r for r in panel_rows(spec, params, order=order, inactive=off,
+                                      ranges=state['engine_ranges'][state['engine']])
                 if r.kind != KIND_INACTIVE][:2 * _CTRL_ROWS_MAX]
         two_columns = len(rows) > _CTRL_ROWS_MAX
         for i, r in enumerate(rows):
@@ -595,12 +612,25 @@ def main(autoplay_midi=None):
             lx = _ctrl_x if col == 0 else _ctrl2_x
             lw = CTRL_LABEL_W if col == 0 else CTRL2_LABEL_W
             tw = CTRL_TRACK_W if col == 0 else CTRL2_TRACK_W
-            track = pygame.Rect(lx + lw, _ctrl_y0 + (i % _CTRL_ROWS_MAX) * _CTRL_ROW_H,
-                                tw, 8)
+            # a slider row keeps room for the Min field before the track; every
+            # other widget (a pill, a word row, a line of text) starts where the
+            # label ends, as it always did
+            _row_y = _ctrl_y0 + (i % _CTRL_ROWS_MAX) * _CTRL_ROW_H
+            _track_x = lx + lw + (RANGE_FIELD_W + RANGE_GAP
+                                  if r.kind == KIND_SLIDER else 0)
+            track = pygame.Rect(_track_x, _row_y, tw, 8)
             c = dict(id=r.arg, label=r.label, lo=r.lo, hi=r.hi, integer=r.integer,
                      scope='engine', block='engine', kind=r.kind,
-                     fmt=_fmt_for(r.integer, False), label_x=lx, track=track,
-                     choices=r.choices, hit=track.inflate(0, 14))
+                     fmt=_fmt_for(r.integer, False), label_x=lx, label_w=lw - 2,
+                     track=track, choices=r.choices, hit=track.inflate(0, 14))
+            if r.kind == KIND_SLIDER:
+                # the Min / Max fields the track spans between; the registry
+                # bounds are what a typed range may not leave (set_range)
+                c['range_rects'] = {
+                    'min': pygame.Rect(lx + lw, _row_y - 4, RANGE_FIELD_W, 16),
+                    'max': pygame.Rect(track.right + RANGE_GAP, _row_y - 4,
+                                       RANGE_FIELD_W, 16)}
+                c['bounds'] = (r.bound_lo, r.bound_hi)
             if r.kind == KIND_TOGGLE:
                 c['pill'] = pygame.Rect(track.left, track.centery - 8, 34, 16)
                 c['hit'] = c['pill'].inflate(4, 4)
@@ -664,9 +694,11 @@ def main(autoplay_midi=None):
         if _panel_log:
             try:
                 with open(_panel_log, 'a', encoding='utf-8') as _f:
-                    _f.write(state['engine'] + ' '
-                             + ' '.join(c['id'] for c in ctrls if c['scope'] == 'engine')
-                             + '\n')
+                    _f.write(state['engine'] + ' ' + ' '.join(
+                        (f"{c['id']}={panel_range_text(c['lo'], c['integer'])}"
+                         f"..{panel_range_text(c['hi'], c['integer'])}"
+                         if c.get('range_rects') else c['id'])
+                        for c in ctrls if c['scope'] == 'engine') + '\n')
             except OSError:
                 pass
 
@@ -706,6 +738,11 @@ def main(autoplay_midi=None):
     dragging_vol = False
     dragging_bpm = False
     dragging_ctrl = None          # id of the timbre knob being dragged, or None
+    # The Min / Max field being typed into: {'id', 'which', 'edit': TextEdit}.
+    # The model is casynth_textedit, the one the bench's fields use -- caret,
+    # selection, Ctrl+A/C/V/X behave the same in both UIs.
+    range_edit = None
+    _range_error = {'at': None}   # (knob id, which) whose typed range was refused
     drag = {'active': False, 'cells': [], 'name': '', 'snap': None}
     _ghost = pygame.Surface((CELL - 2, CELL - 2), pygame.SRCALPHA)
     _ghost.fill((111, 208, 224, 110))
@@ -799,6 +836,75 @@ def main(autoplay_midi=None):
     def toggle_ctrl(c):
         put_ctrl(c, 0 if ctrl_value(c) else 1)
         rebuild_ctrls()                # an on/off setting may hide other rows too
+
+    # ── the Min / Max fields of a knob row ───────────────────────────────────
+    # What a slider SPANS is the player's: a knob whose useful music lives in a
+    # tenth of its range is unplayable with 96 px of track, and the pair says
+    # where the ends are.  The VALUE never moves when a range does -- one outside
+    # it sits at the end of the track, the rule the bench already uses.
+
+    def range_text(c, which):
+        """The text of one field: what the TRACK spans right now (the player's
+        range, an engine's own sub-range, or the registry bound)."""
+        return panel_range_text(c['lo'] if which == 'min' else c['hi'],
+                                c.get('integer'))
+
+    def range_open(c, which):
+        """Start typing into a field (its text selected, so a number replaces it)."""
+        nonlocal range_edit
+        e = TextEdit(range_text(c, which))
+        e.select_all()
+        range_edit = {'id': c['id'], 'which': which, 'edit': e}
+        _range_error['at'] = None
+
+    def range_commit():
+        """Apply what was typed.  A range the registry refuses (not a number, out
+        of the engine's bounds, min above max) leaves the field marked and the old
+        span in force -- the knob never jumps because of a typo."""
+        nonlocal range_edit
+        if range_edit is None:
+            return
+        c = ctrl_by_id(range_edit['id'])
+        ed, which = range_edit['edit'], range_edit['which']
+        range_edit = None
+        if c is None or 'bounds' not in c:
+            return
+        eid = state['engine']
+        lo, hi = float(c['lo']), float(c['hi'])        # what the track spans now
+        try:
+            typed = float(ed.text.strip().replace(',', '.'))
+            lo, hi = (typed, hi) if which == 'min' else (lo, typed)
+            lo, hi = engines.slider_range(eid, c['id'], lo, hi)
+        except ValueError as exc:
+            _range_error['at'] = (c['id'], which)
+            print(f"[range] {exc}")
+            return
+        _range_error['at'] = None
+        default = engines.default_range(eid, c['id']) or c['bounds']
+        if (lo, hi) == tuple(float(x) for x in default):
+            state['engine_ranges'][eid].pop(c['id'], None)   # back to where it started
+        else:
+            state['engine_ranges'][eid][c['id']] = (lo, hi)
+        rebuild_ctrls()
+
+    def range_cancel():
+        nonlocal range_edit
+        range_edit = None
+        _range_error['at'] = None
+
+    def range_reset(c):
+        """Right-click a field: the knob spans the whole registry range again."""
+        state['engine_ranges'][state['engine']].pop(c['id'], None)
+        _range_error['at'] = None
+        rebuild_ctrls()
+
+    def range_hit(pos):
+        """(ctrl, which) of the Min / Max field under the cursor, or None."""
+        for c in ctrls:
+            for which, rect in (c.get('range_rects') or {}).items():
+                if rect.collidepoint(pos):
+                    return c, which
+        return None
 
     def do(bid):
         nonlocal grid, exc_field
@@ -1244,6 +1350,45 @@ def main(autoplay_midi=None):
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 running = False
+            elif e.type == pygame.KEYDOWN and range_edit is not None:
+                # A field has the keyboard: the letters that are piano keys must
+                # type, not play.  Enter / Tab apply, Esc drops what was typed.
+                _ed = range_edit['edit']
+                _mods = pygame.key.get_mods()
+                _ctrl = bool(_mods & pygame.KMOD_CTRL)
+                _shift = bool(_mods & pygame.KMOD_SHIFT)
+                if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_TAB):
+                    range_commit()
+                elif e.key == pygame.K_ESCAPE:
+                    range_cancel()
+                elif e.key == pygame.K_BACKSPACE:
+                    _ed.backspace(ctrl=_ctrl)
+                elif e.key == pygame.K_DELETE:
+                    _ed.delete(ctrl=_ctrl)
+                elif e.key == pygame.K_LEFT:
+                    _ed.move('left', shift=_shift, ctrl=_ctrl)
+                elif e.key == pygame.K_RIGHT:
+                    _ed.move('right', shift=_shift, ctrl=_ctrl)
+                elif e.key == pygame.K_HOME:
+                    _ed.move('home', shift=_shift)
+                elif e.key == pygame.K_END:
+                    _ed.move('end', shift=_shift)
+                elif _ctrl and e.key == pygame.K_a:
+                    _ed.select_all()
+                elif _ctrl and e.key in (pygame.K_c, pygame.K_x):
+                    _clip = _ed.copy() if e.key == pygame.K_c else _ed.cut()
+                    try:
+                        pygame.scrap.put_text(_clip or '')
+                    except Exception:            # noqa: BLE001  (no clipboard: keep typing)
+                        pass
+                elif _ctrl and e.key == pygame.K_v:
+                    try:
+                        _ed.insert(pygame.scrap.get_text() or '')
+                    except Exception:            # noqa: BLE001
+                        pass
+                elif e.unicode and e.unicode in '0123456789.,-+eE':
+                    _ed.insert(e.unicode)
+
             elif e.type == pygame.KEYDOWN:
                 if e.key in _KB_PIANO:
                     if e.key in _kb_held:
@@ -1291,6 +1436,8 @@ def main(autoplay_midi=None):
                         _release_gate()
 
             elif e.type == pygame.MOUSEBUTTONDOWN:
+                if range_edit is not None and range_hit(e.pos) is None:
+                    range_commit()      # clicking anywhere else applies the field
                 if _audio_dropdown_open:
                     # any click closes it; a click on an item moves the sound there
                     for di, item_rect in enumerate(_audio_dd_rects):
@@ -1379,7 +1526,17 @@ def main(autoplay_midi=None):
                         elif vol_track.collidepoint(e.pos):
                             dragging_vol = True
                             set_vol(e.pos[0])
+                        elif range_hit(e.pos) is not None:
+                            # a Min / Max field: left click types into it, right
+                            # click gives the knob its whole registry range back
+                            _c, _which = range_hit(e.pos)
+                            range_commit()          # whatever was open is applied first
+                            if e.button == 3:
+                                range_reset(_c)
+                            else:
+                                range_open(_c, _which)
                         elif any(c['hit'].collidepoint(e.pos) for c in ctrls):
+                            range_commit()          # clicking away from a field applies it
                             for c in ctrls:
                                 if not c['hit'].collidepoint(e.pos):
                                     continue
@@ -1580,6 +1737,8 @@ def main(autoplay_midi=None):
             audio_dropdown_open=_audio_dropdown_open, audio_dd_items=_audio_dd_items,
             audio_dd_rects=_audio_dd_rects,
             audio_name=_out_name(),
+            # the Min / Max field being typed into, if any (see range_edit)
+            range_edit=range_edit, range_error=_range_error['at'],
             # 'ok' it plays there / 'pending' not opened yet / 'failed' it refused
             audio_state=('ok' if audio_ok else
                          ('pending' if not _device['opened'] else 'failed')),

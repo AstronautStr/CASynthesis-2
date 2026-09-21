@@ -15,6 +15,7 @@ import pygame
 
 from casynth_config import *
 from casynth_engine import hsv, note_name, midi_to_freq
+from casynth_panel import range_text as panel_range_text
 from casynth_midi import MIDI_AVAILABLE
 from casynth_midifile import MIDIFILE_AVAILABLE
 from patterns import PATTERNS
@@ -65,6 +66,43 @@ def _ctrl_value(state, c):
     if c['scope'] == 'engine':
         return state['engine_params'][state['engine']][c['id']]
     return state[c['id']]
+
+
+def _range_text(c, which):
+    """The text in one Min / Max field: what the track spans right now.  The same
+    rule gol_synth.range_text uses -- this side only draws it."""
+    return panel_range_text(c['lo'] if which == 'min' else c['hi'], c.get('integer'))
+
+
+def _draw_range_fields(screen, small, c, rt):
+    """The Min / Max fields of one knob row: a box each, the typed one carrying a
+    caret and its selection, a refused one outlined in the accent colour."""
+    edit = getattr(rt, 'range_edit', None)
+    error = getattr(rt, 'range_error', None)
+    for which, rect in c['range_rects'].items():
+        typing = edit is not None and edit['id'] == c['id'] and edit['which'] == which
+        pygame.draw.rect(screen, C_PANEL if typing else C_BG, rect, border_radius=3)
+        edged = (C_ACCENT if typing else
+                 (C_WHITE_ON if error == (c['id'], which) else C_EDGE))
+        pygame.draw.rect(screen, edged, rect, 1, border_radius=3)
+        text = edit['edit'].text if typing else _range_text(c, which)
+        surf = small.render(text, True, C_TXT if typing else C_DIM)
+        screen.set_clip(rect.inflate(-4, 0))
+        screen.blit(surf, (rect.x + 3, rect.centery - 7))
+        if typing:
+            ed = edit['edit']
+            sel = ed.selection
+            if sel is not None:
+                x0 = rect.x + 3 + small.size(text[:sel[0]])[0]
+                x1 = rect.x + 3 + small.size(text[:sel[1]])[0]
+                s = pygame.Surface((max(1, x1 - x0), rect.height - 4))
+                s.set_alpha(70)
+                s.fill(C_ACCENT)
+                screen.blit(s, (x0, rect.y + 2))
+                screen.blit(surf, (rect.x + 3, rect.centery - 7))
+            cx = rect.x + 3 + small.size(text[:ed.cursor])[0]
+            pygame.draw.line(screen, C_TXT, (cx, rect.y + 3), (cx, rect.bottom - 3))
+        screen.set_clip(None)
 
 
 def _draw_spectrum(screen, small, rect, voices, color, f0_hz):
@@ -306,8 +344,12 @@ def draw_frame(screen, fonts, state, lay, rt):
         tr = c['track']
         val = _ctrl_value(state, c)
         kind = c.get('kind', 'slider')
+        _lw = c.get('label_w')
+        if _lw:                       # a long label stops where its column does
+            screen.set_clip(pygame.Rect(c['label_x'], tr.top - 8, _lw, 22))
         screen.blit(small.render(c['label'], True, C_DIM),
                     (c['label_x'], tr.centery - 7))
+        screen.set_clip(None)
         if kind == 'inactive':
             # the parameter does not act for this engine: say why, where the
             # widget would have been -- the bench's rule (casynth_panel), so the
@@ -334,13 +376,30 @@ def draw_frame(screen, fonts, state, lay, rt):
                 screen.set_clip(None)
         else:
             pygame.draw.rect(screen, C_BTN, tr, border_radius=4)
-            frac = float(np.clip((val - c['lo']) / (c['hi'] - c['lo']), 0, 1))
+            span = c['hi'] - c['lo']
+            frac = float(np.clip((val - c['lo']) / span, 0, 1)) if span else 0.0
             cw = int(tr.width * frac)
             pygame.draw.rect(screen, C_ACCENT, (tr.left, tr.top, cw, tr.height),
                              border_radius=4)
             pygame.draw.circle(screen, C_TXT, (tr.left + cw, tr.centery), 5)
-            screen.blit(small.render(c['fmt'](val), True, C_DIM),
-                        (tr.right + 6, tr.centery - 7))
+            rects = c.get('range_rects')
+            if not rects:
+                screen.blit(small.render(c['fmt'](val), True, C_DIM),
+                            (tr.right + 6, tr.centery - 7))
+            else:
+                # Min / Max around the track, the value on the right INSIDE it:
+                # the two fields take the column's spare pixels, and the number
+                # has nowhere else to go (gol_synth, 2026-09-22).
+                _draw_range_fields(screen, small, c, rt)
+                vtxt = small.render(c['fmt'](val), True, C_TXT)
+                vx = tr.right - vtxt.get_width() - 4
+                shade = pygame.Surface((vtxt.get_width() + 6, tr.height + 6))
+                shade.set_alpha(190)
+                shade.fill(C_BG)                 # the number stays readable over
+                shade_r = shade.get_rect()       # the filled part of the track
+                shade_r.topright = (tr.right, tr.top - 3)
+                screen.blit(shade, shade_r)
+                screen.blit(vtxt, (vx, tr.centery - 7))
 
     # level / clip meter: pre-clip peak vs the 0 dBFS ceiling (right edge).
     # Bar turns red and shows "CLIP +X.XdB" of overshoot when over the ceiling

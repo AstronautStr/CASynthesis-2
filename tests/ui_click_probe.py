@@ -45,7 +45,9 @@ OUT_ITEM_Y = MIDI_Y + 20 + 2 + 9            # the first row of its dropdown
 DIV_Y = BY + 46                             # the note-division buttons
 INFO_Y = GRID_H * CELL + 76
 PIANO_Y = GRID_H * CELL + TOOLBAR_H + PIANO_H // 2
-CTRL_X = 740                                # inside column A's slider track
+CTRL_X = 790                                # inside column A's slider track
+MIN_FIELD_X = 725                           # inside its Min field (2026-09-22)
+MAX_FIELD_X = 860                           # ... and its Max field
 RC_X = 1090                                 # inside the right column's track
 VOL_SECTION_Y = BY + 228
 
@@ -60,6 +62,9 @@ CLICKS = [
     (600, BY + 20, 'pattern library button'),
     (RC_X, VOL_SECTION_Y + 66, 'volume slider'),
     (CTRL_X, BY + 2 + 0 * 22 + 4, 'engine knob row 1'),
+    (MIN_FIELD_X, BY + 2 + 0 * 22 + 4, 'the Min field of that row'),
+    (MAX_FIELD_X, BY + 2 + 1 * 22 + 4, 'the Max field of the next one'),
+    (CTRL_X, BY + 2 + 2 * 22 + 4, 'a knob row while a field is open'),
     (CTRL_X, BY + 2 + 5 * 22 + 4, 'engine knob row 6 (the on/off pill)'),
     (CTRL_X, BY + 2 + 6 * 22 + 4, 'engine knob row 7'),
     (RC_X, BY + 20 + 0 * 22 + 4, 'VOICE A'),
