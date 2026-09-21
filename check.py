@@ -43,6 +43,9 @@ Gates (any FAIL -> exit 1):
   3c. it makes a sound python tests/ui_sound_probe.py             (Random + Play with the
                        MOUSE on every engine the prototype offers, then: did the level
                        move and was anything recorded -- the question a player asks)
+  3e. panel rows       python tests/ui_panel_probe.py             (a knob that decides
+                       whether ANOTHER row acts -- Laplace+ `shape` over `dyn` --
+                       must make that row appear, without clicking anything else)
   3d. articulation     python tests/ui_articulation_probe.py      (letting a key go
                        releases the note; HOLD lit keeps it sounding; and a played
                        MIDI line re-articulates note by note although its gate
@@ -260,6 +263,12 @@ def main():
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"},
                          timeout=900)))
+
+    results.append(("the panel follows the knobs (a row that starts acting appears)",
+                    _run("panel probe", [py, os.path.join("tests", "ui_panel_probe.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"},
+                         timeout=300)))
 
     results.append(("the VOICE envelope is audible (note off, HOLD, a played line)",
                     _run("articulation probe",

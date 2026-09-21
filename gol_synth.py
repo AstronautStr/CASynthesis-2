@@ -91,6 +91,19 @@ from casynth_tuning import (dissonance_curve, scale_minima, snap_ratio,
                              TUNE_MAX_PARTIALS)
 
 
+# The tab the instrument opens on; any playable engine id (see `playable`).
+DEFAULT_ENGINE = 'laplace_unified'
+
+# What a PLAYER starts from on every Laplace law (user's decision 2026-09-22):
+# all the modes of a figure, spread and harm fully open, the shape law on and its
+# dynamics with it.  Deliberately NOT the registry defaults: those are the neutral
+# point the REQ tables, the preflights and the Objects gates are written against
+# ("the REQ table equals the Laplace registry defaults"), and moving them moves
+# the meaning of those gates.  This is the instrument's opening position instead,
+# applied to every engine that offers the whole seven-setting Laplace spectrum.
+START_SPECTRUM = dict(n=20, spread=1.0, alpha=0.0, shape=1.0, harm=1.0,
+                      fullshape=1, dyn=1.0)
+
 _KB_PIANO = {
     pygame.K_a: 0,  pygame.K_w: 1,
     pygame.K_s: 2,  pygame.K_e: 3,
@@ -254,6 +267,16 @@ def main(autoplay_midi=None):
     # offer a tab that silently ignores the keyboard.
     playable = [eid for eid in engines.ids() if engines.get(eid).plays_notes]
 
+    def _start_params(eid):
+        """The engine's parameters as the instrument opens: the registry defaults,
+        with START_SPECTRUM over them for an engine that offers the whole Laplace
+        spectrum (so every Laplace law -- the bank, FM, Objects, Laplace+ -- starts
+        on the same timbre, and an engine with a spectrum of its own is untouched)."""
+        p = dict(engines.defaults(eid))
+        if all(k in p for k in engines.SPECTRUM_KEYS):
+            p.update({k: v for k, v in START_SPECTRUM.items() if k in p})
+        return p
+
     grid = np.zeros((GRID_H, GRID_W), np.uint8)
     # exc_field: per-generation event excitation (events_field output).
     # Updated ONLY on step() (both auto and manual); held between steps.
@@ -311,11 +334,16 @@ def main(autoplay_midi=None):
         note=NOTE_DEFAULT, vol=VOL_DEFAULT,
         kb_base=NOTE_DEFAULT,
         sidebar_open=True,
+        # The tab the instrument opens on (user's decision 2026-09-22): Laplace+,
+        # the one engine whose two axes reach every Laplace law -- its Env + Bank
+        # + Sine cell IS the old `laplacian`, so opening here costs nothing and
+        # the other laws are a click away instead of a tab away.  A build without
+        # it (or with it unplayable) falls back to the first tab.
         # CASYNTH_ENGINE preselects a tab (a test hook, like CASYNTH_DUMPFRAME):
         # it is how a headless run measures what one engine costs per block.
         engine=(os.environ.get('CASYNTH_ENGINE') if os.environ.get('CASYNTH_ENGINE') in playable
-                else ENGINES[0]['id']),
-        engine_params={eid: engines.defaults(eid) for eid in playable},
+                else (DEFAULT_ENGINE if DEFAULT_ENGINE in playable else playable[0])),
+        engine_params={eid: _start_params(eid) for eid in playable},
         # GEN ADSR: per-mode envelope on the AUTOMATON clock; A/D/R are FRACTIONS of
         # one step interval (see casynth_config), S is a 0..1 level.
         gen_attack=GEN_ATTACK_DEFAULT,
@@ -524,6 +552,14 @@ def main(autoplay_midi=None):
                 x += w + gap
         return out
 
+    # Which rows the panel currently leaves out, so a knob that changes that set
+    # can notice and rebuild (see set_ctrl).  CASYNTH_PANEL_LOG is a test hook
+    # (like CASYNTH_DUMPFRAME): every rebuild appends the rows the panel shows,
+    # which is how a gate can ask "did the row appear when the knob said it
+    # should" without reading pixels.
+    _panel = {'off': frozenset(), 'n': 0}
+    _panel_log = os.environ.get('CASYNTH_PANEL_LOG')
+
     def rebuild_ctrls():
         """Repopulate `ctrls`: the active engine's parameters (top, two columns)
         + the synth-wide ADSR envelope blocks A/D/S/R (fixed position below -- see
@@ -549,6 +585,8 @@ def main(autoplay_midi=None):
         picks = [a for a in order if a not in shared and a in spec.choices]
         order = shared + picks + [a for a in order if a not in shared and a not in picks]
         off = spec.inactive(params) if spec.inactive is not None else {}
+        _panel['off'] = frozenset(off)
+        _panel['n'] += 1
         rows = [r for r in panel_rows(spec, params, order=order, inactive=off)
                 if r.kind != KIND_INACTIVE][:2 * _CTRL_ROWS_MAX]
         two_columns = len(rows) > _CTRL_ROWS_MAX
@@ -623,6 +661,14 @@ def main(autoplay_midi=None):
             block='tune', kind=KIND_SLIDER, fmt=_fmt_for(False, False),
             label_x=_rc_x,
             track=_t, hit=_t.inflate(0, 14)))
+        if _panel_log:
+            try:
+                with open(_panel_log, 'a', encoding='utf-8') as _f:
+                    _f.write(state['engine'] + ' '
+                             + ' '.join(c['id'] for c in ctrls if c['scope'] == 'engine')
+                             + '\n')
+            except OSError:
+                pass
 
     rebuild_ctrls()
 
@@ -737,6 +783,18 @@ def main(autoplay_midi=None):
         val = c['lo'] + frac * (c['hi'] - c['lo'])
         val = int(round(val)) if c.get('integer') else val
         put_ctrl(c, val)
+        # A SLIDER can decide whether another row acts at all -- Laplace+ hides
+        # `dyn` while shape is 0 -- and the panel used to hear about it only when
+        # something else rebuilt it, so the row appeared after clicking a mode
+        # (user, 2026-09-22).  Rows only ever move BELOW the one being dragged
+        # (the order puts a setting ahead of what it decides), and the drag holds
+        # an id rather than a row, so rebuilding under the cursor is safe.
+        if c['scope'] == 'engine':
+            spec = engines.get(state['engine'])
+            if spec.inactive is not None:
+                off = frozenset(spec.inactive(state['engine_params'][state['engine']]))
+                if off != _panel['off']:
+                    rebuild_ctrls()
 
     def toggle_ctrl(c):
         put_ctrl(c, 0 if ctrl_value(c) else 1)
