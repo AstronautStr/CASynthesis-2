@@ -4,10 +4,28 @@ v1: one engine (engine_id/engine_params) -> loaded as A = B.
 v2: `variants` {A, B} each with a full engine_id/engine_params, plus `listen`
 (short instruction) and optional `initial_side` (default A).
 Optional `script` (2026-09-18, Objects Decay law D2): scripted commands of the
-experiment, [{"at": samples of the scene clock > 0, "kind": "pause", "args":
-{"on": bool}}, ...] -- the runner queues them every time the scene starts from
-its beginning (Start, the pause of a stopped scene released, Restart); absent =
-none (older scenes / records unchanged).
+experiment, [{"at": samples of the scene clock > 0, "kind": ..., "args": ...},
+...] -- the runner queues them every time the scene starts from its beginning
+(Start, the pause of a stopped scene released, Restart); absent = none (older
+scenes / records unchanged).  Kinds: `pause` {on}, and since 2026-09-21 `note`
+{note: 0..127}, `gate` {on}, `vol` {value: 0..1} and `set_cells`
+{cells: [[row, col, 0|1], ...]} (an edit of the field the user made by hand).
+
+ARTICULATION (2026-09-21, the seam): a scene may also describe what a host that
+plays NOTES does, so a prototype session can be re-rendered offline -- immune to
+a CPU dip, unlike a live run.  In `audio`:
+  note      MIDI number the scene sounds at (absent = none: the engines render
+            at f0_hz, transpose 1.0, exactly as every scene so far);
+  gate      is the note held at the start (default true);
+  pan       "center" (default: both channels identical, the bench's rule) or
+            "field" (a voice sits where its figure sits, what the prototype
+            plays);
+  envelope  {"voice": {attack_ms, decay_ms, sustain, release_ms},
+             "gen":   {attack, decay, sustain, release, amp_slew}} -- the VCA
+            over the sum and the per-mode envelope on the automaton clock
+            (GEN A/D/R are FRACTIONS of one tick).  Absent = the defaults of
+            casynth_config, which is what the bench has always rendered.
+A scene without any of this renders byte-for-byte as before.
 Unknown engine / unknown or missing engine parameter / out-of-range cell ->
 SceneError with a readable message.  No silent fallbacks.  The loaded JSON is
 never mutated by playback (the runner copies the settings).
@@ -24,7 +42,11 @@ FORMAT_VERSIONS = (1, 2)
 SIDES = ('A', 'B')
 SUPPORTED_RULES = ('B3/S23',)
 SUPPORTED_BOUNDARIES = ('torus',)
-SCRIPT_KINDS = ('pause',)            # commands a scene script may schedule (2026-09-18)
+# commands a scene script may schedule (2026-09-18; note / gate / vol / set_cells 2026-09-21)
+SCRIPT_KINDS = ('pause', 'note', 'gate', 'vol', 'set_cells', 'step')
+STEP_SOURCES = ('clock', 'script')   # who advances the automaton (2026-09-21)
+VOICE_KEYS = ('attack_ms', 'decay_ms', 'sustain', 'release_ms')
+GEN_KEYS = ('attack', 'decay', 'sustain', 'release', 'amp_slew')
 
 
 class SceneError(ValueError):
@@ -43,6 +65,12 @@ class Scene:
         self.rule = d['rule']
         self.boundary = d['boundary']
         self.rate_hz = float(d['rate_hz'])
+        # who advances the automaton: its own sample clock at rate_hz ('clock',
+        # every scene so far), or the script ('script') -- a converted prototype
+        # session, whose steps happened on a WALL clock and are replayed at the
+        # output samples they were recorded at.  rate_hz still scales the
+        # tick-relative envelopes either way.
+        self.step_source = d.get('steps', 'clock')
         self.format = int(d['format'])
         if self.format == 1:
             one = (d['engine_id'], dict(d['engine_params']))
@@ -71,6 +99,16 @@ class Scene:
         # scripted commands (2026-09-18): (at, kind, args) on the scene clock, sorted
         self.script = sorted(((int(c['at']), c['kind'], dict(c.get('args') or {}))
                               for c in (d.get('script') or [])), key=lambda c: c[0])
+        # articulation (2026-09-21): the note, the gate and the envelopes of a host
+        # that plays notes; absent = nothing to articulate (see the module doc)
+        _a = d['audio']
+        self.note = None if _a.get('note') is None else int(_a['note'])
+        self.gate = bool(_a.get('gate', True))
+        self.pan = _a.get('pan', 'center')
+        env = _a.get('envelope')
+        self.envelope = ({k: dict(v) for k, v in env.items()} if env else None)
+        self.articulated = (self.note is not None or self.envelope is not None
+                            or any(k in ('note', 'gate') for _at, k, _ar in self.script))
         # v1 convenience (single engine)
         self.engine_id, self.engine_params = self.variants['A']
         self.f0_hz = float(d['audio']['f0_hz'])
@@ -123,6 +161,8 @@ def validate(d):
     rate = d['rate_hz']
     if not (isinstance(rate, (int, float)) and rate > 0):
         _fail(f"scene: rate_hz must be > 0, got {rate!r}")
+    if d.get('steps', 'clock') not in STEP_SOURCES:
+        _fail(f"scene: 'steps' must be one of {STEP_SOURCES}, got {d.get('steps')!r}")
     if fmt == 1:
         _validate_engine(d.get('engine_id'), d.get('engine_params'), where='')
     else:
@@ -195,12 +235,14 @@ def validate(d):
             if c['kind'] not in SCRIPT_KINDS:
                 _fail(f"scene: script[{i}].kind must be one of {SCRIPT_KINDS}, got {c['kind']!r}")
             args = c.get('args') or {}
-            if not isinstance(args, dict) or sorted(args) != ['on'] or not isinstance(args['on'], bool):
-                _fail(f"scene: script[{i}].args of a pause must be {{on: true|false}}")
+            if not isinstance(args, dict):
+                _fail(f"scene: script[{i}].args must be an object")
+            _validate_script_args(i, c['kind'], args, rows, cols)
     a = d['audio']
     if not (isinstance(a, dict) and isinstance(a.get('f0_hz'), (int, float))
             and a['f0_hz'] > 0):
         _fail("scene: 'audio' must be {f0_hz > 0, level?}")
+    _validate_articulation(a)
     lvl = a.get('level', 1.0)
     if not (isinstance(lvl, (int, float)) and 0.0 <= lvl <= 1.0):
         _fail(f"scene: audio.level must be within [0, 1], got {lvl!r}")
@@ -211,6 +253,81 @@ def validate(d):
         for k, v in sg.items():
             if isinstance(v, bool) or not isinstance(v, (int, float)) or not (0.0 < v <= 16.0):
                 _fail(f"scene: audio.side_gain.{k} must be a number within (0, 16], got {v!r}")
+
+
+def _validate_script_args(i, kind, args, rows, cols):
+    """Strict per-kind arguments of a scripted command (no silent defaults)."""
+    where = f"scene: script[{i}].args"
+    if kind == 'step':
+        if args:
+            _fail(f"{where} of a step must be empty")
+    elif kind in ('pause', 'gate'):
+        if sorted(args) != ['on'] or not isinstance(args['on'], bool):
+            _fail(f"{where} of a {kind} must be {{on: true|false}}")
+    elif kind == 'note':
+        n = args.get('note')
+        if sorted(args) != ['note'] or isinstance(n, bool) or not isinstance(n, int) \
+                or not (0 <= n <= 127):
+            _fail(f"{where} of a note must be {{note: 0..127}}, got {args!r}")
+    elif kind == 'vol':
+        v = args.get('value')
+        if sorted(args) != ['value'] or isinstance(v, bool) \
+                or not isinstance(v, (int, float)) or not (0.0 <= v <= 1.0):
+            _fail(f"{where} of a vol must be {{value: 0..1}}, got {args!r}")
+    elif kind == 'set_cells':
+        cells = args.get('cells')
+        if sorted(args) != ['cells'] or not isinstance(cells, list) or not cells:
+            _fail(f"{where} of a set_cells must be {{cells: [[row, col, 0|1], ...]}}")
+        for j, cell in enumerate(cells):
+            if not (isinstance(cell, (list, tuple)) and len(cell) == 3
+                    and all(isinstance(x, int) and not isinstance(x, bool) for x in cell)):
+                _fail(f"{where}.cells[{j}] must be [row, col, 0|1] ints, got {cell!r}")
+            r, c, v = cell
+            if not (0 <= r < rows and 0 <= c < cols):
+                _fail(f"{where}.cells[{j}]=({r},{c}) outside the {rows}x{cols} field")
+            if v not in (0, 1):
+                _fail(f"{where}.cells[{j}] value must be 0 or 1, got {v!r}")
+
+
+def _number(where, v, lo, hi):
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v:
+        _fail(f"scene: {where} must be a number, got {v!r}")
+    if not (lo <= v <= hi):
+        _fail(f"scene: {where}={v!r} outside [{lo}, {hi}]")
+
+
+def _validate_articulation(a):
+    """audio.note / audio.gate / audio.envelope (2026-09-21) -- all optional,
+    all strict; absent means the bench's own rendering, unchanged."""
+    n = a.get('note')
+    if n is not None and (isinstance(n, bool) or not isinstance(n, int)
+                          or not (0 <= n <= 127)):
+        _fail(f"scene: audio.note must be a MIDI number 0..127, got {n!r}")
+    if not isinstance(a.get('gate', True), bool):
+        _fail(f"scene: audio.gate must be true or false, got {a.get('gate')!r}")
+    if a.get('pan', 'center') not in ('center', 'field'):
+        _fail(f"scene: audio.pan must be 'center' or 'field', got {a.get('pan')!r}")
+    env = a.get('envelope')
+    if env is None:
+        return
+    if not isinstance(env, dict) or sorted(env) not in (['gen'], ['voice'], ['gen', 'voice']):
+        _fail("scene: audio.envelope must be {voice?: {...}, gen?: {...}}")
+    v = env.get('voice')
+    if v is not None:
+        if not isinstance(v, dict) or sorted(v) != sorted(VOICE_KEYS):
+            _fail(f"scene: audio.envelope.voice must have exactly {list(VOICE_KEYS)}")
+        for k in ('attack_ms', 'decay_ms', 'release_ms'):
+            _number(f"audio.envelope.voice.{k}", v[k], 0.0, 60000.0)
+        _number("audio.envelope.voice.sustain", v['sustain'], 0.0, 1.0)
+    g = env.get('gen')
+    if g is not None:
+        if not isinstance(g, dict) or sorted(g) != sorted(GEN_KEYS):
+            _fail(f"scene: audio.envelope.gen must have exactly {list(GEN_KEYS)}")
+        for k in ('attack', 'decay', 'release'):
+            _number(f"audio.envelope.gen.{k}", g[k], 0.0, 64.0)
+        _number("audio.envelope.gen.sustain", g['sustain'], 0.0, 1.0)
+        if not isinstance(g['amp_slew'], bool):
+            _fail(f"scene: audio.envelope.gen.amp_slew must be true or false, got {g['amp_slew']!r}")
 
 
 def _validate_engine(eid, params, where):

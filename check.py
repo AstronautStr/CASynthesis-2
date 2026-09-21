@@ -26,6 +26,8 @@ Gates (any FAIL -> exit 1):
   1q. objects decay law python tests/test_objects_decay.py          (history -> losses, D1-D3, scene script)
   1r. laplace carriers python tests/test_laplace_carriers.py      (carrier filter / wave bank, band limit)
   1s. laplace FM       python tests/test_laplace_fm.py            (phase law, band / DC, records)
+  1t. the seam         python tests/test_seam.py                  (engines package, contract,
+                       shared ring / panel, a scene that plays a note)
   2. golden master     python tests/golden/golden_master.py       (audio, byte-exact)
   3. ui frame + smoke  CASYNTH_DUMPFRAME render of gol_synth.py   (pixel-exact vs
                        tests/golden/ui_frame.png; doubles as the import/init smoke)
@@ -189,6 +191,12 @@ def main():
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"},
                          timeout=900)))
+
+    results.append(("the seam (engines package, contract, shared ring / panel, articulated scene)",
+                    _run("seam tests", [py, os.path.join("tests", "test_seam.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"},
+                         timeout=600)))
 
     results.append(("golden master",
                     _run("golden master", [py, os.path.join("tests", "golden", "golden_master.py")])))

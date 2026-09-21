@@ -21,14 +21,26 @@ per side); the MONITOR is the listened side with a 20 ms linear crossfade
 (coefficients sum to 1) applied only in the output mixer -- the raw side PCM
 is untouched.  Every engine block is validated (engine_api.check_block)
 before it can reach the output.
+
+ARTICULATION (2026-09-21, the seam).  A scene may carry a note, a gate and the
+envelopes of a host that plays notes (see scene.py).  Then the runner does what
+gol_synth does live, with the same arithmetic: the note is a per-block
+`transpose` handed to engine.render (never a re-analysis at a live f0), and the
+VCA (casynth_engine.VoiceEnvelope) is advanced one block at a time and folded
+into the side gain.  `note` / `gate` / `vol` are commands, so a scene script can
+play a phrase and an offline render reproduces it -- immune to a CPU dip, which
+a live run is not.  A scene WITHOUT articulation renders exactly as before: no
+VCA is created and the gain is not multiplied by anything.
 """
 import math
 import wave
 
 import numpy as np
 
-from casynth_config import SR, CHUNK_S, MASTER_GAIN, VOL_DEFAULT
-from casynth_engine import step, events_field
+from casynth_config import (SR, CHUNK_S, MASTER_GAIN, VOL_DEFAULT,
+                            VOICE_ATTACK_MS_DEFAULT, VOICE_DECAY_MS_DEFAULT,
+                            VOICE_SUSTAIN_DEFAULT, VOICE_RELEASE_MS_DEFAULT)
+from casynth_engine import step, events_field, midi_to_freq, VoiceEnvelope
 from . import registry
 from . import provenance as _prov
 from .engine_api import EngineContext, check_block, supports_snapshot
@@ -43,7 +55,11 @@ COMMANDS = ('start', 'stop', 'pause', 'set_cell', 'reset', 'vol',
             'select', 'set_param', 'set_engine', 'copy_side', 'factory',
             'clear', 'set_cells',      # 2026-09-16: Clear button, pattern drop
             'copy_spectrum',           # 2026-09-17: the shared spectrum settings only
-            'set_range')               # 2026-09-17: the slider range of a ranged parameter (UI, no sound)
+            'set_range',               # 2026-09-17: the slider range of a ranged parameter (UI, no sound)
+            'note', 'gate',            # 2026-09-21: the sounding pitch and the VCA gate
+            'step')                    # 2026-09-21: advance the automaton NOW (scripted steps)
+VOICE_DEFAULT = dict(attack_ms=VOICE_ATTACK_MS_DEFAULT, decay_ms=VOICE_DECAY_MS_DEFAULT,
+                     sustain=VOICE_SUSTAIN_DEFAULT, release_ms=VOICE_RELEASE_MS_DEFAULT)
 RUNNER_STATE_VERSION = 1           # export_state() / from_state() format
 SCRIPT_FLAG = 'script'             # args key of a command the runner queued from the scene script
 
@@ -82,8 +98,13 @@ class SideState:
     def update_field(self, grid, exc):
         self.engine.update_field(grid, exc)
 
-    def render(self, gain, t_samples):
-        buf, peak, n_clip = self.engine.render(gain, t_samples)
+    def render(self, gain, t_samples, transpose=1.0):
+        # the keyword is passed ONLY when there is a note to play, so an engine
+        # written against the older signature keeps working untouched
+        if transpose == 1.0:
+            buf, peak, n_clip = self.engine.render(gain, t_samples)
+        else:
+            buf, peak, n_clip = self.engine.render(gain, t_samples, transpose=transpose)
         check_block(buf, self.ctx, self.engine_id)
         self.peak = float(peak)
         if n_clip > 0:
@@ -148,7 +169,7 @@ class DemoRunner:
         self._seq = 0
         self.selected = scene.initial_side
         self.ctx = EngineContext(SR, BLOCK, CHANNELS, scene.f0_hz, scene.level,
-                                 scene.rate_hz)
+                                 scene.rate_hz, pan=scene.pan)
         # per (side, engine) parameter memory: first pick = defaults / scene,
         # returning to an engine restores the previous values
         self._memory = {}
@@ -190,10 +211,45 @@ class DemoRunner:
         self.running = False
         self.paused = True             # a stopped scene stands on pause
         self.step_samples = SR / sc.rate_hz
+        # articulation (2026-09-21): a scene without it has no VCA at all, so the
+        # side gain is handed to the engine exactly as it always was
+        self.note = sc.note
+        self.gate = bool(sc.gate)
+        self.venv = VoiceEnvelope(gate=self.gate) if sc.articulated else None
+        # seed each engine's gain glide with the gain it will actually be handed,
+        # VCA included -- otherwise a scene that starts on a closed gate glides
+        # from full level down to zero across its first block, which is a click
+        level0 = 1.0 if self.venv is None else self.venv.level
         for s in self.sides.values():
-            s.restart(self.grid, self.exc, self._side_gain(s.name))
+            s.restart(self.grid, self.exc, self._side_gain(s.name) * level0)
+        self._push_envelope()
         self._xfade_from = None
         self._xfade_pos = 0
+
+    def _push_envelope(self):
+        """Hand the scene's envelope settings and tempo to both engines -- the
+        optional part of the contract (an engine with envelopes of its own
+        ignores it).  Only when the scene says something about them: otherwise
+        the engines keep the defaults they were built with."""
+        env = self.scene.envelope
+        if not env:
+            return
+        gen = env.get('gen')
+        for s in self.sides.values():
+            s.engine.set_rate(self.scene.rate_hz)
+            if gen is not None:
+                s.engine.set_envelope(gen['attack'], gen['decay'], gen['sustain'],
+                                      gen['release'], gen['amp_slew'])
+
+    def _articulate(self):
+        """Advance the VCA one block -> (gain factor, transpose)."""
+        v = (self.scene.envelope or {}).get('voice') or VOICE_DEFAULT
+        level = self.venv.block(self.gate, v['attack_ms'] / 1000.0,
+                                v['decay_ms'] / 1000.0, float(v['sustain']),
+                                v['release_ms'] / 1000.0)
+        f0 = self.scene.f0_hz
+        transpose = 1.0 if (self.note is None or f0 <= 0) else midi_to_freq(self.note) / f0
+        return level, transpose
 
     def _gain(self):
         return MASTER_GAIN * self.vol * self.scene.level
@@ -265,6 +321,13 @@ class DemoRunner:
             v = args.get('value')
             if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
                 raise ValueError(f"vol: value must be a finite number, got {v!r}")
+        elif kind == 'note':
+            n = args.get('note')
+            if isinstance(n, bool) or not isinstance(n, int) or not (0 <= n <= 127):
+                raise ValueError(f"note: must be a MIDI number 0..127, got {n!r}")
+        elif kind == 'gate':
+            if not isinstance(args.get('on'), bool):
+                raise ValueError(f"gate: on must be true or false, got {args.get('on')!r}")
         elif kind == 'set_cells':
             try:
                 cells = [[int(r), int(c), int(bool(v))] for r, c, v in args.get('cells') or ()]
@@ -378,6 +441,18 @@ class DemoRunner:
             self._init_scene_state()
         elif kind == 'vol':
             self.vol = float(min(max(args['value'], 0.0), 1.0))
+        elif kind == 'step':
+            self._step()               # a scripted step: the scene owns the clock
+        elif kind in ('note', 'gate'):
+            # a host may play a note on any scene; the VCA appears the first time
+            # it is asked for (with the default envelope its level is exactly 1.0,
+            # so nothing about the sound changes until the knobs say otherwise)
+            if self.venv is None:
+                self.venv = VoiceEnvelope(gate=self.gate)
+            if kind == 'note':
+                self.note = int(args['note'])
+            else:
+                self.gate = bool(args['on'])
         elif kind == 'select':
             side = args['side']
             if side != self.selected:
@@ -440,6 +515,7 @@ class DemoRunner:
             s.set_params(params)
         else:
             s.switch(eid, params, self.grid, self.exc, self._side_gain(s.name))
+            self._push_envelope()          # the fresh instance has not heard it yet
             if s.name == self.selected:
                 self._begin_xfade(None)
         self._memory[(s.name, eid)] = dict(s.params)
@@ -497,10 +573,17 @@ class DemoRunner:
             self.out_samples += BLOCK
             z = _SILENT.copy()
             return Block(z, z.copy(), z.copy())
-        if not self.paused and self.ca_samples >= (self.gen + 1) * self.step_samples:
+        if (self.scene.step_source == 'clock' and not self.paused
+                and self.ca_samples >= (self.gen + 1) * self.step_samples):
             self._step()
-        raw = {name: self.sides[name].render(self._side_gain(name), self.t_samples)
-               for name in SIDES}
+        if self.venv is None:
+            raw = {name: self.sides[name].render(self._side_gain(name), self.t_samples)
+                   for name in SIDES}
+        else:
+            level, transpose = self._articulate()
+            raw = {name: self.sides[name].render(self._side_gain(name) * level,
+                                                 self.t_samples, transpose)
+                   for name in SIDES}
         mon = self._mix_monitor(raw)
         self.out_samples += BLOCK
         self.t_samples += BLOCK
@@ -529,13 +612,17 @@ class DemoRunner:
             version=RUNNER_STATE_VERSION,
             scene=self.scene.doc,
             ctx=dict(sr=SR, block=BLOCK, channels=CHANNELS, f0=self.ctx.f0,
-                     level=self.ctx.level, rate_hz=self.ctx.rate_hz),
+                     level=self.ctx.level, rate_hz=self.ctx.rate_hz, pan=self.ctx.pan),
             grid=self.grid.copy(),
             exc=(None if self.exc is None else np.asarray(self.exc, np.float64).copy()),
             gen=int(self.gen), out_samples=int(self.out_samples),
             t_samples=int(self.t_samples), ca_samples=int(self.ca_samples),
             running=bool(self.running), paused=bool(self.paused),
             vol=float(self.vol), selected=self.selected,
+            # articulation (2026-09-21): absent in older snapshots, which means
+            # a scene that never played a note -- restored as None below
+            note=self.note, gate=bool(self.gate),
+            voice=(None if self.venv is None else self.venv.state()),
             xfade_from=self._xfade_from, xfade_pos=int(self._xfade_pos),
             seq=int(self._seq),
             pending=[dict(seq=int(q), at=(None if at is None else int(at)), kind=k,
@@ -573,8 +660,9 @@ class DemoRunner:
         got = {k: ctx.get(k) for k in want}
         if got != want:
             raise ValueError(f"snapshot: render context {got} != {want}")
-        if (ctx.get('f0'), ctx.get('level'), ctx.get('rate_hz')) != \
-                (scene.f0_hz, scene.level, scene.rate_hz):
+        if (ctx.get('f0'), ctx.get('level'), ctx.get('rate_hz'),
+                ctx.get('pan', 'center')) != \
+                (scene.f0_hz, scene.level, scene.rate_hz, scene.pan):
             raise ValueError("snapshot: audio context does not match the scene")
         grid = state['grid']
         if not isinstance(grid, np.ndarray) or grid.shape != (scene.rows, scene.cols):
@@ -636,6 +724,11 @@ class DemoRunner:
         r.selected = state['selected']
         r._xfade_from = state.get('xfade_from')
         r._xfade_pos = int(state.get('xfade_pos', 0))
+        r.note = state.get('note')
+        r.gate = bool(state.get('gate', True))
+        voice = state.get('voice')
+        r.venv = (VoiceEnvelope().restore(voice) if isinstance(voice, dict)
+                  else (VoiceEnvelope(gate=r.gate) if scene.articulated else None))
         r._seq = int(state['seq'])
         r._memory = {}
         for n, per_engine in state['memory'].items():
@@ -708,6 +801,7 @@ class DemoRunner:
         return dict(grid=self.grid.copy(), gen=self.gen, running=self.running,
                     paused=self.paused, t_seconds=self.t_samples / SR,
                     vol=self.vol, out_samples=self.out_samples,
+                    note=self.note, gate=bool(self.gate),
                     selected=self.selected,
                     sides=self.side_settings(), modified=self.side_modified(),
                     ranges=self.side_ranges(),

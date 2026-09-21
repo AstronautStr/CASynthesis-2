@@ -89,20 +89,36 @@ callback).  supports_snapshot(engine) tells whether a class implements them.
 import numpy as np
 
 
+PAN_CENTER_MODE = 'center'
+PAN_FIELD_MODE = 'field'
+PAN_MODES = (PAN_CENTER_MODE, PAN_FIELD_MODE)
+
+
 class EngineContext:
     """Render context handed to an engine at construction (immutable).
 
     `f0` is the analysis anchor, not the sounding note -- the note is the
-    per-block `transpose` of render() (see the module doc)."""
-    __slots__ = ('sr', 'block', 'channels', 'f0', 'level', 'rate_hz')
+    per-block `transpose` of render() (see the module doc).
 
-    def __init__(self, sr, block, channels, f0, level, rate_hz):
+    `pan` (2026-09-21) is how the HOST wants the field laid across the stereo
+    image: 'center' -- both channels identical, which is what the bench has
+    always rendered so that an A/B difference is never a difference of position
+    -- or 'field', where a voice sits where its figure sits, which is what the
+    prototype has always played.  It is a property of the host, not of the
+    engine's spectrum law, and only engines that have a per-voice position read
+    it.  Default 'center': every scene and record made so far is unchanged."""
+    __slots__ = ('sr', 'block', 'channels', 'f0', 'level', 'rate_hz', 'pan')
+
+    def __init__(self, sr, block, channels, f0, level, rate_hz, pan=PAN_CENTER_MODE):
         self.sr = int(sr)
         self.block = int(block)
         self.channels = int(channels)
         self.f0 = float(f0)
         self.level = float(level)
         self.rate_hz = float(rate_hz)     # automaton steps / s (tick-relative envelopes)
+        if pan not in PAN_MODES:
+            raise ValueError(f"EngineContext: pan must be one of {PAN_MODES}, got {pan!r}")
+        self.pan = pan
 
 
 class SoundEngine:

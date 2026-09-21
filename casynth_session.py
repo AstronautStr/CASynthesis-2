@@ -77,7 +77,9 @@ def _dump_session(rec, prefix="_session"):
                         replay_engines=replay_engines,
                         replay_controls=replay_controls,
                         midi_onsets=midi_onsets, midi_in=midi_in_log)
-    # frames columns: [dt_ms, gen, n_voices, n_rendered, underrun, n_steps_done]
+    # frames columns: [dt_ms, gen, n_voices, n_rendered, underrun, n_steps_done,
+    #                  out_samples]  (out_samples since 2026-09-21: the render
+    #                  thread's position when the frame was logged)
     n_hitch = int((frames[:, 0] > CHUNK_S * 1000).sum()) if len(frames) else 0
     print(f"[session saved] {base}.wav ({len(rec['chunks'])} chunks) + {base}.npz "
           f"({len(rec['steps'])} steps, {len(midi_onsets)} midi onsets)  "
@@ -281,6 +283,239 @@ def replay_session(ts, prefix="_session"):
             nclip += nc
     audio = np.concatenate(out) if out else np.zeros((0, 2), np.int16)
     return audio, pkmax, nclip
+
+
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SESSION -> SCENE  (2026-09-21, the seam: a comparison a CPU dip cannot touch)
+# ──────────────────────────────────────────────────────────────────────────────
+# A recorded session is a LIVE run: its audio depends on the machine keeping up.
+# A SCENE is the same experiment as data -- field, engine, settings, tempo, and
+# since 2026-09-21 the note, the gate, the volume and the envelopes -- and
+# casynth_lab renders it offline through the same engines, block by block, on no
+# clock but its own.  That is the comparison the user asked for ("if there are
+# performance problems, it is good to compare with an offline render, which is
+# immune to CPU dips"), and it is also what lets a prototype session enter the
+# experiment catalog, which it never could before.
+#
+# Sample-exact in the conversion: the initial field, the engine and every one of
+# its settings, the tempo (bpm + division -> rate_hz), both envelope blocks, and
+# the note / gate timeline -- rec['midi_onsets'] is written by the RENDER thread
+# at a known output sample.  Frame-timed (as exact as the frame log, which since
+# 2026-09-21 also records the render thread's position): the volume and edits of
+# the field the user made by hand.
+# NOT converted -- the converter refuses instead of inventing: a session with
+# Sethares tuning on (the sounding carrier is then not the note's own frequency
+# and a scene has no field for it), a session that switched engine mid-way, and
+# one recorded before the frame log carried its sample position.
+SCENE_RULE = 'B3/S23'
+SCENE_BOUNDARY = 'torus'
+
+
+class SessionError(RuntimeError):
+    """A recorded session that cannot be expressed as a scene."""
+
+
+def _plain(v):
+    """numpy scalar -> the int / float / bool a scene document may hold."""
+    if isinstance(v, (bool, np.bool_)):
+        return bool(v)
+    if isinstance(v, (int, np.integer)):
+        return int(v)
+    return float(v)
+
+
+def _cells_of(grid):
+    return [[int(r), int(c)] for r, c in np.argwhere(np.asarray(grid) > 0)]
+
+
+def _cell_diff(prev, cur):
+    """[[row, col, value], ...] turning `prev` into `cur` -- one set_cells."""
+    return [[int(r), int(c), int(cur[r, c])]
+            for r, c in np.argwhere(np.asarray(prev) != np.asarray(cur))]
+
+
+def scene_from_session(ts, prefix="_session", title=None, listen=''):
+    """Scene document (format 2) of a recorded session + a report of what it
+    holds.  -> (doc, info); SessionError for a session a scene cannot express."""
+    import os
+    npz = f"{prefix}_{ts}.npz"
+    if not os.path.exists(npz):
+        raise SessionError(f"no session file {npz}")
+    d = np.load(npz, allow_pickle=True)
+    controls = d['replay_controls'] if 'replay_controls' in d.files else np.array([])
+    if len(controls) == 0:
+        raise SessionError(f"{npz} has no replay_controls log")
+    grids = d['replay_grids']
+    frames = d['frames']
+    if frames.ndim != 2 or frames.shape[1] < 7:
+        raise SessionError(
+            f"{npz}: the frame log has no output-sample column (recorded before "
+            "2026-09-21), so its frame-timed events cannot be placed on a sample")
+    at_sample = frames[:, 6].astype(int)
+    # The render thread starts before the UI thread has published its first
+    # analysis, so the recording opens with a stretch of silence that belongs to
+    # the prototype's startup, not to the experiment.  The scene begins where the
+    # synth first had voices, and every scripted time is measured from there --
+    # `offset` says how far into the recording that is.
+    offset = int(at_sample[0])
+    first = dict(controls[0])
+    engine = first['engine']
+    for i, c in enumerate(controls):
+        c = dict(c)
+        if c['engine'] != engine:
+            raise SessionError(f"{npz}: the engine changed during the session "
+                               f"({engine} -> {c['engine']} at frame {i}); a scene "
+                               f"holds one engine per side")
+        # the render thread uses the snapped carrier ONLY while tune > 0 (see
+        # gol_synth._transpose); with tune == 0 the sounding f0 is the note's own,
+        # and the logged tuned_f0 may simply lag it by a frame
+        if float(c.get('tune', 0.0)) > 0.0:
+            raise SessionError(f"{npz}: Sethares tuning was on at frame {i} "
+                               f"(tune={float(c['tune']):.3f}, sounding "
+                               f"{float(c.get('tuned_f0', 0.0)):.3f} Hz); a scene has no "
+                               f"field for a snapped carrier yet")
+
+    variant = {'engine_id': engine,
+               'engine_params': {k: _plain(v) for k, v in dict(first['engine_params']).items()}}
+    interval = NOTE_DIVS[int(first['div_idx'])][1] * 60.0 / float(first['bpm'])
+
+    # the note / gate timeline: the render thread stamped it with an output sample
+    onsets = d['midi_onsets'] if 'midi_onsets' in d.files else np.zeros((0, 3))
+    note0, gate0 = int(first['note']), bool(first.get('gate', True))
+    script = []
+    for cum, n, g in onsets:
+        at, n, g = int(cum), int(n), bool(g)
+        at -= offset
+        if at <= 0:                                   # before the scene begins
+            note0, gate0 = n, g
+            continue
+        script.append(dict(at=at, kind='note', args=dict(note=n)))
+        script.append(dict(at=at, kind='gate', args=dict(on=g)))
+
+    # the volume and the edits of the field: logged per frame, placed on the
+    # sample that frame recorded
+    vol0 = float(first['vol'])
+    vol, edits = vol0, 0
+    for i in range(1, len(controls)):
+        at = int(at_sample[i]) - offset
+        if at <= 0:
+            continue
+        v = float(dict(controls[i])['vol'])
+        if v != vol:
+            script.append(dict(at=at, kind='vol', args=dict(value=v)))
+            vol = v
+        if i < len(grids) and frames[i, 1] == frames[i - 1, 1]:
+            # the field changed while the GENERATION did not: the user's own edit
+            # (painting, a dropped pattern, Random / Clear), not an automaton step
+            cells = _cell_diff(grids[i - 1], grids[i])
+            if cells:
+                script.append(dict(at=at, kind='set_cells', args=dict(cells=cells)))
+                edits += 1
+    # the automaton steps: the prototype takes them on a WALL clock, so a scene
+    # that re-renders the session must take them where they were RECORDED, not on
+    # its own sample clock.  The frame log says how many steps had happened by
+    # each frame (column 5) and where the render thread was then (column 6).
+    steps = 0
+    for i in range(1, len(frames)):
+        done = int(frames[i, 5])
+        at = int(at_sample[i])
+        at -= offset
+        while steps < done and at > 0:
+            steps += 1
+            script.append(dict(at=at, kind='step', args={}))
+    script.sort(key=lambda c: c['at'])
+
+    env = dict(voice=dict(attack_ms=float(first['voice_attack_ms']),
+                          decay_ms=float(first['voice_decay_ms']),
+                          sustain=float(first['voice_sustain']),
+                          release_ms=float(first['voice_release_ms'])),
+               gen=dict(attack=float(first['gen_attack']), decay=float(first['gen_decay']),
+                        sustain=float(first['gen_sustain']), release=float(first['gen_release']),
+                        amp_slew=bool(first['gen_amp_slew'])))
+    rows, cols = grids[0].shape
+    doc = {
+        'format': 2,
+        'id': f"session_{ts}",
+        'title': title or f"Prototype session {ts}",
+        'grid': {'rows': int(rows), 'cols': int(cols)},
+        'cells': _cells_of(grids[0]),
+        'rule': SCENE_RULE,
+        'boundary': SCENE_BOUNDARY,
+        'rate_hz': 1.0 / interval,
+        'steps': 'script',
+        'audio': {'f0_hz': float(midi_to_freq(NOTE_DEFAULT)), 'level': 1.0,
+                  'note': note0, 'gate': gate0, 'pan': 'field', 'envelope': env},
+        'variants': {'A': variant,
+                     'B': {'engine_id': engine,
+                           'engine_params': dict(variant['engine_params'])}},
+        'initial_side': 'A',
+        'listen': listen or f"Offline render of the recorded session {ts}.",
+        'script': script,
+    }
+    info = dict(samples=(int(at_sample.max()) - offset) if len(at_sample) else 0,
+                offset=offset,
+                frames=int(len(controls)), onsets=int(len(onsets)), edits=edits,
+                vol0=vol0, vol_changes=sum(1 for c in script if c['kind'] == 'vol'),
+                engine=engine, rate_hz=doc['rate_hz'], note=note0, gate=gate0,
+                steps=sum(1 for c in script if c['kind'] == 'step'))
+    return doc, info
+
+
+def render_session_scene(ts, prefix="_session", seconds=None):
+    """Convert a session to a scene and render it OFFLINE through casynth_lab.
+    -> (pcm int16 (n, 2), doc, info)."""
+    from casynth_lab import scene_from_doc, render_offline, DemoRunner
+    doc, info = scene_from_session(ts, prefix)
+    scene = scene_from_doc(doc)
+    n = info['samples'] if seconds is None else int(round(seconds * SR))
+    runner = DemoRunner(scene, vol=info['vol0'])
+    pcm, _r = render_offline(scene, n / float(SR), commands=[('start', 0, {})],
+                             runner=runner, output='A')
+    return pcm, doc, info
+
+
+def _scene_cli(ts, prefix="_session"):
+    """`python gol_synth.py scene <ts>`: session -> scene -> offline render, and
+    the honest comparison with the WAV the live run produced."""
+    import json
+    import os
+    try:
+        pcm, doc, info = render_session_scene(ts, prefix)
+    except SessionError as e:
+        print(f"[scene] cannot convert: {e}")
+        return 2
+    out_json = os.path.join('artifacts', f"_scene_{ts}.json")
+    os.makedirs('artifacts', exist_ok=True)
+    with open(out_json, 'w', encoding='utf-8') as f:
+        json.dump(doc, f, indent=1)
+    print(f"[scene] {info['frames']} frames, {info['onsets']} note/gate events, "
+          f"{info['steps']} automaton steps, {info['vol_changes']} volume changes, "
+          f"{info['edits']} field edits -> {len(doc['script'])} scripted commands; "
+          f"engine {info['engine']}, {info['rate_hz']:.3f} steps/s nominal; "
+          f"scene written to {out_json}")
+    wav = f"{prefix}_{ts}.wav"
+    if not os.path.exists(wav):
+        print(f"[scene] rendered {len(pcm)} samples offline; no {wav} to compare with")
+        return 0
+    from scipy.io import wavfile
+    _sr, ref = wavfile.read(wav)
+    ref = ref[info['offset']:]          # skip the prototype's silent startup
+    n = min(len(ref), len(pcm))
+    if n == 0:
+        print("[scene] nothing to compare")
+        return 0
+    diff = np.abs(pcm[:n].astype(np.int64) - ref[:n].astype(np.int64))
+    same = int(np.count_nonzero(diff.max(axis=1) == 0))
+    first_bad = int(np.argmax(diff.max(axis=1) > 0)) if same < n else -1
+    print(f"[scene] offline {len(pcm)} vs recorded {len(ref)} samples "
+          f"(after {info['offset']} of startup silence); compared {n}: "
+          f"{same} identical ({100.0 * same / n:.2f} %), max|diff| {int(diff.max())}, "
+          f"mean|diff| {diff.mean():.3f}"
+          + (f", first difference at sample {first_bad} ({first_bad / SR:.3f} s)"
+             if first_bad >= 0 else " -- byte-exact"))
+    return 0
 
 
 def _replay_cli(ts, prefix="_session"):

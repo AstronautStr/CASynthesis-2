@@ -197,6 +197,74 @@ def analyse(grid, f0, engine_id, params, exc=None):
 # AUDIO ENGINE  -- flat slot pool with per-slot crossfade
 # ──────────────────────────────────────────────────────────────────────────────
 
+class VoiceEnvelope:
+    """The note-on/off VCA: a scalar 0..1 over the SUMMED signal (the classic
+    articulation), advanced one chunk at a time and folded into the master gain.
+
+    It belongs to the HOST, never to an engine -- an engine is not told that a
+    note is held (see casynth_engines/engine_api.py).  Lifted out of
+    gol_synth._render_loop on 2026-09-21 so the prototype and the bench
+    articulate a note with the same arithmetic instead of two copies of it.
+
+    phase: 0 idle, 1 attack, 2 decay, 3 sustain, 4 release.  A new instance is
+    seeded to the held state (a note is latched at startup), so a steady field
+    sounds without waiting for an edge; with the default knobs (A = 0, S = 1) it
+    sits at 1.0 -- a no-op multiplier, i.e. the historical sound.
+    """
+    __slots__ = ('level', 'phase', 'rel0', 'gate')
+
+    def __init__(self, gate=True):
+        self.gate = bool(gate)
+        self.level = 1.0 if self.gate else 0.0
+        self.phase = 3 if self.gate else 0
+        self.rel0 = 0.0
+
+    def block(self, gate, attack_s, decay_s, sustain, release_s, dt=CHUNK_S):
+        """One chunk on the LIVE knob values (seconds; sustain is a level).
+        Returns the level at the end of the chunk."""
+        gate = bool(gate)
+        if gate and not self.gate:                 # note-on edge -> attack
+            self.phase = 1
+            if attack_s <= 0.0:                    # instant attack
+                self.level, self.phase = 1.0, 2
+        elif self.gate and not gate:               # note-off edge -> release
+            self.phase = 4
+            self.rel0 = self.level
+            if release_s <= 0.0:                   # instant cut
+                self.level, self.phase = 0.0, 0
+        ph = self.phase
+        if ph == 1:                                # attack: 0 -> 1
+            self.level += dt / attack_s
+            if self.level >= 1.0:
+                self.level, self.phase = 1.0, 2
+        elif ph == 2:                              # decay: 1 -> sustain
+            if decay_s <= 0.0:
+                self.level, self.phase = sustain, 3
+            else:
+                self.level -= (1.0 - sustain) * dt / decay_s
+                if self.level <= sustain:
+                    self.level, self.phase = sustain, 3
+        elif ph == 3:                              # sustain: track the live level
+            self.level = sustain
+        elif ph == 4:                              # release: rel0 -> 0
+            self.level -= self.rel0 * dt / release_s
+            if self.level <= 0.0:
+                self.level, self.phase = 0.0, 0
+        self.gate = gate
+        return self.level
+
+    def state(self):
+        return dict(level=float(self.level), phase=int(self.phase),
+                    rel0=float(self.rel0), gate=bool(self.gate))
+
+    def restore(self, st):
+        self.level = float(st['level'])
+        self.phase = int(st['phase'])
+        self.rel0 = float(st['rel0'])
+        self.gate = bool(st['gate'])
+        return self
+
+
 def render_chunk_laplacian(phase, amp_cur, pan_cur,
                            amp_tgt, pan_tgt, freq_slots, channels, gain_prev, gain,
                            transpose=1.0):

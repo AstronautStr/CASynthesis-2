@@ -12,7 +12,7 @@ from casynth_config import (CHUNK_S, TOTAL_SLOTS, MAX_VOICES, MAX_MODES_PER_OBJ,
                             GEN_ATTACK_DEFAULT, GEN_DECAY_DEFAULT,
                             GEN_SUSTAIN_DEFAULT, GEN_RELEASE_DEFAULT)
 from casynth_engine import analyse, SlotPool, render_chunk_laplacian
-from .engine_api import SoundEngine
+from .engine_api import SoundEngine, PAN_FIELD_MODE
 
 PAN_CENTER = 0.5                   # both channels identical (S1 rule)
 
@@ -146,6 +146,11 @@ class LegacySynthEngine(SoundEngine):
     def _analyse(self):
         _labels, voices, _color = analyse(self._grid, self.ctx.f0, self.engine_id,
                                           self.params, exc=self._exc)
-        for v in voices:
-            v['pan'] = PAN_CENTER
+        if self.ctx.pan != PAN_FIELD_MODE:
+            # the bench's rule since S1: both channels identical, so an A/B
+            # difference is never a difference of position.  A host that asks for
+            # 'field' keeps the position analyse() gave each voice -- which is
+            # what the prototype has always played.
+            for v in voices:
+                v['pan'] = PAN_CENTER
         self.voices = voices

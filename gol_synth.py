@@ -73,8 +73,10 @@ from patterns import PATTERNS
 # Modularised subsystems (extracted from this monolith -- see casynth_*.py).
 from casynth_config import *                                   # noqa: F401,F403
 from casynth_engine import (midi_to_freq, note_name, step, hsv, analyse,
-                            render_chunk_laplacian, SlotPool, events_field)
-from casynth_session import _dump_session, replay_session, _replay_cli
+                            render_chunk_laplacian, SlotPool, events_field,
+                            VoiceEnvelope)
+from casynth_session import (_dump_session, replay_session, _replay_cli,
+                             _scene_cli)
 from casynth_midi import MidiInput, MIDI_AVAILABLE
 from casynth_midifile import MidiFilePlayer, MIDIFILE_AVAILABLE
 from casynth_host import AudioHost
@@ -143,6 +145,12 @@ def main(autoplay_midi=None):
     # machine without it just reports no device here.
     host = AudioHost(int(CHUNK_S * SR), 2, sr=SR, lookahead=AUDIO_LOOKAHEAD_CHUNKS)
     _ur = {'prev': 0}                          # last underrun count shown in the UI
+    # Where the render thread is, in output samples (it writes, the UI thread
+    # reads).  A recorded frame stores it, so an event the UI logs per frame --
+    # a volume drag, a painted cell -- lands on a real sample when the session is
+    # turned into a scene (casynth_session.scene_from_session), instead of being
+    # guessed from frame durations.
+    _pos = {'cum': 0}
     audio_ok = host.start()
     if audio_ok:
         _lat = ('?' if host.latency is None else f"{host.latency * 1000:.0f}")
@@ -712,13 +720,9 @@ def main(autoplay_midi=None):
         last_note, last_gate = state['note'], bool(state['gate'])
         # VOICE ADSR (VCA): a scalar 0..1 envelope keyed to note-on/off, multiplying
         # the master gain (a classic articulation over the summed oscillator signal).
-        # phase: 0 idle, 1 attack, 2 decay, 3 sustain, 4 release.  Seeded to the
-        # held state (a note is latched at startup) so a steady field sounds without
-        # waiting for an edge; with the default knobs (A=0,S=1) it sits at 1.0 -> a
-        # no-op multiplier == the historical sound.  (Note-off release is wired in the
-        # next step; here gate-off is still handled by emptying voices_in.)
-        venv = {'level': (1.0 if last_gate else 0.0),
-                'phase': (3 if last_gate else 0), 'rel0': 0.0}
+        # The arithmetic lives in casynth_engine.VoiceEnvelope since 2026-09-21 --
+        # the bench articulates a scene's notes with the same class, not a copy.
+        venv = VoiceEnvelope(gate=last_gate)
         while audio_ctl['alive']:
             if host.full():
                 time.sleep(0.001)      # ring full -> idle briefly
@@ -738,38 +742,12 @@ def main(autoplay_midi=None):
             # the ONLY articulation gate now: the oscillator (KA field) is fed to the
             # pool ALWAYS (below), so a note change never retriggers the per-mode GEN
             # envelope -- it just re-articulates this scalar VCA.
-            va = state['voice_attack_ms']  / 1000.0
-            vd = state['voice_decay_ms']   / 1000.0
-            vs = float(state['voice_sustain'])
-            vr = state['voice_release_ms'] / 1000.0
-            if gate and not last_gate:                 # note-on edge -> attack
-                venv['phase'] = 1
-                if va <= 0.0:                          # instant attack
-                    venv['level'], venv['phase'] = 1.0, 2
-            elif last_gate and not gate:               # note-off edge -> release
-                venv['phase'] = 4
-                venv['rel0'] = venv['level']
-                if vr <= 0.0:                          # instant cut
-                    venv['level'], venv['phase'] = 0.0, 0
-            _vph = venv['phase']
-            if _vph == 1:                              # attack: 0 -> 1
-                venv['level'] += CHUNK_S / va
-                if venv['level'] >= 1.0:
-                    venv['level'], venv['phase'] = 1.0, 2
-            elif _vph == 2:                            # decay: 1 -> sustain
-                if vd <= 0.0:
-                    venv['level'], venv['phase'] = vs, 3
-                else:
-                    venv['level'] -= (1.0 - vs) * CHUNK_S / vd
-                    if venv['level'] <= vs:
-                        venv['level'], venv['phase'] = vs, 3
-            elif _vph == 3:                            # sustain: track live level
-                venv['level'] = vs
-            elif _vph == 4:                            # release: rel0 -> 0
-                venv['level'] -= venv['rel0'] * CHUNK_S / vr
-                if venv['level'] <= 0.0:
-                    venv['level'], venv['phase'] = 0.0, 0
-            gain = MASTER_GAIN * state['vol'] * venv['level']
+            level = venv.block(gate,
+                               state['voice_attack_ms'] / 1000.0,
+                               state['voice_decay_ms'] / 1000.0,
+                               float(state['voice_sustain']),
+                               state['voice_release_ms'] / 1000.0)
+            gain = MASTER_GAIN * state['vol'] * level
             # Pool is fed PITCH-NORMALIZED reference voices; the live carrier is a
             # scalar transpose applied at render (phase-continuous, no retrigger).
             # The oscillator is FREE-RUNNING: voices flow regardless of gate (note-off
@@ -795,6 +773,7 @@ def main(autoplay_midi=None):
                 rec['underruns'] = host.underruns
             last_note, last_gate = note, gate
             cum += len(buf)
+            _pos['cum'] = cum
 
     def _on_midi_message(msg):
         # Called from rtmidi's own thread the instant a message arrives (callback
@@ -900,6 +879,11 @@ def main(autoplay_midi=None):
     # save it to that path and exit (deterministic on the default empty field) --
     # a bit-exact visual baseline for the draw extraction.
     _dumpframe = os.environ.get('CASYNTH_DUMPFRAME')
+    # CASYNTH_RUN_SECONDS: quit by itself after that many seconds -- a headless
+    # session (SDL_VIDEODRIVER=dummy, CASYNTH_RECORD=1) can then be recorded and
+    # compared against its own offline render without a human pressing Esc.
+    _run_seconds = os.environ.get('CASYNTH_RUN_SECONDS')
+    _deadline = (time.perf_counter() + float(_run_seconds)) if _run_seconds else None
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0
@@ -1112,12 +1096,16 @@ def main(autoplay_midi=None):
         ur_delta = _ur_now - _ur['prev']
         _ur['prev'] = _ur_now
         if rec is not None:
-            # columns: [dt_ms, gen, n_voices, n_rendered, underrun, n_steps_done]
+            # columns: [dt_ms, gen, n_voices, n_rendered, underrun, n_steps_done,
+            #           out_samples]
             # n_steps_done = len(rec['steps']) at this moment; used by replay to
             # index step history directly (serial-path) so exc reconstruction is
             # correct even when gen resets to 0 after clear() (FIX-F).
+            # out_samples (2026-09-21) = how far the render thread had got when this
+            # frame was logged -> the sample a frame-timed event happened at.
             rec['frames'].append((round(dt * 1000.0, 2), state['gen'],
-                                  len(voices), 0, ur_delta, len(rec['steps'])))
+                                  len(voices), 0, ur_delta, len(rec['steps']),
+                                  _pos['cum']))
             # Per-frame control snapshot -- CONTEXT for the session (engine/knob
             # timeline).  Audio is no longer rendered per frame, so n_rendered=0; the
             # AUTHORITATIVE sample-accurate note timing is rec['midi_onsets'] written
@@ -1171,6 +1159,8 @@ def main(autoplay_midi=None):
         if _dumpframe is not None:
             pygame.image.save(screen, _dumpframe)
             running = False
+        elif _deadline is not None and time.perf_counter() >= _deadline:
+            running = False
 
     # Stop the render/MIDI threads and the audio stream BEFORE dumping the session,
     # so the render thread is no longer appending to rec['chunks'] when we read it.
@@ -1192,6 +1182,9 @@ def main(autoplay_midi=None):
 if __name__ == '__main__':
     if len(sys.argv) >= 3 and sys.argv[1] == 'replay':
         _replay_cli(sys.argv[2])
+    elif len(sys.argv) >= 3 and sys.argv[1] == 'scene':
+        # session -> scene -> OFFLINE render, compared with the live WAV
+        sys.exit(_scene_cli(sys.argv[2]))
     elif len(sys.argv) >= 3 and sys.argv[1] == 'play':
         main(autoplay_midi=sys.argv[2])
     else:
