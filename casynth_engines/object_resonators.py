@@ -731,6 +731,13 @@ class ObjectResonatorsEngine(SoundEngine):
         self.age_k = age_decay_k(n, self.sr)
         self._grid = None
         self._exc = None
+        # Per-slot arrays a HOST attached (attach_slot_state): they are moved,
+        # split and cleared WITH the slots, so a voicing that lives outside this
+        # engine -- the FM carrier of the unified engine, REQ
+        # memory/req-unified-laplace-2026-09-21.md section 6 -- cannot fall out
+        # of step with the bank it reads.  Empty by default and not part of the
+        # snapshot: the owner of an array owns its continuation too.
+        self.extra_slot = []
         self._zero()
         self._kernel(0, np.zeros((0, 2)))          # compile / load the cached kernel
 
@@ -787,6 +794,20 @@ class ObjectResonatorsEngine(SoundEngine):
         self.next_id = 1
         self.G_prev = None
         self.E_prev = None
+        for a in getattr(self, 'extra_slot', ()):      # an attached voicing restarts too
+            a[:] = 0.0
+
+    def attach_slot_state(self, array):
+        """Hand this engine a per-slot array of the caller's own (N_SLOTS,) that
+        should follow the slots: it is zeroed when a slot is freed or the engine
+        restarts, copied when a bank is moved to a tail, and carried over when a
+        set of modes splits off into one.  The array stays the caller's; nothing
+        here ever reads its values."""
+        if array.shape[0] != N_SLOTS:
+            raise ValueError(f"engine {ENGINE_ID}: attached slot state of "
+                             f"{array.shape[0]} != {N_SLOTS} slots")
+        self.extra_slot.append(array)
+        return array
 
     def _kernel(self, n, out):
         _render(n, out, self.role, self.ndrive, self.npulse, self.nlive, self.zre, self.zim, self.cth, self.sth,
@@ -878,6 +899,8 @@ class ObjectResonatorsEngine(SoundEngine):
         self.slaw[s] = 0
         self.gam_a[s] = 0.0
         self.gam_t[s] = 0.0
+        for a in self.extra_slot:
+            a[s] = 0.0
 
     def _zero_pulse(self, s):
         """No excitation left in slot s: the slot and the per-mode pulse states."""
@@ -905,6 +928,8 @@ class ObjectResonatorsEngine(SoundEngine):
     def _move_slot(self, src, dst):
         for name in self._SLOT_FIELDS:
             a = getattr(self, name)
+            a[dst] = a[src]
+        for a in self.extra_slot:
             a[dst] = a[src]
         self._clear_slot(src)
 
@@ -1034,6 +1059,8 @@ class ObjectResonatorsEngine(SoundEngine):
             a = getattr(self, name)
             a[dst, :m] = a[s, keep]
         self.slaw[dst] = self.slaw[s]                            # the tail keeps its law and holds its targets
+        for a in self.extra_slot:
+            a[dst] = a[s]                                        # ... and an attached voicing its phase
         self.wleft[dst] = self.wleft[s]
         self.pan[dst] = self.pan[s]
         self.pleft[dst] = self.pleft[s]
@@ -1442,6 +1469,22 @@ class ObjectResonatorsEngine(SoundEngine):
         g = float(gain)
         self.gg[:] = (g, g, 0.0)
 
+    def prime_silent(self):
+        """The current field becomes this engine's OWN previous field, so the
+        first boundary finds no change and makes no packet.
+
+        A fresh init compares the field with zeros and every live cell is a birth
+        -- which is right when a note starts, and wrong when a host only switches
+        an articulation ON over a field that has been running (REQ
+        memory/req-unified-laplace-2026-09-21.md section 6: switching an axis is
+        never an impulse).  The ages of the live positions are set as that first
+        boundary would have set them, so an adaptive law continues too."""
+        if self._grid is None:
+            return
+        self.G_prev = self._grid.copy()
+        self.E_prev = self._exc_array(self._exc).copy()
+        self.age[self._grid != 0] = 1.0
+
     def update_field(self, grid, exc):
         self._grid = np.array(grid, np.uint8, copy=True)
         self._exc = None if exc is None else np.array(exc, np.float64, copy=True)
@@ -1536,6 +1579,28 @@ class ObjectResonatorsEngine(SoundEngine):
         y, peak, n_clip = self.render_float(gain)
         pcm = (np.clip(y, -1.0, 1.0) * 32767).astype(np.int16)
         return np.ascontiguousarray(pcm), peak, n_clip
+
+    def begin_block(self, gain, transpose=1.0, gain_prev=None):
+        """Everything render() does BEFORE the samples -- the retune of a new
+        note, the host's override of the gain-glide start, the block boundary and
+        the gain target -- for a host that then runs a sample kernel of its own
+        on this state (the voicings of the unified engine, REQ
+        memory/req-unified-laplace-2026-09-21.md section 6).  The call order is
+        render()'s own, so a cell that ends with the kernel of _kernel() is this
+        engine bit for bit."""
+        if transpose != self._transpose:
+            self._retune(transpose)
+        if gain_prev is not None:
+            g0 = float(gain_prev)
+            self.gg[R_CUR] = self.gg[R_TGT] = g0
+            self.gg[R_INC] = 0.0
+            self.ints[I_G_LEFT] = 0
+        self._boundary()
+        self._set_gain(gain)
+
+    def end_block(self):
+        """... and what it does AFTER them: every position forgets a little."""
+        self._age_block()
 
     def render_float(self, gain):
         """One block (block, 2) after OUT_SCALE and the ramped bench gain, before the

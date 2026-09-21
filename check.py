@@ -31,6 +31,9 @@ Gates (any FAIL -> exit 1):
   1u. GEN envelope     python tests/test_gen_envelope.py          (the host's live GEN
                        A/D/S/R + tempo reach every engine that claims them, reach no
                        engine that does not, and an untold engine is byte-identical)
+  1v. unified Laplace  python tests/test_laplace_unified.py       (articulation x
+                       voicing on one spectrum: the axes, the four byte anchors of the
+                       engines it collapsed, and an axis switch that never clicks)
   2. golden master     python tests/golden/golden_master.py       (audio, byte-exact)
   3. ui frame + smoke  CASYNTH_DUMPFRAME render of gol_synth.py   (pixel-exact vs
                        tests/golden/ui_frame.png; doubles as the import/init smoke)
@@ -216,6 +219,12 @@ def main():
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"},
                          timeout=600)))
+
+    results.append(("the unified Laplace engine (axes x voicings, the byte anchors)",
+                    _run("unified Laplace tests", [py, os.path.join("tests", "test_laplace_unified.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"},
+                         timeout=900)))
 
     results.append(("golden master",
                     _run("golden master", [py, os.path.join("tests", "golden", "golden_master.py")])))
