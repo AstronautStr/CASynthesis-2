@@ -504,7 +504,10 @@ class GutterFieldEngine(SoundEngine):
                 self.u_held = self.u_field.copy()
         self._apply_freqs()
 
-    def render(self, gain, t_samples):
+    def render(self, gain, t_samples, *, gain_prev=None, transpose=1.0):
+        self._check_transpose(transpose)
+        if gain_prev is not None:
+            self.gain_prev = self._eff(gain_prev)  # the host overrides the glide start
         y, peak, n_clip = self.render_float(gain)
         pcm = (np.clip(y, -1.0, 1.0) * 32767).astype(np.int16)
         return np.ascontiguousarray(pcm), peak, n_clip

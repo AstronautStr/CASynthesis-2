@@ -92,9 +92,9 @@ class SideState:
 
     def display(self):
         """Read-only numbers an engine offers the UI (None when it has none);
-        the display never takes part in the sound."""
-        fn = getattr(self.engine, 'display', None)
-        return fn() if callable(fn) else None
+        the display never takes part in the sound.  Part of the contract since
+        2026-09-21, so every engine has it (the base class returns None)."""
+        return self.engine.display()
 
     @property
     def snapshot_ok(self):

@@ -514,7 +514,10 @@ class LaplaceCarriersEngine(SoundEngine):
         if self._grid is not None:
             self._analyse()
 
-    def render(self, gain, t_samples):
+    def render(self, gain, t_samples, *, gain_prev=None, transpose=1.0):
+        self._check_transpose(transpose)
+        if gain_prev is not None:
+            self.gain_prev = float(gain_prev)      # the host overrides the glide start
         n = self.ctx.block
         self.bank.update(self.voices, self._release_chunks, self._attack_chunks,
                          self._decay_chunks, self._sustain)

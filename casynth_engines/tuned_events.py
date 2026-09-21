@@ -304,7 +304,10 @@ class TunedEventsEngine(SoundEngine):
                 self.rr[R_INC] = 0.0
                 self.ints[I_R_LEFT] = 0
 
-    def render(self, gain, t_samples):
+    def render(self, gain, t_samples, *, gain_prev=None, transpose=1.0):
+        self._check_transpose(transpose)
+        if gain_prev is not None:
+            self.gain_prev = self._eff(gain_prev)  # the host overrides the glide start
         y, peak, n_clip = self.render_float(gain)
         pcm = (np.clip(y, -1.0, 1.0) * 32767).astype(np.int16)
         return np.ascontiguousarray(pcm), peak, n_clip

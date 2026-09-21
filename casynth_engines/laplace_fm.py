@@ -593,7 +593,10 @@ class LaplaceFMEngine(SoundEngine):
         if self._grid is not None:
             self._pending_analysis = True
 
-    def render(self, gain, t_samples):
+    def render(self, gain, t_samples, *, gain_prev=None, transpose=1.0):
+        self._check_transpose(transpose)
+        if gain_prev is not None:
+            self.gain_prev = float(gain_prev)      # the host overrides the glide start
         n = self.ctx.block
         if self._pending_analysis:
             self._analyse()

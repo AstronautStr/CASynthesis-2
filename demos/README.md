@@ -731,17 +731,30 @@ turns the field into stereo blocks.
    ```python
    from casynth_engines import SoundEngine
    class MyEngine(SoundEngine):
-       def init(self, grid, exc, gain): ...        # (re)start on the CURRENT field, silent
+       SUPPORTS_TRANSPOSE = False                   # True = render() plays a note
+       def init(self, grid, exc, gain=0.0): ...    # (re)start on the CURRENT field, silent
        def update_field(self, grid, exc): ...      # field changed (step / painting)
        def set_params(self, params): ...           # full validated dict (call super())
-       def render(self, gain, t_samples): ...      # -> (int16 (ctx.block, 2), peak, n_clip)
-       def reset(self, gain): ...                  # == init on the same field
+       def render(self, gain, t_samples, *, gain_prev=None, transpose=1.0): ...
+                                                   # -> (int16 (ctx.block, 2), peak, n_clip)
+       def reset(self, gain=0.0): ...              # == init on the same field
+       def display(self): ...                      # optional read-only numbers for a UI
+       def set_envelope(self, a, d, s, r, amp_slew): ...   # optional: live host envelope
+       def set_rate(self, rate_hz): ...            # optional: live host tempo
        STATE_VERSION = 1                            # optional (S5): exact continuation
        def export_state(self): ...                 # -> dict of scalars/lists + ndarrays
        def restore_state(self, grid, exc, state): ...  # rebuild so render() continues exactly
    ```
    `self.ctx` gives `sr`, `block`, `channels`, `f0`, `level`, `rate_hz`.  Apply
-   `gain` once (pre-clip).  No wall-clock time, never write to `grid`.
+   `gain` once (pre-clip) and GLIDE to it from the previous block's gain;
+   `gain_prev` is the host overriding what you remembered.  `ctx.f0` is the
+   ANALYSIS ANCHOR, never the sounding note -- the note arrives per block as
+   `transpose`, a multiplier on every frequency you render (phase keeps
+   accumulating, so nothing retriggers).  An engine that cannot do that leaves
+   `SUPPORTS_TRANSPOSE` False and the base class refuses the note instead of
+   playing a wrong one.  The VCA, the note gate and the level meter's decay are
+   the host's, not yours.  No wall-clock time, never write to `grid`.  The full
+   contract is the module doc of `casynth_engines/engine_api.py`.
 2. **Register** — explicitly, in one place: the `_LAZY` map at the bottom of
    `casynth_engines/registry.py` (id -> your module, after the built-in five).
    The module is imported by the first `registry.get(id)`, so listing it costs

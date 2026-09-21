@@ -33,7 +33,13 @@ def _gen_chunks(frac, interval_s):
 
 class LegacySynthEngine(SoundEngine):
     """One casynth_core map_* method (engine_id) rendered through the shared
-    SlotPool additive path."""
+    SlotPool additive path.
+
+    The note is a `transpose` at render: the pool holds the frequencies analysed
+    at ctx.f0 and render_chunk_laplacian multiplies them per block, so a note
+    change is phase-continuous and retriggers nothing (see engine_api)."""
+
+    SUPPORTS_TRANSPOSE = True
 
     def __init__(self, ctx, params, engine_id):
         super().__init__(ctx, params)
@@ -62,14 +68,16 @@ class LegacySynthEngine(SoundEngine):
         if self._grid is not None:
             self._analyse()
 
-    def render(self, gain, t_samples):
+    def render(self, gain, t_samples, *, gain_prev=None, transpose=1.0):
+        if gain_prev is not None:
+            self.gain_prev = float(gain_prev)      # the host overrides the glide start
         self.pool.update(self.voices, self.phase, self.amp_cur, self.pan_cur,
                          self._release_chunks, self._attack_chunks,
                          self._decay_chunks, self._sustain, amp_slew=False)
         buf, peak, n_clip = render_chunk_laplacian(
             self.phase, self.amp_cur, self.pan_cur, self.pool.amp_tgt,
             self.pool.pan_tgt, self.pool.freq_slots, self.ctx.channels,
-            self.gain_prev, gain, 1.0)
+            self.gain_prev, gain, transpose)
         self.gain_prev = gain
         return buf, peak, n_clip
 
