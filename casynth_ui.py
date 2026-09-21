@@ -272,14 +272,34 @@ def draw_frame(screen, fonts, state, lay, rt):
         val = _ctrl_value(state, c)
         screen.blit(small.render(c['label'], True, C_DIM),
                     (c['label_x'], tr.centery - 7))
-        pygame.draw.rect(screen, C_BTN, tr, border_radius=4)
-        frac = float(np.clip((val - c['lo']) / (c['hi'] - c['lo']), 0, 1))
-        cw = int(tr.width * frac)
-        pygame.draw.rect(screen, C_ACCENT, (tr.left, tr.top, cw, tr.height),
-                         border_radius=4)
-        pygame.draw.circle(screen, C_TXT, (tr.left + cw, tr.centery), 5)
-        screen.blit(small.render(c['fmt'](val), True, C_DIM),
-                    (tr.right + 6, tr.centery - 7))
+        kind = c.get('kind', 'slider')
+        if kind == 'toggle':
+            # an on/off integer is a pill, as on the bench (2026-09-21)
+            pill = c['pill']
+            pygame.draw.rect(screen, C_ACCENT if val else C_BTN, pill, border_radius=8)
+            pygame.draw.rect(screen, C_EDGE, pill, 1, border_radius=8)
+            screen.blit(small.render("on" if val else "off", True, C_DIM),
+                        (pill.right + 6, tr.centery - 7))
+        elif kind == 'choices':
+            # a mode named by words: one button per word, the current one lit
+            for value, rect in c['word_rects']:
+                on = (int(val) == value)
+                pygame.draw.rect(screen, C_ACCENT if on else C_BTN, rect, border_radius=3)
+                pygame.draw.rect(screen, C_EDGE, rect, 1, border_radius=3)
+                word = small.render(c['choices'][value], True, C_BG if on else C_DIM)
+                screen.set_clip(rect)
+                screen.blit(word, (rect.centerx - word.get_width() // 2,
+                                   rect.centery - word.get_height() // 2))
+                screen.set_clip(None)
+        else:
+            pygame.draw.rect(screen, C_BTN, tr, border_radius=4)
+            frac = float(np.clip((val - c['lo']) / (c['hi'] - c['lo']), 0, 1))
+            cw = int(tr.width * frac)
+            pygame.draw.rect(screen, C_ACCENT, (tr.left, tr.top, cw, tr.height),
+                             border_radius=4)
+            pygame.draw.circle(screen, C_TXT, (tr.left + cw, tr.centery), 5)
+            screen.blit(small.render(c['fmt'](val), True, C_DIM),
+                        (tr.right + 6, tr.centery - 7))
 
     # level / clip meter: pre-clip peak vs the 0 dBFS ceiling (right edge).
     # Bar turns red and shows "CLIP +X.XdB" of overshoot when over the ceiling

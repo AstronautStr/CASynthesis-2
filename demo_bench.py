@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from casynth_config import (VOL_DEFAULT, C_BG, C_GRID, C_PANEL, C_EDGE, C_TXT,
                             C_DIM, C_BTN, C_ACCENT)                    # noqa: E402
+import casynth_panel as panel                                          # noqa: E402
 from casynth_lab import (load_scene, SceneError, DemoRunner, SIDES, registry,
                          describe_difference, validate_param)           # noqa: E402
 from casynth_lab.catalog import Catalog, CatalogError, bench_scene     # noqa: E402
@@ -131,11 +132,6 @@ def figure_decay_text(f, a):
         return f"a {a:.2f}"
     lo, hi = float(f.get('t_lo', 0.0)), float(f.get('t_hi', 0.0))
     return f"T {lo:.2f} s" if hi - lo < 0.005 else f"T {lo:.2f}-{hi:.2f} s"
-
-
-def _is_toggle(spec):
-    _arg, _label, lo, hi, integer, _d = spec
-    return bool(integer) and lo == 0 and hi == 1
 
 
 class BenchApp:
@@ -422,7 +418,11 @@ class BenchApp:
                     self._post('set_engine', side=side, engine_id=e_id)
                     return f'engine:{e_id}'
             inactive = self._inactive(eid, params)
-            choices = registry.get(eid).choices
+            espec = registry.get(eid)
+            choices = espec.choices
+            # which widget each parameter has: the shared decision (casynth_panel),
+            # the same call gol_synth.rebuild_ctrls makes
+            prows = {r.arg: r for r in panel.panel_rows(espec, params, inactive=inactive)}
             for name, rr in self._range_rects(eid).items():
                 if name in inactive:
                     continue
@@ -432,9 +432,10 @@ class BenchApp:
                         return f'range:{name}:{which}'
             for spec, (sx, sy, sw, sh) in self._param_rows(eid):
                 name = spec[0]
-                if name in inactive:
+                prow = prows[name]
+                if prow.kind == panel.KIND_INACTIVE:
                     continue                          # shown as text, not editable
-                if name in choices:
+                if prow.kind == panel.KIND_CHOICES:
                     for value, rect in self._choice_rects(eid, name, sy):
                         if self._inside(rect, pos) and value != params[name]:
                             self._post('set_param', side=side, name=name, value=value)
@@ -443,7 +444,7 @@ class BenchApp:
                 # +-4 px around the bar (+-8 until 2026-09-18: with ROW_H 17 that shadowed the top
                 # of the next row's word buttons)
                 if sx - 6 <= pos[0] < sx + sw + 6 and sy - 4 <= pos[1] < sy + sh + 4:
-                    if _is_toggle(spec):
+                    if prow.kind == panel.KIND_TOGGLE:
                         self._post('set_param', side=side, name=name,
                                    value=0 if params[name] else 1)
                     else:
@@ -830,15 +831,21 @@ class BenchApp:
             screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                             rect[1] + (rect[3] - t.get_height()) // 2))
         inactive = self._inactive(eid, params)
-        choices = registry.get(eid).choices
-        ranges = registry.get(eid).ranges
+        espec = registry.get(eid)
+        choices = espec.choices
+        ranges = espec.ranges
+        # the same shared decision as in press() / gol_synth.rebuild_ctrls
+        prows = {r.arg: r for r in panel.panel_rows(
+            espec, params, inactive=inactive,
+            ranges={n: self._range_of(snap, side, n) for n in ranges})}
         range_rects = self._range_rects(eid)
         for spec, (sx, sy, sw, sh) in self._param_rows(eid):
             name, label, lo, hi, integer, _d = spec
-            v = params[name]
-            ranged = name in ranges
+            prow = prows[name]
+            v = prow.value
+            lo, hi = prow.lo, prow.hi        # the user's sub-range when it has one
+            ranged = prow.ranged
             if ranged:
-                lo, hi = self._range_of(snap, side, name)
                 rr = range_rects[name]
                 screen.blit(small.render("range", True, C_DIM), (px + 12, rr['y']))
                 for which in ('min', 'max'):
@@ -857,9 +864,9 @@ class BenchApp:
                     screen.blit(small.render(self.range_error[1][:24], True, C_ERR),
                                 (rr['max'][0] + RANGE_FIELD_W + 6, rr['y'] + 2))
             screen.blit(small.render(label, True, C_DIM), (px, sy - 4))
-            if name in inactive:
+            if prow.kind == panel.KIND_INACTIVE:
                 screen.blit(small.render(inactive[name], True, C_DIM), (sx + 6, sy - 4))   # a gap after a long label
-            elif name in choices:
+            elif prow.kind == panel.KIND_CHOICES:
                 for value, rect in self._choice_rects(eid, name, sy):
                     on = (value == v)
                     pygame.draw.rect(screen, C_BTN_ON if on else C_BTN, rect, border_radius=3)
@@ -867,7 +874,7 @@ class BenchApp:
                     t = small.render(choices[name][value], True, C_TXT)
                     screen.blit(t, (rect[0] + (rect[2] - t.get_width()) // 2,
                                     rect[1] + (rect[3] - t.get_height()) // 2))
-            elif _is_toggle(spec):
+            elif prow.kind == panel.KIND_TOGGLE:
                 pygame.draw.rect(screen, C_ACCENT if v else C_BTN, (sx, sy - 3, 34, 16),
                                  border_radius=8)
                 pygame.draw.rect(screen, C_EDGE, (sx, sy - 3, 34, 16), 1, border_radius=8)

@@ -67,7 +67,8 @@ SOUND_EXCLUDE = frozenset(('casynth_lab/__init__.py', 'casynth_engines/__init__.
 # the files a working checkout of the bench needs (isolated copies in tests,
 # the S7 demo repo): the sound set plus the bench, its resources and deps
 RUNTIME_FILES = ('demo_bench.py', 'patterns.py', 'casynth_core.py', 'casynth_engine.py',
-                 'casynth_config.py', 'casynth_host.py', 'requirements.txt')
+                 'casynth_config.py', 'casynth_host.py', 'casynth_panel.py',
+                 'requirements.txt')
 RUNTIME_DIRS = (('casynth_lab', '.py'), ('casynth_engines', '.py'), ('demos', '.json'))
 RUNTIME_MODULES = ('casynth_core', 'casynth_engine', 'casynth_config', 'casynth_lab',
                    'casynth_engines')

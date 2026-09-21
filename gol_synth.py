@@ -78,7 +78,10 @@ from casynth_session import _dump_session, replay_session, _replay_cli
 from casynth_midi import MidiInput, MIDI_AVAILABLE
 from casynth_midifile import MidiFilePlayer, MIDIFILE_AVAILABLE
 from casynth_host import AudioHost
+from casynth_panel import (panel_rows, shared_first, KIND_CHOICES, KIND_INACTIVE,
+                           KIND_SLIDER, KIND_TOGGLE)
 from casynth_ui import _make_piano, pattern_preview_surf, draw_frame
+from casynth_engines import registry as engines
 from casynth_tuning import (dissonance_curve, scale_minima, snap_ratio,
                              TUNE_MAX_PARTIALS)
 
@@ -326,6 +329,15 @@ def main(autoplay_midi=None):
     _ctrl_x  = _pat_btn.right + 16
     _ctrl_y0 = by + 2
     _CTRL_ROW_H = 22
+    # Column B (2026-09-21): engines with many settings (Objects has 17) do not fit
+    # one column.  Measured geometry of this window (1232 x 1022): column A starts
+    # at _ctrl_x = 666, the right column at _rc_x = 1048, the MIDI bar at y = 910
+    # -> 13 rows per column and a 172 px gap between the columns.  Column A keeps
+    # its pixels, so the four harmonic engines look exactly as before.
+    _ctrl2_x       = _ctrl_x + 218                # 884
+    CTRL2_LABEL_W  = 40                           # track 924..996
+    CTRL2_TRACK_W  = 72                           # value 1002..1044, 4 px to _rc_x
+    _CTRL_ROWS_MAX = 13
     # Right column, top to bottom: VOICE ADSR block, GEN ADSR block, Tune row.
     # VOICE header at _ctrl_y0; its 4 knobs at _VOICE_RC_Y0 + row*22.
     # GEN header at by+110; its 4 knobs at _GEN_RC_Y0 + row*22; Tune one row below.
@@ -345,18 +357,74 @@ def main(autoplay_midi=None):
             return lambda v: f"{int(v)}"
         return lambda v: f"{v:.2f}"
 
+    def _word_rects(words, tr, right):
+        """Buttons of a mode selector: each sized to ITS word, left to right from
+        the track, using the room up to `right` (a selector needs no value column).
+        They are squeezed proportionally only if the words do not fit."""
+        gap, x, out = 4, tr.left, []
+        for v, word in enumerate(words):
+            w = small.size(word)[0] + 10
+            out.append((v, pygame.Rect(x, tr.centery - 8, w, 16)))
+            x += w + gap
+        if x - gap > right:
+            room = right - tr.left - gap * (len(out) - 1)
+            k = room / float(max(1, sum(r.width for _v, r in out)))
+            x = tr.left
+            for i, (v, r) in enumerate(out):
+                w = max(16, int(r.width * k))
+                out[i] = (v, pygame.Rect(x, r.top, w, r.height))
+                x += w + gap
+        return out
+
     def rebuild_ctrls():
-        """Repopulate `ctrls`: the active engine's params (top) + the synth-wide
-        ADSR envelope block A/D/S/R (fixed position below -- see _ENV_* geometry)."""
+        """Repopulate `ctrls`: the active engine's parameters (top, two columns)
+        + the synth-wide ADSR envelope blocks A/D/S/R (fixed position below -- see
+        the _VOICE_/_GEN_ geometry).
+
+        Which widget a parameter gets is decided in casynth_panel, the same call
+        the bench makes: a word row for a named-choice parameter, a pill for an
+        on/off integer, a slider otherwise (over the user's sub-range when the
+        parameter has one).  Parameters that do not act for the current settings
+        are left OUT of the panel entirely (the bench shows them as text instead).
+
+        Reading order (user's decision 2026-09-21: "hide the inactive ones,
+        compact, the most shared parameters first"): the settings engines have in
+        common (the seven of the old Laplace) first, so switching engines moves as
+        few rows as possible; then the mode selectors, ahead of the parameters
+        whose activity they decide, so changing one moves rows BELOW it and not
+        under the cursor; then the engine's own rest."""
         ctrls.clear()
-        for row, (arg, lbl, lo, hi, integer, _default) in enumerate(
-                ENGINE_BY_ID[state['engine']]['params']):
-            ctrls.append(dict(
-                id=arg, label=lbl, lo=lo, hi=hi, integer=integer, scope='engine',
-                block='engine', fmt=_fmt_for(integer, False),
-                label_x=_ctrl_x,
-                track=pygame.Rect(_ctrl_x + CTRL_LABEL_W,
-                                  _ctrl_y0 + row * _CTRL_ROW_H, CTRL_TRACK_W, 8)))
+        spec = engines.get(state['engine'])
+        params = state['engine_params'][state['engine']]
+        order = shared_first(spec, engines.SPECTRUM_KEYS)
+        shared = [a for a in order if a in engines.SPECTRUM_KEYS]
+        picks = [a for a in order if a not in shared and a in spec.choices]
+        order = shared + picks + [a for a in order if a not in shared and a not in picks]
+        rows = [r for r in panel_rows(spec, params, order=order)
+                if r.kind != KIND_INACTIVE][:2 * _CTRL_ROWS_MAX]
+        two_columns = len(rows) > _CTRL_ROWS_MAX
+        for i, r in enumerate(rows):
+            col = i // _CTRL_ROWS_MAX
+            lx = _ctrl_x if col == 0 else _ctrl2_x
+            lw = CTRL_LABEL_W if col == 0 else CTRL2_LABEL_W
+            tw = CTRL_TRACK_W if col == 0 else CTRL2_TRACK_W
+            track = pygame.Rect(lx + lw, _ctrl_y0 + (i % _CTRL_ROWS_MAX) * _CTRL_ROW_H,
+                                tw, 8)
+            c = dict(id=r.arg, label=r.label, lo=r.lo, hi=r.hi, integer=r.integer,
+                     scope='engine', block='engine', kind=r.kind,
+                     fmt=_fmt_for(r.integer, False), label_x=lx, track=track,
+                     choices=r.choices, hit=track.inflate(0, 14))
+            if r.kind == KIND_TOGGLE:
+                c['pill'] = pygame.Rect(track.left, track.centery - 8, 34, 16)
+                c['hit'] = c['pill'].inflate(4, 4)
+            elif r.kind == KIND_CHOICES:
+                # a selector may use the room the value column would take; in two
+                # columns it must stop before column B
+                right = (_ctrl2_x - 8) if (two_columns and col == 0) else (_rc_x - 4)
+                c['word_rects'] = _word_rects(r.choices, track, right)
+                c['hit'] = c['word_rects'][0][1].unionall(
+                    [rr for _v, rr in c['word_rects'][1:]]).inflate(4, 4)
+            ctrls.append(c)
         # Right column, synth-wide.  Two ADSR blocks (A/D/R durations, S levels):
         #   VOICE = note-on/off VCA over the summed signal (classic articulation);
         #   GEN   = per-mode envelope on the AUTOMATON clock (the oscillator's life).
@@ -371,7 +439,7 @@ def main(autoplay_midi=None):
         for i, (arg, lbl, lo, hi, is_ms) in enumerate(voice_specs):
             ctrls.append(dict(
                 id=arg, label=lbl, lo=lo, hi=hi, integer=False, scope='synth',
-                block='voice', fmt=_fmt_for(False, is_ms),
+                block='voice', kind=KIND_SLIDER, fmt=_fmt_for(False, is_ms),
                 label_x=_rc_x,
                 track=pygame.Rect(_rc_track_x,
                                   _VOICE_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)))
@@ -385,14 +453,14 @@ def main(autoplay_midi=None):
         for i, (arg, lbl, lo, hi) in enumerate(gen_specs):
             ctrls.append(dict(
                 id=arg, label=lbl, lo=lo, hi=hi, integer=False, scope='synth',
-                block='gen', fmt=_fmt_for(False, False),
+                block='gen', kind=KIND_SLIDER, fmt=_fmt_for(False, False),
                 label_x=_rc_x,
                 track=pygame.Rect(_rc_track_x,
                                   _GEN_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)))
         # Tune: one row below the GEN block.
         ctrls.append(dict(
             id='tune', label='T', lo=0.0, hi=1.0, integer=False, scope='synth',
-            block='tune', fmt=_fmt_for(False, False),
+            block='tune', kind=KIND_SLIDER, fmt=_fmt_for(False, False),
             label_x=_rc_x,
             track=pygame.Rect(_rc_track_x,
                               _GEN_RC_Y0 + 4 * _CTRL_ROW_H, _RC_TRACK_W, 8)))
@@ -474,7 +542,9 @@ def main(autoplay_midi=None):
         state['bpm'] = int(round(BPM_MIN + frac * (BPM_MAX - BPM_MIN)))
 
     def ctrl_by_id(cid):
-        return next(c for c in ctrls if c['id'] == cid)
+        # None once a mode change has hidden that row (rebuild_ctrls drops the
+        # parameters that do not act) -- a drag in flight simply ends
+        return next((c for c in ctrls if c['id'] == cid), None)
 
     def ctrl_value(c):
         """Current value of a knob: engine attributes live in the active engine's
@@ -483,14 +553,33 @@ def main(autoplay_midi=None):
             return state['engine_params'][state['engine']][c['id']]
         return state[c['id']]
 
-    def set_ctrl(c, mx):
-        frac = float(np.clip((mx - c['track'].left) / c['track'].width, 0, 1))
-        val = c['lo'] + frac * (c['hi'] - c['lo'])
-        val = int(round(val)) if c.get('integer') else val
+    def put_ctrl(c, val):
         if c['scope'] == 'engine':
             state['engine_params'][state['engine']][c['id']] = val
         else:
             state[c['id']] = val
+
+    def set_ctrl(c, mx):
+        """Drag / click at x: a slider reads the fraction of its track, a mode
+        selector the word under the cursor (dragging across the words keeps
+        picking, so the rows below it move, not the cursor)."""
+        if c.get('kind') == KIND_CHOICES:
+            val = c['word_rects'][-1][0]
+            for v, rect in c['word_rects']:
+                if mx < rect.right:
+                    val = v
+                    break
+            put_ctrl(c, int(val))
+            rebuild_ctrls()            # a mode decides which rows are shown at all
+            return
+        frac = float(np.clip((mx - c['track'].left) / c['track'].width, 0, 1))
+        val = c['lo'] + frac * (c['hi'] - c['lo'])
+        val = int(round(val)) if c.get('integer') else val
+        put_ctrl(c, val)
+
+    def toggle_ctrl(c):
+        put_ctrl(c, 0 if ctrl_value(c) else 1)
+        rebuild_ctrls()                # an on/off setting may hide other rows too
 
     def do(bid):
         nonlocal grid, exc_field
@@ -916,13 +1005,16 @@ def main(autoplay_midi=None):
                         elif vol_track.collidepoint(e.pos):
                             dragging_vol = True
                             set_vol(e.pos[0])
-                        elif any(c['track'].inflate(0, 14).collidepoint(e.pos)
-                                 for c in ctrls):
+                        elif any(c['hit'].collidepoint(e.pos) for c in ctrls):
                             for c in ctrls:
-                                if c['track'].inflate(0, 14).collidepoint(e.pos):
+                                if not c['hit'].collidepoint(e.pos):
+                                    continue
+                                if c['kind'] == KIND_TOGGLE:
+                                    toggle_ctrl(c)      # a pill flips, it is not dragged
+                                else:
                                     dragging_ctrl = c['id']
                                     set_ctrl(c, e.pos[0])
-                                    break
+                                break
                         else:
                             for b in buttons:
                                 if b['rect'].collidepoint(e.pos):
@@ -952,7 +1044,11 @@ def main(autoplay_midi=None):
                 elif dragging_bpm:
                     set_bpm(e.pos[0])
                 elif dragging_ctrl is not None:
-                    set_ctrl(ctrl_by_id(dragging_ctrl), e.pos[0])
+                    _c = ctrl_by_id(dragging_ctrl)
+                    if _c is None:
+                        dragging_ctrl = None
+                    else:
+                        set_ctrl(_c, e.pos[0])
 
             elif e.type == pygame.MOUSEWHEEL:
                 if (state['sidebar_open'] and pygame.mouse.get_pos()[0] >= W
