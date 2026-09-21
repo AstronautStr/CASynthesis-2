@@ -63,7 +63,14 @@ _2026-09-21: добавлен гейт **1t** — `tests/test_seam.py` (19 те�
 равен прямому пути** `analyse → SlotPool → render_chunk_laplacian`). Тайминговые тесты бюджета
 Laplace FM (гейт 1s) нагрузочно-чувствительны: на занятой машине падают и на НЕТРОНУТОМ коде._
 
-`python check.py` = 60 юнит-тестов + 42 + 9 + 6 + 6 + 6 + 15 тестов demo-стенда S1–S7 и демо S/N + 9 тестов N0 (гейт 1h) + 10 тестов N1 (гейт 1i) + 3 теста гипотез N1 + 19 тестов N2 (гейт 1j) + 16 тестов N3 (гейт 1k) + 28 тестов N4 (гейт 1l) + 13 тестов Objects/Laplace (гейт 1m) + 19 тестов Objects radius/attack (гейт 1n) + 13 тестов Objects events/modal (гейт 1o) + 8 тестов Objects birth strength (гейт 1p) + 25 тестов Objects decay law и контроля D4 (гейт 1q) + 34 теста Laplace carriers (гейт 1r) + 43 теста Laplace FM (гейт 1s)
+_2026-09-21: три гейта на вопросы, которые НИ ОДИН гейт не задавал, пока инструмент стоял немой._
+_**3c** `tests/ui_sound_probe.py` — «нажал Random и Play, уровень двигается?» на каждом движке._
+_**1u** `tests/test_gen_envelope.py` (8 тестов) — живые ручки GEN и темп доходят до каждого движка,_
+_который их заявляет, и ни до одного, который не заявляет; подсказка реестра совпадает с классом;_
+_«хост ничего не сказал» == «сказал дефолты» байт-в-байт (это и держит каталог)._
+_**3d** `tests/ui_hold_probe.py` — отпустил клавишу: при HOLD выкл нота отпускается, при вкл держится._
+
+`python check.py` = 60 юнит-тестов + 42 + 9 + 6 + 6 + 6 + 15 тестов demo-стенда S1–S7 и демо S/N + 9 тестов N0 (гейт 1h) + 10 тестов N1 (гейт 1i) + 3 теста гипотез N1 + 19 тестов N2 (гейт 1j) + 16 тестов N3 (гейт 1k) + 28 тестов N4 (гейт 1l) + 13 тестов Objects/Laplace (гейт 1m) + 19 тестов Objects radius/attack (гейт 1n) + 13 тестов Objects events/modal (гейт 1o) + 8 тестов Objects birth strength (гейт 1p) + 25 тестов Objects decay law и контроля D4 (гейт 1q) + 34 теста Laplace carriers (гейт 1r) + 43 теста Laplace FM (гейт 1s) + 8 тестов живых ручек GEN (гейт 1u)
 + golden-master аудио (байт-в-байт,
 sha256[:16]=cd3126907ad13b6c) + UI-кадр (пиксель-в-пиксель vs `tests/golden/ui_frame.png`)
 + import/init smoke. Эталоны ВЕРСИОНИРУЮТСЯ в `tests/golden/` (переехали из gitignored
@@ -102,6 +109,16 @@ sha256[:16]=cd3126907ad13b6c) + UI-кадр (пиксель-в-пиксель vs
   ноты НЕ ретриггерят моды — чинит «зависание» и churn хвостов); **GEN ADSR** per-mode в
   долях интервала тика (масштабируется с BPM); **Voice ADSR (VCA)** — note-on/off скаляр
   над суммой (дефолты = no-op). GEN amp-slew тумблер против «beep» при shape>0 (6fb093a).
+  **Живые ручки GEN на всех вкладках (2026-09-21, лог `memory/log/2026-09-21-gen-envelope-and-hold.md`):**
+  `set_envelope`/`set_rate` контракта опциональны, и до этой правки их читал только
+  `LegacySynthEngine` — на вкладках Laplace waves / Laplace FM блок GEN (и темп, и slew) не
+  действовал вовсе. Общий миксин `legacy_engine.GenEnvelopeKnobs` подмешан в оба; slew у них
+  объявлен НЕдействующим (`SUPPORTS_AMP_SLEW=False`: у Filter-несущих и FM-источников своя
+  поканальная огибающая). Objects читает не GEN, а свой Decay law. Что действует — говорит
+  реестр (`EngineSpec.gen_envelope` / `.gen_amp_slew`, сверяются с классом через
+  `engine_api.reads_gen_envelope` / `supports_amp_slew`), панель прототипа рисует недействующий
+  блок текстом `engine's own`. Движок, которому хост ничего не сказал, байт-в-байт прежний —
+  каталог и golden не тронуты.
 - **Аудио:** sounddevice callback-стрим, SlotPool active+tail слоты с кросс-фейдом хвостов,
   `MAX_VOICES=24`; mixer форсирован в stereo (`allowedchanges=0`).
 - **UI:** поле (рисование/стирание), play/pause/step/random/clear, BPM+деление, сайдбар
@@ -115,7 +132,12 @@ sha256[:16]=cd3126907ad13b6c) + UI-кадр (пиксель-в-пиксель vs
   `CASYNTH_RECORD=1` пишет пер-кадровый `replay_controls` (снапшот ВСЕХ контролов) +
   `steps`/`step_prevs` (реконструкция exc, serial-матчинг после clear); чтение
   `python gol_synth.py replay <ts>` + sample-fidelity vs записанный WAV.
-- **Несущая:** экранное/клавиатурное пианино C3–C5 (latched) + MIDI.
+- **Несущая:** экранное/клавиатурное пианино C3–C5 + MIDI. **Note-off и HOLD (2026-09-21):**
+  отпускание клавиши/мыши = note-off (до этого `KEYUP` не обрабатывался вовсе и VOICE release
+  звучал только от MIDI). Гейт опускает `_release_gate()`, когда его отпустило ПОСЛЕДНЕЕ из
+  четырёх: клавиатура, мышь на пиано, MIDI, файл-плеер. Тогл `hold` в заголовке VOICE (дефолт
+  выкл) возвращает латч: нота может только смениться, но не деактивироваться — действует и на
+  MIDI. Стартовый `gate=True` сохранён (поле звучит сразу).
 
 ## Статус ревью
 

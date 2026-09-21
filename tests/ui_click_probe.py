@@ -68,6 +68,8 @@ CLICKS = [
     (RC_X, BY + 128 + 3 * 22 + 4, 'GEN R'),
     (RC_X, BY + 128 + 4 * 22 + 4, 'Tune'),
     (1060, BY + 109, 'GEN amp-slew toggle'),
+    (1100, BY + 8, 'VOICE HOLD toggle'),
+    (1100, BY + 8, 'VOICE HOLD toggle again (back to releasing)'),
     (100, 200, 'paint a cell'),
     (120, 220, 'erase a cell'),
     (300, PIANO_Y, 'piano key'),
@@ -105,6 +107,12 @@ def drive():
         click(CTRL_X, BY + 2 + 4)         # and its first knob row, whatever widget it is
         time.sleep(0.06)
     click(45, TAB_Y)                      # back to the first engine
+    # The KEYUP branch (2026-09-21): a computer-keyboard note must come up again,
+    # and with HOLD dark that release is what takes the gate down.
+    post(pygame.KEYDOWN, key=pygame.K_a, mod=0, unicode='a', scancode=4)
+    time.sleep(0.1)
+    post(pygame.KEYUP, key=pygame.K_a, mod=0, scancode=4)
+    print("[probe] keyboard note down and up", flush=True)
     print("[probe] all clicks delivered", flush=True)
 
 

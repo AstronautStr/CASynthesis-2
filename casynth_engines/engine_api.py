@@ -198,6 +198,23 @@ def supports_transpose(engine):
     return bool(getattr(type(engine), 'SUPPORTS_TRANSPOSE', False))
 
 
+def reads_gen_envelope(engine):
+    """True when the engine CLASS implements set_envelope -- the host's live GEN
+    A/D/S/R knobs act on it.  False = it carries envelopes of its own and the
+    knobs are ignored, which a UI must SAY instead of offering four knobs that
+    do nothing (the registry's `gen_envelope` mirrors this so a host can ask
+    before it builds an instance)."""
+    return type(engine).set_envelope is not SoundEngine.set_envelope
+
+
+def supports_amp_slew(engine):
+    """True when the GEN amplitude-slew toggle acts on this engine: it reads the
+    knobs AND has somewhere to put the slew (the SlotPool has; an engine with a
+    per-source envelope of its own has not)."""
+    return (reads_gen_envelope(engine)
+            and bool(getattr(type(engine), 'SUPPORTS_AMP_SLEW', False)))
+
+
 class EngineBlockError(RuntimeError):
     """An engine returned a block that cannot be sent to the audio output."""
 

@@ -340,11 +340,18 @@ def main(autoplay_midi=None):
         # the default note so the session log always has a valid float value.
         tune=0.0,
         tuned_f0=midi_to_freq(NOTE_DEFAULT),
-        # MIDI gate: note-on/off for the VOICE VCA (True = attack/sustain, False =
+        # Gate: note-on/off for the VOICE VCA (True = attack/sustain, False =
         # release).  The oscillator (KA field) is free-running -- gate does NOT empty
         # the voice pool; it only articulates the master VCA (see _render_loop).
-        # Keyboard/mouse piano always set gate=True (latch). MIDI note-off sets False.
+        # It goes down when the LAST thing holding a note lets go: a computer key,
+        # the mouse on the piano, a MIDI note-off, the file player.  It starts up,
+        # so a field sounds the moment the synth opens.
         gate=True,
+        # HOLD (2026-09-21): while on, a note can only be REPLACED, never released
+        # -- the latch the prototype has always had.  Off, the VOICE release runs
+        # when the key comes up, which is the only way to hear that block at all
+        # from the keyboard or the mouse.
+        voice_hold=False,
         midi_held=[],   # stack of currently held MIDI notes (last-note priority)
         midi_port=None, # name of currently open MIDI port
     )
@@ -359,6 +366,22 @@ def main(autoplay_midi=None):
     # (melody); the timbre still comes from the live CA field, not the file.
     midifile = MidiFilePlayer()
     _mf_held = []   # notes currently sounding from the file (for the max() pick)
+
+    # ── who is holding a note right now ───────────────────────────────────────
+    # Four things can: a computer key, the mouse on the on-screen piano, a MIDI
+    # device (state['midi_held']) and the file player (_mf_held).  The gate goes
+    # down only when the LAST of them lets go -- and never while HOLD is lit,
+    # where a note can be replaced but not released.
+    _kb_held = []        # piano keys physically down, oldest first (last-note priority)
+    _mouse_piano = {'on': False}
+
+    def _release_gate():
+        """Nothing holds a note any more -> note-off (unless HOLD latches it)."""
+        if state['voice_hold']:
+            return
+        if _kb_held or _mouse_piano['on'] or state['midi_held'] or _mf_held:
+            return
+        state['gate'] = False
 
     # toolbar layout
     by     = GRID_H * CELL + 8
@@ -461,6 +484,12 @@ def main(autoplay_midi=None):
     # Click-toggle for GEN amp-slew, tucked to the right of the "GEN" header text
     # (no extra knob row -> keeps the tight right-column geometry unchanged).
     _slew_btn = pygame.Rect(_rc_x + 34, _GEN_HDR_RC_Y - 1, 46, 15)
+    # The same trick in the VOICE header: HOLD.  With it lit a note LATCHES -- it
+    # can only be replaced by another note, never let go -- which is how the
+    # prototype has always behaved (a field sounds while you work on it).  With it
+    # dark, letting go of a key IS a note-off: the VOICE release finally runs, and
+    # the block below it stops being decoration.
+    _hold_btn = pygame.Rect(_rc_x + 44, _VOICE_HDR_RC_Y - 1, 46, 15)
     ctrls = []
 
     def _fmt_for(integer, is_ms):
@@ -557,19 +586,25 @@ def main(autoplay_midi=None):
                 label_x=_rc_x,
                 track=_t, hit=_t.inflate(0, 14)))
         # GEN A/D/R are fractions of a tick (dimensionless), S a 0..1 level.
+        # An engine with envelopes of ITS OWN does not read them (Objects has a
+        # decay law instead), and the registry says so before an instance exists:
+        # then the block is shown as inactive text, the way the bench shows a
+        # parameter that does not act, instead of four knobs that do nothing.
         gen_specs = [
             ('gen_attack',  'A', GEN_FRAC_MIN, GEN_FRAC_MAX),
             ('gen_decay',   'D', GEN_FRAC_MIN, GEN_FRAC_MAX),
             ('gen_sustain', 'S', SUSTAIN_MIN,  SUSTAIN_MAX),
             ('gen_release', 'R', GEN_FRAC_MIN, GEN_FRAC_MAX),
         ]
+        _gen_live = spec.gen_envelope
         for i, (arg, lbl, lo, hi) in enumerate(gen_specs):
             _t = pygame.Rect(_rc_track_x, _GEN_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)
             ctrls.append(dict(
                 id=arg, label=lbl, lo=lo, hi=hi, integer=False, scope='synth',
-                block='gen', kind=KIND_SLIDER, fmt=_fmt_for(False, False),
-                label_x=_rc_x,
-                track=_t, hit=_t.inflate(0, 14)))
+                block='gen', kind=(KIND_SLIDER if _gen_live else KIND_INACTIVE),
+                text=('' if _gen_live else "engine's own"),
+                fmt=_fmt_for(False, False), label_x=_rc_x,
+                track=_t, hit=(_t.inflate(0, 14) if _gen_live else pygame.Rect(0, 0, 0, 0))))
         # Tune: one row below the GEN block.
         _t = pygame.Rect(_rc_track_x, _GEN_RC_Y0 + 4 * _CTRL_ROW_H, _RC_TRACK_W, 8)
         ctrls.append(dict(
@@ -626,7 +661,8 @@ def main(autoplay_midi=None):
         div_buttons=div_buttons, legend_x=legend_x, info_y=info_y, rc_x=_rc_x,
         vol_section_y=_vol_section_y, vol_track=vol_track, rc_track_x=_rc_track_x,
         rc_track_w=_RC_TRACK_W, voice_hdr_rc_y=_VOICE_HDR_RC_Y,
-        gen_hdr_rc_y=_GEN_HDR_RC_Y, slew_btn=_slew_btn, ctrls=ctrls,
+        gen_hdr_rc_y=_GEN_HDR_RC_Y, slew_btn=_slew_btn, hold_btn=_hold_btn,
+        ctrls=ctrls,
         meter_track=meter_track, midi_btn=_midi_btn, midi_btn_w=_MIDI_BTN_W,
         mf_btn=_mf_btn,
         midi_dd_ith=_MIDI_DD_ITH, audio_btn=_audio_btn, audio_btn_w=_AUDIO_BTN_W,
@@ -1000,7 +1036,7 @@ def main(autoplay_midi=None):
                 state['note'] = state['midi_held'][-1]
                 state['gate'] = True
             else:
-                state['gate'] = False
+                _release_gate()    # only if nothing else holds a note, and not on HOLD
         else:
             return   # clock/sysex/other: not a note event
         if rec is not None:
@@ -1028,7 +1064,7 @@ def main(autoplay_midi=None):
                 state['note'] = max(_mf_held)   # fall back to the highest held
                 state['gate'] = True
             else:
-                state['gate'] = False
+                _release_gate()
         if rec is not None:
             rec['midi_in'].append((time.perf_counter(),
                                    int(state['note']), bool(state['gate'])))
@@ -1068,7 +1104,7 @@ def main(autoplay_midi=None):
         if midifile.playing:
             midifile.stop()
             _mf_held.clear()
-            state['gate'] = False
+            _release_gate()
         else:
             path = _pick_midifile()
             if path:
@@ -1125,6 +1161,9 @@ def main(autoplay_midi=None):
                 running = False
             elif e.type == pygame.KEYDOWN:
                 if e.key in _KB_PIANO:
+                    if e.key in _kb_held:
+                        _kb_held.remove(e.key)
+                    _kb_held.append(e.key)          # newest last: last-note priority
                     state['note'] = state['kb_base'] + _KB_PIANO[e.key]
                     state['gate'] = True
                 elif e.key == pygame.K_z:
@@ -1151,6 +1190,19 @@ def main(autoplay_midi=None):
                     state['div_idx'] = min(len(NOTE_DIVS) - 1, state['div_idx'] + 1)
                 elif e.key == pygame.K_LEFT:
                     state['div_idx'] = max(0, state['div_idx'] - 1)
+
+            elif e.type == pygame.KEYUP:
+                # A key comes up: fall back to the newest key still down, and if
+                # none is, let the note GO -- that release is the VOICE envelope's
+                # whole point.  HOLD keeps it latched (see _release_gate).
+                if e.key in _KB_PIANO:
+                    if e.key in _kb_held:
+                        _kb_held.remove(e.key)
+                    if _kb_held:
+                        state['note'] = state['kb_base'] + _KB_PIANO[_kb_held[-1]]
+                        state['gate'] = True
+                    else:
+                        _release_gate()
 
             elif e.type == pygame.MOUSEBUTTONDOWN:
                 if _audio_dropdown_open:
@@ -1203,6 +1255,7 @@ def main(autoplay_midi=None):
                         if m is not None:
                             state['note'] = m
                             state['gate'] = True
+                            _mouse_piano['on'] = True    # held until the button comes up
                     else:
                         tab_hit = next((t for t in engine_tabs
                                         if t['rect'].collidepoint(e.pos)), None)
@@ -1218,7 +1271,14 @@ def main(autoplay_midi=None):
                                 rebuild_ctrls()   # swap knob panel to new engine
                         elif _pat_btn.collidepoint(e.pos):
                             state['sidebar_open'] = not state['sidebar_open']
-                        elif _slew_btn.collidepoint(e.pos):
+                        elif _hold_btn.collidepoint(e.pos):
+                            state['voice_hold'] = not state['voice_hold']
+                            if not state['voice_hold']:
+                                # letting HOLD go lets the latched note go too,
+                                # if nothing is actually being held
+                                _release_gate()
+                        elif (_slew_btn.collidepoint(e.pos)
+                              and engines.get(state['engine']).gen_amp_slew):
                             state['gen_amp_slew'] = not state['gen_amp_slew']
                         elif bpm_track.inflate(0, 16).collidepoint(e.pos):
                             dragging_bpm = True
@@ -1259,6 +1319,9 @@ def main(autoplay_midi=None):
                 dragging_vol = False
                 dragging_bpm = False
                 dragging_ctrl = None
+                if _mouse_piano['on']:
+                    _mouse_piano['on'] = False       # the mouse leaves the piano
+                    _release_gate()
 
             elif e.type == pygame.MOUSEMOTION:
                 if drag['active']:
@@ -1420,6 +1483,8 @@ def main(autoplay_midi=None):
             grid=grid, color=color, labels=labels, voices=_disp_voices, drag=drag,
             ghost=_ghost, white_keys=white_keys, black_keys=black_keys,
             sb_scroll=_sb_scroll, meter=meter, budget=budget,
+            # does the GEN amp-slew toggle act on the engine in front of us?
+            slew_live=engines.get(state['engine']).gen_amp_slew,
             # "audio disabled" is a COMPLAINT, and there is nothing to complain
             # about until the device has actually been tried (it is opened after
             # this first frame -- see _open_device)

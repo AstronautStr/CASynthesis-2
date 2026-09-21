@@ -28,6 +28,9 @@ Gates (any FAIL -> exit 1):
   1s. laplace FM       python tests/test_laplace_fm.py            (phase law, band / DC, records)
   1t. the seam         python tests/test_seam.py                  (engines package, contract,
                        shared ring / panel, a scene that plays a note)
+  1u. GEN envelope     python tests/test_gen_envelope.py          (the host's live GEN
+                       A/D/S/R + tempo reach every engine that claims them, reach no
+                       engine that does not, and an untold engine is byte-identical)
   2. golden master     python tests/golden/golden_master.py       (audio, byte-exact)
   3. ui frame + smoke  CASYNTH_DUMPFRAME render of gol_synth.py   (pixel-exact vs
                        tests/golden/ui_frame.png; doubles as the import/init smoke)
@@ -37,6 +40,8 @@ Gates (any FAIL -> exit 1):
   3c. it makes a sound python tests/ui_sound_probe.py             (Random + Play with the
                        MOUSE on every engine the prototype offers, then: did the level
                        move and was anything recorded -- the question a player asks)
+  3d. note off / HOLD  python tests/ui_hold_probe.py              (letting a key go
+                       releases the note; with HOLD lit it keeps sounding)
 
 Keep stdout ASCII-only: the default Windows console codepage (cp1251) chokes on
 fancy glyphs, and agents run this a lot.
@@ -204,6 +209,12 @@ def main():
                               "PYTHONUTF8": "1"},
                          timeout=600)))
 
+    results.append(("GEN envelope knobs reach the engines that claim them",
+                    _run("GEN envelope tests", [py, os.path.join("tests", "test_gen_envelope.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"},
+                         timeout=600)))
+
     results.append(("golden master",
                     _run("golden master", [py, os.path.join("tests", "golden", "golden_master.py")])))
 
@@ -238,6 +249,12 @@ def main():
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"},
                          timeout=900)))
+
+    results.append(("a key that comes up releases the note (and HOLD latches it)",
+                    _run("hold probe", [py, os.path.join("tests", "ui_hold_probe.py")],
+                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
+                              "PYTHONUTF8": "1"},
+                         timeout=600)))
 
     print("--- summary ---")
     failed = [n for (n, ok) in results if not ok]

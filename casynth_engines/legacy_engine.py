@@ -31,7 +31,59 @@ def _gen_chunks(frac, interval_s):
     return max(1, round(frac * interval_s / CHUNK_S))
 
 
-class LegacySynthEngine(SoundEngine):
+class GenEnvelopeKnobs:
+    """The host's LIVE GEN ADSR knobs, for an engine whose per-mode envelope is
+    the SlotPool's: A/D/R are FRACTIONS of one automaton tick (so the texture
+    scales with the tempo), S is a 0..1 level.
+
+    ONE copy of that arithmetic, mixed into every engine that has the envelope.
+    Until 2026-09-21 only LegacySynthEngine read the knobs, so on the
+    prototype's "Laplace waves" and "Laplace FM" tabs the whole GEN block was
+    dead: those engines run the same SlotPool envelope but held the defaults
+    they were built with, and neither followed BPM.  A host that says nothing
+    still gets exactly the defaults, so a scene without an `envelope` renders
+    byte-for-byte as before.
+
+    SUPPORTS_AMP_SLEW: amplitude slew is a SlotPool feature; an engine with its
+    own per-source envelope (the Filter carriers, the FM sources) has nowhere to
+    put it and says so, instead of swallowing the toggle in silence."""
+
+    SUPPORTS_AMP_SLEW = True
+
+    def _init_gen_env(self, rate_hz):
+        self._rate_hz = float(rate_hz)
+        self._attack = float(GEN_ATTACK_DEFAULT)
+        self._decay = float(GEN_DECAY_DEFAULT)
+        self._sustain = float(GEN_SUSTAIN_DEFAULT)
+        self._release = float(GEN_RELEASE_DEFAULT)
+        self._amp_slew = False
+        self._recount()
+
+    def _recount(self):
+        """Chunk counts of the GEN envelope at the current fractions and tempo --
+        the same arithmetic the prototype ran every block before it hosted an
+        engine (gol_synth._render_loop)."""
+        interval = 1.0 / self._rate_hz
+        self._release_chunks = _gen_chunks(self._release, interval)
+        self._attack_chunks = _gen_chunks(self._attack, interval)
+        self._decay_chunks = _gen_chunks(self._decay, interval)
+
+    def set_envelope(self, attack, decay, sustain, release, amp_slew):
+        self._attack = float(attack)
+        self._decay = float(decay)
+        self._sustain = float(sustain)
+        self._release = float(release)
+        self._amp_slew = bool(amp_slew) and self.SUPPORTS_AMP_SLEW
+        self._recount()
+
+    def set_rate(self, rate_hz):
+        rate_hz = float(rate_hz)
+        if rate_hz > 0.0 and rate_hz != self._rate_hz:
+            self._rate_hz = rate_hz
+            self._recount()
+
+
+class LegacySynthEngine(GenEnvelopeKnobs, SoundEngine):
     """One casynth_core map_* method (engine_id) rendered through the shared
     SlotPool additive path.
 
@@ -47,41 +99,13 @@ class LegacySynthEngine(SoundEngine):
         # GEN A/D/R are FRACTIONS of one automaton tick, so the per-mode texture
         # scales with the tempo.  Both the fractions and the tempo are LIVE knobs
         # in the prototype: set_envelope / set_rate hand them over on a block
-        # boundary (2026-09-21).  The defaults reproduce the bench exactly.
-        self._rate_hz = float(ctx.rate_hz)
-        self._attack = float(GEN_ATTACK_DEFAULT)
-        self._decay = float(GEN_DECAY_DEFAULT)
-        self._release = float(GEN_RELEASE_DEFAULT)
-        self._sustain = float(GEN_SUSTAIN_DEFAULT)
-        self._amp_slew = False
-        self._recount()
+        # boundary (2026-09-21, GenEnvelopeKnobs).  The defaults reproduce the
+        # bench exactly.
+        self._init_gen_env(ctx.rate_hz)
         self.voices = []
         self._grid = None
         self._exc = None
         self._clear_audio(gain=0.0)
-
-    def _recount(self):
-        """Chunk counts of the GEN envelope at the current fractions and tempo --
-        the same arithmetic the prototype ran every block before it hosted this
-        engine (gol_synth._render_loop)."""
-        interval = 1.0 / self._rate_hz
-        self._release_chunks = _gen_chunks(self._release, interval)
-        self._attack_chunks = _gen_chunks(self._attack, interval)
-        self._decay_chunks = _gen_chunks(self._decay, interval)
-
-    def set_envelope(self, attack, decay, sustain, release, amp_slew):
-        self._attack = float(attack)
-        self._decay = float(decay)
-        self._sustain = float(sustain)
-        self._release = float(release)
-        self._amp_slew = bool(amp_slew)
-        self._recount()
-
-    def set_rate(self, rate_hz):
-        rate_hz = float(rate_hz)
-        if rate_hz > 0.0 and rate_hz != self._rate_hz:
-            self._rate_hz = rate_hz
-            self._recount()
 
     # -- SoundEngine ------------------------------------------------------------
     def init(self, grid, exc, gain=0.0):

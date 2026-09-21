@@ -48,13 +48,11 @@ import math
 import numpy as np
 
 from casynth_config import (SR, TWO_PI, _RAMP, TOTAL_SLOTS, N_ACTIVE, MAX_VOICES,
-                            MAX_MODES_PER_OBJ, TAIL_MIN_AMP,
-                            GEN_ATTACK_DEFAULT, GEN_DECAY_DEFAULT,
-                            GEN_SUSTAIN_DEFAULT, GEN_RELEASE_DEFAULT)
+                            MAX_MODES_PER_OBJ, TAIL_MIN_AMP)
 from casynth_core import ENGINE_BY_ID
 from casynth_engine import analyse, SlotPool
 from .engine_api import SoundEngine
-from .legacy_engine import PAN_CENTER, _gen_chunks, _SLOT_ARRAYS, _POOL_ARRAYS
+from .legacy_engine import (PAN_CENTER, GenEnvelopeKnobs, _SLOT_ARRAYS, _POOL_ARRAYS)
 from .registry import EngineSpec, register
 
 ENGINE_ID = 'laplace_carriers'
@@ -492,24 +490,32 @@ class _FilterVoices:
 
 # ── the engine ────────────────────────────────────────────────────────────────
 
-class LaplaceCarriersEngine(SoundEngine):
+class LaplaceCarriersEngine(GenEnvelopeKnobs, SoundEngine):
     """Both laws on one analysis; `method` picks which one is heard."""
 
     STATE_VERSION = 1
 
+    # the Filter carriers run their own per-source envelope, which has no
+    # amplitude-slew path -- the GEN slew toggle would act on one method and not
+    # on the other, so this engine declines it for both (GenEnvelopeKnobs)
+    SUPPORTS_AMP_SLEW = False
+
     def __init__(self, ctx, params):
         super().__init__(ctx, params)
         self.engine_id = ENGINE_ID
-        interval = 1.0 / ctx.rate_hz
-        self._release_chunks = _gen_chunks(GEN_RELEASE_DEFAULT, interval)
-        self._attack_chunks = _gen_chunks(GEN_ATTACK_DEFAULT, interval)
-        self._decay_chunks = _gen_chunks(GEN_DECAY_DEFAULT, interval)
-        self._sustain = float(GEN_SUSTAIN_DEFAULT)
-        self._xfade_blocks = max(1, self._release_chunks)
+        # the GEN envelope is the SlotPool's and its knobs are the host's, live
+        # (2026-09-21); _recount below keeps the method crossfade tied to release
+        self._init_gen_env(ctx.rate_hz)
         self.voices = []
         self._grid = None
         self._exc = None
         self._clear_audio(gain=0.0)
+
+    def _recount(self):
+        """Plus the rule this engine adds: the method crossfade lasts exactly as
+        long as a voice takes to let go, so a switch never outlives its tails."""
+        super()._recount()
+        self._xfade_blocks = max(1, self._release_chunks)
 
     # -- parameters --------------------------------------------------------------
     def _p(self, name):
@@ -752,4 +758,6 @@ def overlay(params, rows, cols):
 register(EngineSpec(ENGINE_ID, LABEL, PARAMS,
                     lambda ctx, params: LaplaceCarriersEngine(ctx, params),
                     choices=CHOICES, inactive=inactive, overlay=overlay,
+                    # the SlotPool envelope, but no slew path in the Filter method
+                    gen_envelope=True, gen_amp_slew=False,
                     plays_notes=True))

@@ -70,13 +70,11 @@ import math
 import numpy as np
 
 from casynth_config import (SR, TWO_PI, _RAMP, MAX_VOICES, MAX_MODES_PER_OBJ,
-                            TAIL_MIN_AMP,
-                            GEN_ATTACK_DEFAULT, GEN_DECAY_DEFAULT,
-                            GEN_SUSTAIN_DEFAULT, GEN_RELEASE_DEFAULT)
+                            TAIL_MIN_AMP)
 from casynth_core import ENGINE_BY_ID
 from casynth_engine import analyse
 from .engine_api import SoundEngine
-from .legacy_engine import PAN_CENTER, _gen_chunks
+from .legacy_engine import PAN_CENTER, GenEnvelopeKnobs
 from .registry import EngineSpec, register
 
 ENGINE_ID = 'laplace_fm'
@@ -538,11 +536,15 @@ class _FMSources:
 
 # ── the engine ────────────────────────────────────────────────────────────────
 
-class LaplaceFMEngine(SoundEngine):
+class LaplaceFMEngine(GenEnvelopeKnobs, SoundEngine):
     """The Laplacian analysis of the baseline, sounded as one FM carrier per figure."""
 
     STATE_VERSION = 2          # 2: the wider modulator tail pool (2026-09-21); a version 1
                                # state is accepted and widened -- see restore_state
+
+    # the sources carry their own envelope (SourcePool._env), which has no
+    # amplitude-slew path: the GEN slew toggle is declined, not swallowed
+    SUPPORTS_AMP_SLEW = False
 
     def __init__(self, ctx, params, oversample=OVERSAMPLE):
         """`oversample` is OVERSAMPLE for the registered engine; a gate builds the SAME
@@ -550,11 +552,9 @@ class LaplaceFMEngine(SoundEngine):
         one rate is refused at another)."""
         super().__init__(ctx, params)
         self.engine_id = ENGINE_ID
-        interval = 1.0 / ctx.rate_hz
-        self._release_chunks = _gen_chunks(GEN_RELEASE_DEFAULT, interval)
-        self._attack_chunks = _gen_chunks(GEN_ATTACK_DEFAULT, interval)
-        self._decay_chunks = _gen_chunks(GEN_DECAY_DEFAULT, interval)
-        self._sustain = float(GEN_SUSTAIN_DEFAULT)
+        # the GEN envelope follows the SlotPool rule (SourcePool._env below) and
+        # its knobs are the host's, live (2026-09-21)
+        self._init_gen_env(ctx.rate_hz)
         self.oversample = int(oversample)
         self.kernel = _kernel(self.oversample, ctx.sr)
         self.taps = len(self.kernel)
@@ -812,4 +812,6 @@ def overlay(params, rows, cols):
 
 register(EngineSpec(ENGINE_ID, LABEL, PARAMS,
                     lambda ctx, params: LaplaceFMEngine(ctx, params),
-                    inactive=inactive, overlay=overlay, plays_notes=True))
+                    inactive=inactive, overlay=overlay, plays_notes=True,
+                    # the SlotPool envelope rule; the sources have no slew path
+                    gen_envelope=True, gen_amp_slew=False))

@@ -131,6 +131,7 @@ def draw_frame(screen, fonts, state, lay, rt):
     _VOICE_HDR_RC_Y = lay.voice_hdr_rc_y
     _GEN_HDR_RC_Y   = lay.gen_hdr_rc_y
     _slew_btn      = lay.slew_btn
+    _hold_btn      = getattr(lay, 'hold_btn', None)
     ctrls          = lay.ctrls
     meter_track    = lay.meter_track
     _midi_btn      = lay.midi_btn
@@ -281,20 +282,39 @@ def draw_frame(screen, fonts, state, lay, rt):
     for _hy, _hlbl in ((_VOICE_HDR_RC_Y, "VOICE"), (_GEN_HDR_RC_Y, "GEN")):
         pygame.draw.line(screen, C_EDGE, (_rc_x, _hy), (_env_rc_right, _hy))
         screen.blit(small.render(_hlbl, True, C_DIM), (_rc_x, _hy + 2))
+    # HOLD (right of the "VOICE" header): lit = a note latches and can only be
+    # replaced; dark = letting go of the key is a note-off and the VOICE release
+    # runs.  Same widget as slew, one block up.
+    _hold_on = bool(state.get('voice_hold', False))
+    if _hold_btn is not None:
+        pygame.draw.rect(screen, C_ACCENT if _hold_on else C_BTN, _hold_btn,
+                         border_radius=3)
+        screen.blit(small.render("hold", True, C_BG if _hold_on else C_DIM),
+                    (_hold_btn.x + 6, _hold_btn.y + 1))
     # GEN amp-slew toggle (right of the "GEN" header): lit when on.  Smooths
     # stable-pitch amplitude gating (the shape>0 beep); off = bit-exact legacy.
-    _slew_on = state['gen_amp_slew']
+    # An engine that has no slew path says so by going flat instead of offering
+    # a toggle that does nothing (rt.slew_live, from the registry).
+    _slew_live = bool(getattr(rt, 'slew_live', True))
+    _slew_on = state['gen_amp_slew'] and _slew_live
     pygame.draw.rect(screen, C_ACCENT if _slew_on else C_BTN, _slew_btn,
                      border_radius=3)
-    screen.blit(small.render("slew", True, C_BG if _slew_on else C_DIM),
+    screen.blit(small.render("slew", True, (C_BG if _slew_on else
+                                            (C_DIM if _slew_live else C_CAPPED))),
                 (_slew_btn.x + 6, _slew_btn.y + 1))
     for c in ctrls:
         tr = c['track']
         val = _ctrl_value(state, c)
+        kind = c.get('kind', 'slider')
         screen.blit(small.render(c['label'], True, C_DIM),
                     (c['label_x'], tr.centery - 7))
-        kind = c.get('kind', 'slider')
-        if kind == 'toggle':
+        if kind == 'inactive':
+            # the parameter does not act for this engine: say why, where the
+            # widget would have been -- the bench's rule (casynth_panel), so the
+            # two panels read the same way
+            screen.blit(small.render(c.get('text', ''), True, C_DIM),
+                        (tr.left, tr.centery - 7))
+        elif kind == 'toggle':
             # an on/off integer is a pill, as on the bench (2026-09-21)
             pill = c['pill']
             pygame.draw.rect(screen, C_ACCENT if val else C_BTN, pill, border_radius=8)
