@@ -3,11 +3,16 @@
   UI thread   --post()-->  cmd queue  -->  render thread (owns DemoRunner)
                                               |  next_block() just-in-time
                                               v
-                                          block queue  -->  audio callback
-                                                            (copies int16 only)
+                                    casynth_host.AudioHost  -->  audio callback
+                                    (ring + look-ahead)          (copies int16 only)
 The UI reads snapshot() (a copy published by the render thread) and never
 touches the runner.  Slow frames / painting cannot change the render tempo:
 the tempo is the device pulling blocks, the runner counts samples.
+
+The ring, the look-ahead pre-roll, the underrun count and the device belong to
+casynth_host (shared with the prototype since 2026-09-21); what is left here is
+what only a BENCH does: the A/B runner, the command queue, the transport fade,
+the streaming Recorder and the players of a saved take.
 
 Transport fade: 'reset' flushes queued blocks and applies a short explicit
 fade-in to the fresh audio (transport only; the runner's PCM is untouched).
@@ -21,6 +26,7 @@ import time
 import numpy as np
 
 from casynth_config import SR, AUDIO_LOOKAHEAD_CHUNKS
+from casynth_host import AudioHost, open_output_stream
 from .runner import BLOCK, CHANNELS
 from .engine_api import EngineBlockError
 from .recorder import Recorder
@@ -31,11 +37,10 @@ PAIR_XFADE_SAMPLES = int(round(PAIR_XFADE_MS / 1000.0 * SR))   # 441
 
 
 def _default_output_factory(callback):
-    import sounddevice as sd     # imported lazily: offline path never needs it
-    stream = sd.OutputStream(samplerate=SR, channels=CHANNELS, dtype='int16',
-                             latency='low', callback=callback)
-    stream.start()
-    return stream
+    """The bench's device: casynth_host opens it, the bench only names its own
+    rate and channels (sounddevice stays a lazy import -- the offline path never
+    needs a device)."""
+    return open_output_stream(callback, sr=SR, channels=CHANNELS)
 
 
 class LiveEngine:
@@ -62,15 +67,13 @@ class LiveEngine:
         self._sink = sink
         self._lookahead = lookahead
         self._cmd_q = queue.Queue()
-        self._blk_q = queue.Queue()
-        self._resid = {'buf': None, 'pos': 0}
+        # the ring + the device: shared with the prototype.  pace=True -> without a
+        # device a wall-clock pacer drains it, so the scene still advances.
+        self.host = AudioHost(BLOCK, CHANNELS, sr=SR, lookahead=lookahead,
+                              output_factory=output_factory, callback=self._audio_cb,
+                              pace=True)
         self._alive = False
         self._thread = None
-        self._pacer = None
-        self._stream = None
-        self.device_ok = False
-        self.device_error = None
-        self.underruns = 0
         self.block_errors = 0        # engine blocks rejected (replaced by silence)
         self.last_error = None
         self._fade_left = 0
@@ -85,17 +88,7 @@ class LiveEngine:
                                      origin_snapshot=self._origin_snapshot,
                                      parent_record_id=self._parent_record_id, **kw)
         if self._sink is None:
-            try:
-                silent = np.zeros((BLOCK, CHANNELS), np.int16)
-                for _ in range(self._lookahead):
-                    self._blk_q.put(silent.copy())
-                self._stream = self._factory(self._audio_cb)
-                self.device_ok = True
-            except Exception as e:           # noqa: BLE001
-                self.device_ok = False
-                self.device_error = str(e) or type(e).__name__
-                self._pacer = threading.Thread(target=self._pace_loop, daemon=True)
-                self._pacer.start()
+            self.host.start()                # sets device_ok / device_error itself
         self._thread = threading.Thread(target=self._render_loop, daemon=True)
         self._thread.start()
 
@@ -103,16 +96,22 @@ class LiveEngine:
         self._alive = False
         if self._thread is not None:
             self._thread.join(timeout=2.0)
-        if self._pacer is not None:
-            self._pacer.join(timeout=2.0)
-        if self._stream is not None:
-            try:
-                self._stream.stop()
-                self._stream.close()
-            except Exception:                # noqa: BLE001
-                pass
+        self.host.stop()
         if self.recorder is not None:
             self.recorder.discard()
+
+    # -- the device, as the UI reads it ---------------------------------------
+    @property
+    def device_ok(self):
+        return self.host.device_ok
+
+    @property
+    def device_error(self):
+        return self.host.device_error
+
+    @property
+    def underruns(self):
+        return self.host.underruns
 
     # -- recording / cut (S4) ----------------------------------------------------
     def diagnostics(self):
@@ -229,16 +228,12 @@ class LiveEngine:
 
     # -- render thread --------------------------------------------------------
     def _flush_blocks(self):
-        while True:
-            try:
-                self._blk_q.get_nowait()
-            except queue.Empty:
-                return
+        self.host.flush()
 
     def _render_loop(self):
         r = self.runner
         while self._alive:
-            if self._sink is None and self._blk_q.qsize() >= self._lookahead:
+            if self._sink is None and self.host.full():
                 time.sleep(0.001)
                 continue
             while True:
@@ -277,12 +272,11 @@ class LiveEngine:
             if self._sink is not None:
                 self._sink(buf, blk)
             else:
-                self._blk_q.put(buf)
+                self.host.put(buf)
 
     # -- device side ----------------------------------------------------------
     def _audio_cb(self, outdata, frames, time_info, status):
-        if status and getattr(status, 'output_underflow', False):
-            self.underruns += 1
+        self.host.count_status(status)
         player = self._player
         if player is None and self.muted:
             self._drain_live(frames)
@@ -304,25 +298,7 @@ class LiveEngine:
             if player['pos'] >= len(pcm):
                 self._player = None
             return
-        filled = 0
-        while filled < frames:
-            if self._resid['buf'] is None:
-                try:
-                    self._resid['buf'] = self._blk_q.get_nowait()
-                    self._resid['pos'] = 0
-                except queue.Empty:
-                    outdata[filled:] = 0
-                    self.underruns += 1
-                    return
-            buf, pos = self._resid['buf'], self._resid['pos']
-            take = min(frames - filled, len(buf) - pos)
-            outdata[filled:filled + take] = buf[pos:pos + take]
-            filled += take
-            pos += take
-            if pos >= len(buf):
-                self._resid['buf'] = None
-            else:
-                self._resid['pos'] = pos
+        self.host.ring.fill(outdata, frames)
 
     @staticmethod
     def _slice_or_silence(pcm, pos, frames):
@@ -356,35 +332,4 @@ class LiveEngine:
 
     def _drain_live(self, frames):
         """Consume `frames` of live blocks without outputting them."""
-        left = frames
-        while left > 0:
-            if self._resid['buf'] is None:
-                try:
-                    self._resid['buf'] = self._blk_q.get_nowait()
-                    self._resid['pos'] = 0
-                except queue.Empty:
-                    return
-            buf, pos = self._resid['buf'], self._resid['pos']
-            take = min(left, len(buf) - pos)
-            pos += take
-            left -= take
-            if pos >= len(buf):
-                self._resid['buf'] = None
-            else:
-                self._resid['pos'] = pos
-
-    def _pace_loop(self):
-        """No device: consume blocks at real time so the scene still advances."""
-        period = BLOCK / SR
-        nxt = time.perf_counter()
-        while self._alive:
-            nxt += period
-            try:
-                self._blk_q.get(timeout=period)
-            except queue.Empty:
-                pass
-            delay = nxt - time.perf_counter()
-            if delay > 0:
-                time.sleep(delay)
-            else:
-                nxt = time.perf_counter()
+        self.host.ring.drain(frames)

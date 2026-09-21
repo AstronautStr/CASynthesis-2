@@ -63,15 +63,10 @@ import os
 import sys
 import ctypes
 import time
-import queue as _queue
 import threading
 from types import SimpleNamespace
 import numpy as np
 import pygame
-try:
-    import sounddevice as sd
-except Exception:          # optional; audio is just disabled if unavailable
-    sd = None
 from casynth_core import ENGINES, ENGINE_BY_ID
 from patterns import PATTERNS
 
@@ -82,6 +77,7 @@ from casynth_engine import (midi_to_freq, note_name, step, hsv, analyse,
 from casynth_session import _dump_session, replay_session, _replay_cli
 from casynth_midi import MidiInput, MIDI_AVAILABLE
 from casynth_midifile import MidiFilePlayer, MIDIFILE_AVAILABLE
+from casynth_host import AudioHost
 from casynth_ui import _make_piano, pattern_preview_surf, draw_frame
 from casynth_tuning import (dissonance_curve, scale_minima, snap_ratio,
                              TUNE_MAX_PARTIALS)
@@ -133,61 +129,25 @@ def main(autoplay_midi=None):
             pass
     pygame.init()
 
-    # ── audio output: sounddevice callback stream pulling from a ring buffer ──
-    # The synth (main thread) renders chunks ahead into audio_q; the PortAudio
-    # callback (audio thread) pulls samples at the hardware rate.  This decouples
-    # audio from the 60 fps frame loop: a frame hitch only shrinks the buffer, it
-    # never gaps playback.  amp_cur/phase/pool are touched only by the main thread;
-    # the callback reads finished int16 chunks from the thread-safe queue.
-    audio_q = _queue.Queue()
-    _resid  = {'buf': None, 'pos': 0}          # partial chunk across callbacks
-    _ur     = {'n': 0, 'prev': 0}              # underrun counter (audio thread)
-
-    def _audio_cb(outdata, frames, time_info, status):
-        # Volume is now applied PRE-clip in render_chunk_laplacian, so the callback
-        # just copies finished int16 samples -- no per-sample multiply here.
-        filled = 0
-        while filled < frames:
-            if _resid['buf'] is None:
-                try:
-                    _resid['buf'] = audio_q.get_nowait()
-                    _resid['pos'] = 0
-                except _queue.Empty:
-                    outdata[filled:] = 0       # underrun -> silence (no click)
-                    _ur['n'] += 1
-                    return
-            buf = _resid['buf']
-            pos = _resid['pos']
-            take = min(frames - filled, len(buf) - pos)
-            outdata[filled:filled + take] = buf[pos:pos + take]
-            filled += take
-            pos += take
-            if pos >= len(buf):
-                _resid['buf'] = None
-            else:
-                _resid['pos'] = pos
-
-    audio_ok = True
-    stream = None
-    if sd is None:
-        audio_ok = False
-        print("[audio disabled: sounddevice not installed] - visuals will still run")
+    # ── audio output: the shared device host (casynth_host) ──────────────────
+    # The synth (render thread) renders chunks ahead into the host's ring; the
+    # PortAudio callback pulls samples at the hardware rate.  This decouples audio
+    # from the 60 fps frame loop: a frame hitch only shrinks the ring, it never
+    # gaps playback.  amp_cur/phase/pool are touched only by the render thread;
+    # the callback copies finished int16 chunks out of the ring and nothing else.
+    # The ring, the callback, the look-ahead pre-roll and the underrun count are
+    # the same code the bench runs -- sounddevice is imported inside it, so a
+    # machine without it just reports no device here.
+    host = AudioHost(int(CHUNK_S * SR), 2, sr=SR, lookahead=AUDIO_LOOKAHEAD_CHUNKS)
+    _ur = {'prev': 0}                          # last underrun count shown in the UI
+    audio_ok = host.start()
+    if audio_ok:
+        _lat = ('?' if host.latency is None else f"{host.latency * 1000:.0f}")
+        print(f"[audio] sounddevice out latency={_lat}ms "
+              f"+ {AUDIO_LOOKAHEAD_CHUNKS} chunk look-ahead "
+              f"({AUDIO_LOOKAHEAD_CHUNKS*CHUNK_S*1000:.0f}ms)")
     else:
-        try:
-            # pre-roll silence so the callback never starves before the first
-            # feed_audio() tops up the buffer (otherwise 1-2 startup underruns).
-            silent = np.zeros((int(CHUNK_S * SR), 2), np.int16)
-            for _ in range(AUDIO_LOOKAHEAD_CHUNKS):
-                audio_q.put(silent.copy())
-            stream = sd.OutputStream(samplerate=SR, channels=2, dtype='int16',
-                                     latency='low', callback=_audio_cb)
-            stream.start()
-            print(f"[audio] sounddevice out latency={stream.latency*1000:.0f}ms "
-                  f"+ {AUDIO_LOOKAHEAD_CHUNKS} chunk look-ahead "
-                  f"({AUDIO_LOOKAHEAD_CHUNKS*CHUNK_S*1000:.0f}ms)")
-        except Exception as e:
-            audio_ok = False
-            print(f"[audio disabled: {e}] - visuals will still run")
+        print(f"[audio disabled: {host.device_error}] - visuals will still run")
 
     W = GRID_W * CELL
     H = GRID_H * CELL + TOOLBAR_H + PIANO_H
@@ -671,7 +631,7 @@ def main(autoplay_midi=None):
         venv = {'level': (1.0 if last_gate else 0.0),
                 'phase': (3 if last_gate else 0), 'rel0': 0.0}
         while audio_ctl['alive']:
-            if audio_q.qsize() >= AUDIO_LOOKAHEAD_CHUNKS:
+            if host.full():
                 time.sleep(0.001)      # ring full -> idle briefly
                 continue
             spec = render_spec['cur']
@@ -736,14 +696,14 @@ def main(autoplay_midi=None):
                                                        pool.freq_slots, 2,
                                                        gain_prev, gain, transpose)
             gain_prev = gain
-            audio_q.put(buf)
+            host.put(buf)
             meter['peak'] = max(peak, meter['peak'] * METER_DECAY)
             meter['clip'] = n_clip > 0
             if rec is not None:
                 rec['chunks'].append(buf)
                 if note != last_note or gate != last_gate:
                     rec['midi_onsets'].append((cum, int(note), bool(gate)))
-                rec['underruns'] = _ur['n']
+                rec['underruns'] = host.underruns
             last_note, last_gate = note, gate
             cum += len(buf)
 
@@ -1052,8 +1012,9 @@ def main(autoplay_midi=None):
         # applies the live carrier as a transpose and the live gate, so note timing
         # follows the device, not this frame.
         render_spec['cur'] = {'voices': voices, 'base_f0': base_f0}
-        ur_delta = _ur['n'] - _ur['prev']
-        _ur['prev'] = _ur['n']
+        _ur_now = host.underruns
+        ur_delta = _ur_now - _ur['prev']
+        _ur['prev'] = _ur_now
         if rec is not None:
             # columns: [dt_ms, gen, n_voices, n_rendered, underrun, n_steps_done]
             # n_steps_done = len(rec['steps']) at this moment; used by replay to
@@ -1124,9 +1085,7 @@ def main(autoplay_midi=None):
     # while _dump_session reads it.
     midifile.stop()
     midi_in.close()
-    if stream is not None:
-        stream.stop()
-        stream.close()
+    host.stop()
 
     if rec is not None:
         _dump_session(rec)
