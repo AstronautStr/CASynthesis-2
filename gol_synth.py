@@ -63,6 +63,7 @@ import os
 import sys
 import ctypes
 import time
+import queue as _queue
 import threading
 from types import SimpleNamespace
 import numpy as np
@@ -162,7 +163,7 @@ def main(autoplay_midi=None):
     # smoothed and the worst milliseconds per block against the CHUNK_S budget.
     # The UI shows it next to the meter -- an instrument that cannot hold real
     # time must say so out loud, not hide it in an underrun counter.
-    budget = {'ms': 0.0, 'max': 0.0}
+    budget = {'ms': 0.0, 'max': 0.0, 'underruns': 0, 'lookahead': AUDIO_LOOKAHEAD_CHUNKS}
     audio_ok = False
     _device = {'opened': False}
 
@@ -251,7 +252,10 @@ def main(autoplay_midi=None):
         note=NOTE_DEFAULT, vol=VOL_DEFAULT,
         kb_base=NOTE_DEFAULT,
         sidebar_open=True,
-        engine=ENGINES[0]['id'],
+        # CASYNTH_ENGINE preselects a tab (a test hook, like CASYNTH_DUMPFRAME):
+        # it is how a headless run measures what one engine costs per block.
+        engine=(os.environ.get('CASYNTH_ENGINE') if os.environ.get('CASYNTH_ENGINE') in playable
+                else ENGINES[0]['id']),
         engine_params={eid: engines.defaults(eid) for eid in playable},
         # GEN ADSR: per-mode envelope on the AUTOMATON clock; A/D/R are FRACTIONS of
         # one step interval (see casynth_config), S is a 0..1 level.
@@ -760,6 +764,8 @@ def main(autoplay_midi=None):
     # Laplace waves and Laplace FM are played here AS THEY ARE and not one line
     # of their sound code is copied (memory/req-seam-2026-09-21.md).
     _SILENT = np.zeros((int(CHUNK_S * SR), 2), np.int16)
+    engine_q = _queue.Queue()          # UI thread -> render thread: a ready engine
+    _handed = {'id': None}
     _XFADE_BLOCKS = max(1, round(ENGINE_XFADE_MS / 1000.0 / CHUNK_S))
 
     def _engine_ctx():
@@ -776,11 +782,30 @@ def main(autoplay_midi=None):
         e.set_envelope(state['gen_attack'], state['gen_decay'], state['gen_sustain'],
                        state['gen_release'], state['gen_amp_slew'])
 
-    def _engine_new(eid, spec, gain):
-        e = engines.create(eid, _engine_ctx(), dict(spec['params']))
+    def _engine_new(eid, spec, params, gain):
+        e = engines.create(eid, _engine_ctx(), dict(params))
         _engine_tell(e)
         e.init(spec['grid'], spec['exc'], gain)
         return e
+
+    def _hand_engine():
+        """Build the engine the user picked HERE, on the UI thread, and hand it
+        over ready.  Building one can cost a fifth of a second -- Objects compiles
+        its kernel the first time it renders -- and that must never happen inside
+        a block the device is waiting for.  After the handoff the UI thread never
+        touches the instance again; the render thread owns it."""
+        spec = render_spec['cur']
+        if spec is None:
+            return
+        eid = state['engine']
+        params = dict(state['engine_params'][eid])
+        try:
+            e = _engine_new(eid, spec, params, MASTER_GAIN * state['vol'])
+        except Exception as exc:                 # noqa: BLE001
+            print(f"[engine {eid} unavailable: {exc}]")
+            return
+        _handed['id'] = eid
+        engine_q.put((eid, e, spec['serial'], params))
 
     def _render_block(eng, spec, gain, t_samples, transpose):
         """One block from the hosted engine.  The field, the excitation and the
@@ -788,23 +813,27 @@ def main(autoplay_midi=None):
         and never mid-block; update_field runs exactly once per new serial.
         Switching engine under a held note crossfades: both instances render
         while the old one fades out, so the switch has no step in it."""
-        if spec is None:                       # nothing analysed yet: silence
-            return _SILENT.copy(), 0.0, 0
-        if eng['id'] != spec['engine']:
+        try:                                   # a ready engine from the UI thread
+            eid, obj, serial, params = engine_q.get_nowait()
+        except _queue.Empty:
+            pass
+        else:
             if eng['obj'] is not None:
                 eng['old'] = eng['obj']
                 eng['fade'] = _XFADE_BLOCKS
-            eng['obj'] = _engine_new(spec['engine'], spec, gain)
-            eng['id'] = spec['engine']
-            eng['params'] = dict(spec['params'])
+            eng['obj'], eng['id'] = obj, eid
+            eng['serial'], eng['params'] = serial, params
+            host.lookahead = AUDIO_LOOKAHEAD_CHUNKS     # the new engine earns its own
+            budget['lookahead'] = host.lookahead
+            budget['max'] = 0.0
+        if spec is None or eng['obj'] is None:   # nothing to play yet: silence
+            return _SILENT.copy(), 0.0, 0
+        if eng['serial'] != spec['serial']:
+            eng['obj'].update_field(spec['grid'], spec['exc'])
             eng['serial'] = spec['serial']
-        else:
-            if eng['serial'] != spec['serial']:
-                eng['obj'].update_field(spec['grid'], spec['exc'])
-                eng['serial'] = spec['serial']
-            if eng['params'] != spec['params']:
-                eng['obj'].set_params(dict(spec['params']))
-                eng['params'] = dict(spec['params'])
+        if eng['params'] != spec['params'] and eng['id'] == spec['engine']:
+            eng['obj'].set_params(dict(spec['params']))
+            eng['params'] = dict(spec['params'])
         _engine_tell(eng['obj'])
         buf, peak, n_clip = eng['obj'].render(gain, t_samples, transpose=transpose)
         if eng['fade'] > 0 and eng['old'] is not None:
@@ -859,6 +888,16 @@ def main(autoplay_midi=None):
             _dt = (time.perf_counter() - _t0) * 1000.0
             budget['ms'] += (_dt - budget['ms']) * BUDGET_SMOOTH
             budget['max'] = max(budget['max'], _dt)
+            # A heavy engine earns a deeper ring instead of dropping out, and it
+            # EARNS it by actually dropping out: one more block of look-ahead per
+            # underrun, up to AUDIO_LOOKAHEAD_MAX_MS.  A machine that keeps up pays
+            # no latency at all, and one that cannot buys exactly as much as it
+            # needs -- with the price shown in the toolbar beside the cost.  A new
+            # engine starts over from the default.
+            if host.underruns > budget['underruns'] and host.lookahead < AUDIO_LOOKAHEAD_MAX_CHUNKS:
+                host.lookahead += 1
+                budget['lookahead'] = host.lookahead
+            budget['underruns'] = host.underruns
             host.put(buf)
             meter['peak'] = max(peak, meter['peak'] * METER_DECAY)
             meter['clip'] = n_clip > 0
@@ -1196,6 +1235,8 @@ def main(autoplay_midi=None):
         # prototype hosted an engine this ran on EVERY frame, 60 times a second,
         # even on a field standing still; now the render thread analyses for the
         # sound as well, and paying for it twice is what starves the device.
+        if _handed['id'] != state['engine']:
+            _hand_engine()             # a tab was clicked (or this is the first frame)
         _vis_key = (_serial['n'], _vis_engine, tuple(sorted(_vis_params.items())))
         if _vis['key'] != _vis_key:
             _vis['key'] = _vis_key
@@ -1271,7 +1312,7 @@ def main(autoplay_midi=None):
         rt = SimpleNamespace(
             grid=grid, color=color, labels=labels, voices=_disp_voices, drag=drag,
             ghost=_ghost, white_keys=white_keys, black_keys=black_keys,
-            sb_scroll=_sb_scroll, meter=meter,
+            sb_scroll=_sb_scroll, meter=meter, budget=budget,
             # "audio disabled" is a COMPLAINT, and there is nothing to complain
             # about until the device has actually been tried (it is opened after
             # this first frame -- see _open_device)
@@ -1303,7 +1344,8 @@ def main(autoplay_midi=None):
     host.stop()
 
     print(f"[budget] {budget['ms']:.2f} ms per block (worst {budget['max']:.2f}) "
-          f"of {CHUNK_S * 1000.0:.2f} ms; underruns {host.underruns}")
+          f"of {CHUNK_S * 1000.0:.2f} ms; look-ahead {budget['lookahead']} chunks "
+          f"({budget['lookahead'] * CHUNK_S * 1000.0:.0f} ms); underruns {host.underruns}")
     if rec is not None:
         _dump_session(rec)
 

@@ -251,6 +251,20 @@ def draw_frame(screen, fonts, state, lay, rt):
                      (vol_track.left, vol_track.top, fw, vol_track.height),
                      border_radius=4)
     pygame.draw.circle(screen, C_TXT, (vol_track.left + fw, vol_track.centery), 6)
+    # ── what one block of sound COSTS (2026-09-21) ───────────────────────────
+    # An instrument that cannot hold real time has to say so where the player
+    # looks, not hide it in a counter nobody reads: the smoothed milliseconds per
+    # block against the budget, the worst block since this engine started, the
+    # underruns the device reported, and the look-ahead a heavy engine earned.
+    _bud = getattr(rt, 'budget', None)
+    if _bud is not None:
+        _cap = CHUNK_S * 1000.0
+        _hot = (_bud['ms'] >= _cap * BUDGET_RAISE_FRAC) or _bud['underruns']
+        _txt = (f"{_bud['ms']:.1f}/{_cap:.0f} max{_bud['max']:.0f} ur{_bud['underruns']}")
+        if _bud['lookahead'] != AUDIO_LOOKAHEAD_CHUNKS:
+            _txt += f" la{_bud['lookahead']}"
+        screen.blit(small.render(_txt, True, (235, 96, 96) if _hot else C_DIM),
+                    (_rc_x, vol_track.bottom + 10))
     if not audio_ok:
         screen.blit(small.render("audio disabled", True, C_DIM), (W - 110, 6))
 

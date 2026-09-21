@@ -81,6 +81,14 @@ ENGINE_XFADE_MS = 30
 # Smoothing of the per-block cost the toolbar shows (a one-pole on the render
 # thread): slow enough to read, fast enough to see a heavy engine arrive.
 BUDGET_SMOOTH = 0.05
+# A block that costs more than this much of its budget is a block that will
+# eventually be late, so the ring is allowed to run deeper -- up to
+# AUDIO_LOOKAHEAD_MAX_MS.  More look-ahead means more latency, which is why it
+# is earned by measurement and shown in the toolbar, not set once and hidden.
+BUDGET_THIN_BLOCKS = 1          # the ring this shallow = the device has caught up
+BUDGET_RAISE_FRAC = 0.75        # a block costing this much of its budget reads as hot
+AUDIO_LOOKAHEAD_MAX_MS = 160
+AUDIO_LOOKAHEAD_MAX_CHUNKS = max(3, round(AUDIO_LOOKAHEAD_MAX_MS / 1000.0 / CHUNK_S))
 # Headroom: up to MAX_VOICES objects, each up to MAX_MODES_PER_OBJ partials, plus
 # front+back overlap during cross-fades -> the summed signal can peak well above
 # 1.0 and hard-clip (audible distortion).  Measured raw peak on a dense field is
@@ -298,6 +306,8 @@ __all__ = [
     'SR', 'RANDOM_DENSITY',
     'BPM_DEFAULT', 'BPM_MIN', 'BPM_MAX', 'NOTE_DIVS', 'DIV_DEFAULT', 'MAX_VOICES',
     'CHUNK_S', 'AUDIO_LOOKAHEAD_MS', 'AUDIO_LOOKAHEAD_CHUNKS', 'ENGINE_XFADE_MS', 'BUDGET_SMOOTH',
+    'BUDGET_RAISE_FRAC', 'BUDGET_THIN_BLOCKS',
+    'AUDIO_LOOKAHEAD_MAX_MS', 'AUDIO_LOOKAHEAD_MAX_CHUNKS',
     'MASTER_GAIN', 'VOL_DEFAULT', 'VOL_W', 'METER_DECAY',
     'MAX_MODES_PER_OBJ', 'PATCH_SIZE',
     'SPREAD_DEFAULT', 'ALPHA_DEFAULT', 'ALPHA_MIN', 'ALPHA_MAX',

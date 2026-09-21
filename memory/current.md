@@ -6,13 +6,22 @@ _Снапшот живого состояния (консолидирован /d
 
 ## Карта файлов
 
+**Шов зашит 2026-09-21** (ТЗ `memory/req-seam-2026-09-21.md`, лог `memory/log/2026-09-21-seam.md`):
+движки переехали из `casynth_lab/` в `casynth_engines/` — ниже по тексту старые пути
+`casynth_lab/<движок>.py` означают `casynth_engines/<движок>.py` (в `casynth_lab/` на этих именах
+лежат шимы, отдающие ТОТ ЖЕ объект модуля). Прототип больше не копирует звуковой код: он хостит
+экземпляр `SoundEngine`.
+
 | Файл | Что это |
 |---|---|
-| `gol_synth.py` | **Активный прототип** (мульти-движковый): event-loop, layout, аудио/MIDI-потоки |
+| `gol_synth.py` | **Активный прототип**: event-loop, layout, MIDI, VCA; ХОСТИТ экземпляр `SoundEngine` из `casynth_engines` (вкладки — движки, умеющие играть ноту) |
+| `casynth_engines/` | **Движки как продукт**: `engine_api` (контракт: `render(gain, t, *, gain_prev, transpose)`, `set_envelope`/`set_rate`, `EngineContext(pan=)`), `registry` (ленивая регистрация: `import casynth_engines` не тянет numba), `legacy_engine`, `figures` + 12 модулей движков |
+| `casynth_host.py` | Устройство и кольцо блоков для ОБОИХ хостов: `BlockRing`, `AudioHost`, `open_output_stream` |
+| `casynth_panel.py` | Какой виджет у параметра (`panel_rows`) — одно решение для панели прототипа и стенда |
 | `casynth_config.py` | ВСЕ константы (геометрия/аудио/слоты/ADSR/палитра); pygame-free |
 | `casynth_engine.py` | `step/analyse/events_field/SlotPool/render_chunk_laplacian/midi_to_freq` |
 | `casynth_core.py` | Либа маппинга форма→(freqs,amps): 5 `map_*` + реестр `ENGINES` (чистые данные) |
-| `casynth_session.py` | Session-рекордер: `_dump_session`/`replay_session`/CLI `replay <ts>` |
+| `casynth_session.py` | Session-рекордер `_dump_session`; **сессия → сцена** (`scene_from_session`, CLI `scene <ts>`) — оффлайн-сверка, неуязвимая к просадкам CPU (побайтово совпала с живым прогоном); `replay_session` знает только пять маппингов ядра и отсылает к сцене |
 | `casynth_ui.py` | Весь рендеринг (`draw_frame`, пианино, спектр-полоска) |
 | `casynth_midi.py` / `casynth_midifile.py` | MIDI-вход (rtmidi callback) / MIDI-file плеер |
 | `casynth_tuning.py` | Сетхарес: `pair_dissonance/dissonance_curve/scale_minima/snap_ratio` |
@@ -41,6 +50,12 @@ _Снапшот живого состояния (консолидирован /d
 | `tests/` | `test_casynth_core.py` (60 тестов) + `test_demo_lab.py` (39 тестов S1–S3) + `test_demo_lab_s4.py` (9 тестов S4) + `test_demo_lab_s5.py` (6 тестов S5) + `test_demo_lab_s6.py` (6 тестов S6, изолированные git-репо в `artifacts/_s6/`) + `test_demo_lab_s7.py` (6 тестов S7, `artifacts/_s7/`; демо-каталог `s7_demo_catalog.py`) + `test_demo_lab_sn.py` (16 тестов демо S/N, `artifacts/_sn/`) + `test_n2_events.py` (19 тестов N2, `artifacts/_n2_tests/`) + `test_n3_tuned_events.py` (16 тестов N3, `artifacts/_n3_tests/`) + `test_n4_object_resonators.py` (28 тестов N4, `artifacts/_n4_tests/`) + `test_objects_laplace.py` (13 тестов Objects/Laplace, `artifacts/_ol_tests/`) + `test_objects_radius_attack.py` (19 тестов Radius range / Attack, `artifacts/_ora_tests/`) + `test_objects_event_source.py` (13 тестов Events / Birth position, `artifacts/_oes_tests/`) + `test_objects_birth_strength.py` (8 тестов Birth strength, `artifacts/_obs_tests/`) + `test_objects_decay.py` (25 тестов Decay law) + `test_laplace_carriers.py` (34 теста Laplace carriers) + `test_laplace_fm.py` (43 теста Laplace FM) + `golden/` (эталоны golden-master и UI) |
 
 ## Гейты (обязательны после каждого изменения)
+
+_2026-09-21: добавлен гейт **1t** — `tests/test_seam.py` (19 тестов шва: пакет движков без стенда и
+без numba, контракт всех 17 движков, кольцо `casynth_host`, решение панели `casynth_panel`,
+артикулированная сцена, `VoiceEnvelope` против прежней арифметики, и **путь через хост побайтово
+равен прямому пути** `analyse → SlotPool → render_chunk_laplacian`). Тайминговые тесты бюджета
+Laplace FM (гейт 1s) нагрузочно-чувствительны: на занятой машине падают и на НЕТРОНУТОМ коде._
 
 `python check.py` = 60 юнит-тестов + 42 + 9 + 6 + 6 + 6 + 15 тестов demo-стенда S1–S7 и демо S/N + 9 тестов N0 (гейт 1h) + 10 тестов N1 (гейт 1i) + 3 теста гипотез N1 + 19 тестов N2 (гейт 1j) + 16 тестов N3 (гейт 1k) + 28 тестов N4 (гейт 1l) + 13 тестов Objects/Laplace (гейт 1m) + 19 тестов Objects radius/attack (гейт 1n) + 13 тестов Objects events/modal (гейт 1o) + 8 тестов Objects birth strength (гейт 1p) + 25 тестов Objects decay law и контроля D4 (гейт 1q) + 34 теста Laplace carriers (гейт 1r) + 43 теста Laplace FM (гейт 1s)
 + golden-master аудио (байт-в-байт,
@@ -115,9 +130,11 @@ sha256[:16]=cd3126907ad13b6c) + UI-кадр (пиксель-в-пиксель vs
 - Заведено ~3 из ~8 спроектированных перцептивных осей — диапазон тембра узок.
 - Клиппинг при плотном ярком поле — ручной headroom (метр+громкость); Researcher 06-17:
   для фазы прослушивания достаточно.
-- **Оффлайн-реплей не воспроизводит VCA-артикуляцию** (per-frame путь superseded рефактором
-  огибающих; лог пишет `voice_*` для контекста). Контракт рекордера дырявый для
-  VCA-зависимых багов — вернуть при возрождении оффлайн-аудио-реплея.
+- ~~Оффлайн-реплей не воспроизводит VCA-артикуляцию~~ — **закрыто 2026-09-21**: путь сверки теперь
+  СЦЕНА (`python gol_synth.py scene <ts>`), она несёт ноту, гейт, громкость, обе огибающие, пан,
+  правки поля и шаги автомата на их сэмплах. Живая сессия прототипа совпала с оффлайн-рендером
+  стенда побайтово (353408/353408 и 343552/343552 после того, как прототип стал хостить движок).
+  Старый `replay_session` остался только для пяти маппингов ядра и сам отсылает к сцене.
 - PyInstaller-сборка (`CASynth.spec`, dist/) — разовый эксперимент Пользователя, НЕ канал
   дистрибуции; spec закоммичен исторически (решить судьбу при следующей уборке).
 - **Тех. долг P2 очереди команд (2026-09-18, решение пользователя — сейчас не чинить):** прогноз

@@ -762,10 +762,14 @@ turns the field into stereo blocks.
    ```python
    from casynth_engines import EngineSpec, register
    register(EngineSpec('my_engine', 'My', [('depth', 'depth', 0.0, 1.0, False, 0.5)],
-                       lambda ctx, params: MyEngine(ctx, params)))
+                       lambda ctx, params: MyEngine(ctx, params),
+                       plays_notes=True))        # only if SUPPORTS_TRANSPOSE is True
    ```
    Param spec = `(arg, label, lo, hi, integer, default)`; integer 0/1 renders as
-   a toggle.  Optional display hints (no effect on sound): `choices={'path':
+   a toggle.  `plays_notes` says the engine renders the contract's `transpose`,
+   so a host with a keyboard (gol_synth) may offer it; a gate checks it against
+   the class's `SUPPORTS_TRANSPOSE`, and it lives on the spec so a host can ask
+   without building one of every engine first.  Optional display hints (no effect on sound): `choices={'path':
    ('Ellipse', 'Lissajous', 'Raster')}` renders an integer parameter as word
    buttons; `inactive(params) -> {name: text}` shows a parameter as text when
    it does not act; `overlay(params, rows, cols) -> dict` (`polyline` of
