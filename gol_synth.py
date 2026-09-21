@@ -484,12 +484,12 @@ def main(autoplay_midi=None):
             ('voice_release_ms', 'R', VOICE_RELEASE_MS_MIN, VOICE_RELEASE_MS_MAX, True),
         ]
         for i, (arg, lbl, lo, hi, is_ms) in enumerate(voice_specs):
+            _t = pygame.Rect(_rc_track_x, _VOICE_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)
             ctrls.append(dict(
                 id=arg, label=lbl, lo=lo, hi=hi, integer=False, scope='synth',
                 block='voice', kind=KIND_SLIDER, fmt=_fmt_for(False, is_ms),
                 label_x=_rc_x,
-                track=pygame.Rect(_rc_track_x,
-                                  _VOICE_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)))
+                track=_t, hit=_t.inflate(0, 14)))
         # GEN A/D/R are fractions of a tick (dimensionless), S a 0..1 level.
         gen_specs = [
             ('gen_attack',  'A', GEN_FRAC_MIN, GEN_FRAC_MAX),
@@ -498,19 +498,19 @@ def main(autoplay_midi=None):
             ('gen_release', 'R', GEN_FRAC_MIN, GEN_FRAC_MAX),
         ]
         for i, (arg, lbl, lo, hi) in enumerate(gen_specs):
+            _t = pygame.Rect(_rc_track_x, _GEN_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)
             ctrls.append(dict(
                 id=arg, label=lbl, lo=lo, hi=hi, integer=False, scope='synth',
                 block='gen', kind=KIND_SLIDER, fmt=_fmt_for(False, False),
                 label_x=_rc_x,
-                track=pygame.Rect(_rc_track_x,
-                                  _GEN_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)))
+                track=_t, hit=_t.inflate(0, 14)))
         # Tune: one row below the GEN block.
+        _t = pygame.Rect(_rc_track_x, _GEN_RC_Y0 + 4 * _CTRL_ROW_H, _RC_TRACK_W, 8)
         ctrls.append(dict(
             id='tune', label='T', lo=0.0, hi=1.0, integer=False, scope='synth',
             block='tune', kind=KIND_SLIDER, fmt=_fmt_for(False, False),
             label_x=_rc_x,
-            track=pygame.Rect(_rc_track_x,
-                              _GEN_RC_Y0 + 4 * _CTRL_ROW_H, _RC_TRACK_W, 8)))
+            track=_t, hit=_t.inflate(0, 14)))
 
     rebuild_ctrls()
 
