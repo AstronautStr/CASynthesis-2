@@ -24,8 +24,8 @@ THE SIX CELLS -- four are older engines and keep their bytes, two are new
   Env    + Bank + Saw/Square == `laplace_carriers` Wave bank      (gate 1r)
   Env    + FM                == `laplace_fm`                      (gate 1s)
   Events + Bank + Sine       == `ca_object_resonators`            (gates 1l-1q)
-  Events + Bank + Saw/Square == NEW (section 6 of the REQ, a later step)
-  Events + FM                == NEW (section 6 of the REQ, a later step)
+  Events + Bank + Saw/Square == NEW (section 6 of the REQ)
+  Events + FM                == NEW (section 6 of the REQ)
 
 The first four are not re-derived here: the cell IS the implementation those
 gates already pin (_BankVoices of laplace_carriers, _FMSources of laplace_fm,
@@ -34,11 +34,26 @@ byte anchor is therefore not a claim to be proved once -- it is a gate that is
 already written, and tests/test_laplace_unified.py runs each of the four against
 its old engine block by block.
 
-THE CELLS THAT ARE NOT HERE YET.  `Events + Bank + Saw/Square` and `Events + FM`
-are a NEW law, not a consequence of an old one (REQ section 6), and they arrive
-in their own step with their own gates and their own panel rows.  Until then the
-axes refuse those two combinations out loud (validate) instead of quietly
-sounding something else.
+THE TWO NEW CELLS -- the Events articulation, sounded by something else
+
+The Objects law is NOT rewritten.  The tracker, the packets (a = e/(e+2)), the
+detector disk, the Fixed decay (gamma = ln 1000 / T60), the attack smoothing, the
+slots and the tails are its own; only the READOUT of a mode changes:
+
+    Sine        : b_s = sum_j w_j Re(z_j)                    (the law's own kernel)
+    Saw/Square  : b_s = sum_j w_j |z_j| W(theta_j; f_j)
+    FM          : y_s = A_s(t) sin(theta_c + sum_j beta_j(t) sin(theta_j))
+                  a_j(t) = w_j |z_j(t)|,  beta_j = I a_j,  A_s = sqrt(sum_j a_j^2)
+
+theta_j = arg(z_j) + pi/2 is the mode's OWN phase, read out of the state rather
+than kept beside it, so the h = 1 term of W is |z| sin(theta) = Re(z) exactly: a
+wave is the sine line with harmonics on top.  W, the band limit b(h f) taken at
+the frequency of every harmonic of every wave, and the whole FM law (beta in
+RADIANS, divided by nothing, one carrier per figure, one phase sum, OVERSAMPLE x
+sr and the fixed DC blocker) are the two older REQs unchanged.  What is new --
+and what makes these a new law rather than a consequence of an old one -- is that
+beta_j now DECAYS with the mode: a struck figure is an FM percussion whose index
+falls with its own amplitude.  See casynth_engines/unified_events.py.
 
 SWITCHING AN AXIS never makes an impulse and never cuts.  The outgoing cell keeps
 rendering and is faded out over one voice release while the incoming one fades in;
@@ -77,6 +92,7 @@ from casynth_core import ENGINE_BY_ID
 from casynth_engine import analyse
 from .engine_api import SoundEngine, PAN_FIELD_MODE
 from .legacy_engine import PAN_CENTER, GenEnvelopeKnobs, LegacySynthEngine
+from .registry import EngineSpec, register
 from . import laplace_carriers as lc
 from . import laplace_fm as lfm
 
@@ -382,13 +398,13 @@ class UnifiedLaplaceEngine(GenEnvelopeKnobs, SoundEngine):
         super().__init__(ctx, params)
         for k, v in OPTIONAL_PARAMS.items():
             self.params.setdefault(k, v)
-        validate(self.params)
         self.engine_id = ENGINE_ID
         self._init_gen_env(ctx.rate_hz)
         self.n = int(ctx.block)
         self._grid = None
         self._exc = None
         self._layers = []
+        self._tables = None                 # one wave-table pool for every Events cell
         self._fresh = True                  # the next cell is an init, not a switch
         self.gain_prev = float(0.0)
         self.switches = 0
@@ -420,8 +436,13 @@ class UnifiedLaplaceEngine(GenEnvelopeKnobs, SoundEngine):
                 return EnvFMCell(self.ctx, self.params, self._grid, self._exc, self.gain_prev)
             return EnvBankCell(self.ctx, self.params, self._grid, self._exc, self.gain_prev)
         from . import unified_events as uev
+        if voice == VOICE_FM:
+            return uev.EventsFMCell(self.ctx, self.params, self._grid, self._exc,
+                                    self.gain_prev, strike)
+        if self._tables is None:
+            self._tables = uev.WaveTables()
         return uev.EventsBankCell(self.ctx, self.params, self._grid, self._exc,
-                                  self.gain_prev, strike)
+                                  self.gain_prev, strike, tables=self._tables)
 
     def _active(self):
         for lay in self._layers:
@@ -459,15 +480,9 @@ class UnifiedLaplaceEngine(GenEnvelopeKnobs, SoundEngine):
 
     def set_params(self, params):
         key_old = self._key()
-        old = dict(self.params)
         super().set_params(params)
         for k, v in OPTIONAL_PARAMS.items():
             self.params.setdefault(k, v)
-        try:
-            validate(self.params)
-        except ValueError:
-            self.params = old
-            raise
         for lay in self._layers:
             lay.cell.set_params(self.params)
         if self._key() != key_old and self._grid is not None:
@@ -539,22 +554,6 @@ def _finish(y, channels):
 
 # ── panel metadata ────────────────────────────────────────────────────────────
 
-def validate(params):
-    """The combinations the axes do not define YET (REQ section 6: the new cells
-    are their own step).  Refused out loud, before anything changes, rather than
-    quietly sounding a sine instead of the wave that was asked for."""
-    artic = int(params.get('artic', ARTIC_ENV))
-    if artic != ARTIC_EVENTS:
-        return
-    if int(params.get('voice', VOICE_BANK)) == VOICE_FM:
-        raise ValueError(f"engine {ENGINE_ID}: Events + FM is not implemented yet "
-                         f"(REQ memory/req-unified-laplace-2026-09-21.md section 6)")
-    if int(params.get('waveform', WF_SINE)) != WF_SINE:
-        raise ValueError(f"engine {ENGINE_ID}: Events + "
-                         f"{WAVE_NAMES[int(params.get('waveform', WF_SINE))]} is not "
-                         f"implemented yet (REQ section 6)")
-
-
 def inactive(params):
     """Knobs that do not act for the current axes.  The prototype leaves them out
     of the panel entirely, so Env + Bank shows 9 rows and Events + FM 13 (REQ
@@ -571,6 +570,10 @@ def inactive(params):
         out['radius_mul'] = f"{float(params.get('radius_mul', 1.0)):.2f}  Events only"
         out['decay_s'] = f"{float(params.get('decay_s', 0.80)):.2f} s  Events only"
         out['attack_ms'] = f"{float(params.get('attack_ms', 0.0)):.0f} ms  Events only"
+    if artic == ARTIC_EVENTS:
+        # not a parameter of this engine: the key a PANEL reads to grey out the
+        # host's GEN block, the way the registry hint does it for Objects
+        out['gen_envelope'] = "Events: the engine's own"
     if float(params.get('shape', 0.0)) <= 0.0:
         out['dyn'] = 'acts only with shape > 0'
     return out
@@ -585,3 +588,14 @@ def overlay(params, rows, cols):
     else:
         v = f"Bank {WAVE_NAMES[int(params.get('waveform', WF_SINE))]}"
     return dict(text=f"Laplace+ [{a}, {v}]")
+
+
+register(EngineSpec(ENGINE_ID, LABEL, PARAMS,
+                    lambda ctx, params: UnifiedLaplaceEngine(ctx, params),
+                    choices=CHOICES, ranges=RANGES,
+                    inactive=inactive, overlay=overlay,
+                    # the Env cells run the SlotPool envelope, so the host's GEN
+                    # knobs act; the Events articulation has a decay law of its own
+                    # and inactive() says so.  No cell has a slew path.
+                    gen_envelope=True, gen_amp_slew=False,
+                    plays_notes=True))

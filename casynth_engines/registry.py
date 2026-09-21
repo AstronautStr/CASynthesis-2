@@ -311,5 +311,9 @@ _LAZY.update({
     'laplace_carriers': 'laplace_carriers',
     # Laplace FM (2026-09-20): the modes of a figure modulate one sine carrier of that figure.
     'laplace_fm': 'laplace_fm',
+    # The unified Laplace engine (2026-09-21): articulation x voicing on one
+    # spectrum.  The four ids above are ALIASES of it with their axes pinned --
+    # they keep their own entries, their own parameters and their own bytes.
+    'laplace_unified': 'laplace_unified',
 })
 _IDS.extend(i for i in _LAZY if i not in _IDS)

@@ -548,7 +548,8 @@ def main(autoplay_midi=None):
         shared = [a for a in order if a in engines.SPECTRUM_KEYS]
         picks = [a for a in order if a not in shared and a in spec.choices]
         order = shared + picks + [a for a in order if a not in shared and a not in picks]
-        rows = [r for r in panel_rows(spec, params, order=order)
+        off = spec.inactive(params) if spec.inactive is not None else {}
+        rows = [r for r in panel_rows(spec, params, order=order, inactive=off)
                 if r.kind != KIND_INACTIVE][:2 * _CTRL_ROWS_MAX]
         two_columns = len(rows) > _CTRL_ROWS_MAX
         for i, r in enumerate(rows):
@@ -602,7 +603,11 @@ def main(autoplay_midi=None):
             ('gen_sustain', 'S', SUSTAIN_MIN,  SUSTAIN_MAX),
             ('gen_release', 'R', GEN_FRAC_MIN, GEN_FRAC_MAX),
         ]
-        _gen_live = spec.gen_envelope
+        # An engine with envelopes of its own does not read the knobs at all;
+        # one whose ARTICULATION decides it (the unified engine under Events)
+        # says so per parameter set, through the same `inactive` hook the knob
+        # rows use.  Either way the block is shown as text, not as dead knobs.
+        _gen_live = spec.gen_envelope and 'gen_envelope' not in off
         for i, (arg, lbl, lo, hi) in enumerate(gen_specs):
             _t = pygame.Rect(_rc_track_x, _GEN_RC_Y0 + i * _CTRL_ROW_H, _RC_TRACK_W, 8)
             ctrls.append(dict(
