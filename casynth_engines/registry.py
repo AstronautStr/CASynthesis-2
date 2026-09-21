@@ -267,9 +267,25 @@ def _legacy_factory(engine_id):
     return lambda ctx, params: LegacySynthEngine(ctx, params, engine_id)
 
 
+def _unified_factory(engine_id):
+    """`laplacian` is an ALIAS of the unified Laplace engine (REQ
+    memory/req-unified-laplace-2026-09-21.md section 5): the id resolves there,
+    and that engine hands back the cell its axes pin -- which for Env + Bank +
+    Sine is this very SlotPool path, unchanged.  The four other methods are not
+    Laplace and keep their own factory.  The import is deferred to the first
+    instance so that importing this package still costs nothing."""
+    def factory(ctx, params):
+        from . import laplace_unified as lu
+        return lu.create(ctx, params, engine_id)
+    return factory
+
+
+_ALIASED = ('laplacian',)          # core methods the unified engine collapsed
+
 for _e in _CORE_ENGINES:
     # the five legacy methods run the SlotPool envelope, slew included
-    register(EngineSpec(_e['id'], _e['label'], _e['params'], _legacy_factory(_e['id']),
+    _factory = (_unified_factory if _e['id'] in _ALIASED else _legacy_factory)(_e['id'])
+    register(EngineSpec(_e['id'], _e['label'], _e['params'], _factory,
                         plays_notes=True, gen_envelope=True, gen_amp_slew=True))
 
 # The engine modules after the built-in five, in this ONE place -- the import

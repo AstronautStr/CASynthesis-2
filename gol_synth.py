@@ -1521,6 +1521,17 @@ def main(autoplay_midi=None):
             audio_state=('ok' if audio_ok else
                          ('pending' if not _device['opened'] else 'failed')),
             midi_dd_rects=_midi_dd_rects, midifile=midifile)
+        if _dumpframe is not None:
+            # The one-frame dump is a PIXEL-EXACT baseline, so nothing in it may
+            # depend on how busy the machine happened to be.  The cost indicator
+            # (2026-09-21, B2 of the seam) shows live milliseconds per block, and
+            # by frame one it has measured whatever the render thread managed to
+            # do in the meantime -- which made the gate flaky, not wrong.  At
+            # frame one it has measured nothing, and the dump says exactly that.
+            budget['ms'] = 0.0
+            budget['max'] = 0.0
+            budget['underruns'] = 0
+            budget['lookahead'] = AUDIO_LOOKAHEAD_CHUNKS
         draw_frame(screen, (font, small), state, lay, rt)
         pygame.display.flip()
 

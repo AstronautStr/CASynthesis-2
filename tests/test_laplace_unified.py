@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The unified Laplace engine (REQ memory/req-unified-laplace-2026-09-21.md).
 
-Step C1 -- the axes and the four byte anchors:
+Steps C1 and C2 -- the axes, the four byte anchors and the aliases:
 
   - the axes: the seven spectral settings first, then artic / voice and the knobs
     each axis brings, with the ranges, defaults and named choices of section 2
@@ -19,6 +19,9 @@ Step C1 -- the axes and the four byte anchors:
   - switching an axis: never an impulse, never a cut, and never a hole -- the
     cell that was heard rings out while the new one comes in
   - the combinations that are NOT implemented yet are refused out loud
+  - the aliases: the factory of every old id resolves through this engine, and
+    what comes back is that id's own law with its own parameters and its own
+    bytes -- so scenes, snapshots and the records of lab_catalog/ replay
 
     python tests/test_laplace_unified.py
 
@@ -471,6 +474,118 @@ class ObjectsHooks(unittest.TestCase):
     def test_a_wrong_sized_attachment_is_refused(self):
         with self.assertRaises(ValueError):
             self._objects().attach_slot_state(np.zeros(3))
+
+
+class AliasFactories(unittest.TestCase):
+    """REQ section 5: the four old ids are ALIASES of this engine.
+
+    The id resolves HERE -- one place knows which law an id stands for -- and
+    what comes back is the cell its axes pin, which is that law's own engine.
+    Its registry entry, its parameters, its snapshot and its bytes are untouched,
+    which is what lets every scene, every snapshot and every record of
+    lab_catalog/ go on replaying."""
+
+    IDS = ('laplacian', 'laplace_carriers', 'laplace_fm', 'ca_object_resonators')
+
+    def test_every_old_id_resolves_through_this_engine(self):
+        seen = []
+        real = lu.create
+
+        def spy(ctx, params, engine_id=lu.ENGINE_ID):
+            seen.append(engine_id)
+            return real(ctx, params, engine_id)
+        lu.create = spy
+        try:
+            for eid in self.IDS:
+                registry.create(eid, CTX, registry.defaults(eid))
+        finally:
+            lu.create = real
+        self.assertEqual(sorted(seen), sorted(self.IDS))
+
+    def test_an_alias_hands_back_its_own_law(self):
+        from casynth_engines.legacy_engine import LegacySynthEngine
+        from casynth_engines import laplace_fm as lfm
+        want = {'laplacian': LegacySynthEngine,
+                'laplace_carriers': lc.LaplaceCarriersEngine,
+                'laplace_fm': lfm.LaplaceFMEngine,
+                'ca_object_resonators': orz.ObjectResonatorsEngine}
+        for eid, cls in want.items():
+            self.assertIs(type(registry.create(eid, CTX, registry.defaults(eid))), cls, eid)
+
+    def test_an_alias_renders_what_its_class_renders(self):
+        """The factory changed, the sound did not: the same parameters through
+        the alias and through the class itself are the same bytes."""
+        from casynth_engines.legacy_engine import LegacySynthEngine
+        from casynth_engines import laplace_fm as lfm
+        direct = {
+            'laplacian': lambda p: LegacySynthEngine(CTX, p, 'laplacian'),
+            'laplace_carriers': lambda p: lc.LaplaceCarriersEngine(CTX, p),
+            'laplace_fm': lambda p: lfm.LaplaceFMEngine(CTX, p),
+            'ca_object_resonators': lambda p: orz.ObjectResonatorsEngine(CTX, p),
+        }
+        for eid, build in direct.items():
+            p = dict(registry.defaults(eid))
+            a = run(registry.create(eid, CTX, dict(p)))
+            b = run(build(dict(p)))
+            self.assertTrue(np.array_equal(a, b), f"{eid}: the alias changed the sound")
+
+    def test_the_registry_entries_are_untouched(self):
+        """A host reads the entry BEFORE it builds anything; an alias may not
+        move a parameter, a default, a named choice or a capability."""
+        expect = {
+            'laplacian': dict(label='Laplace', params=list(lu.SPECTRUM_KEYS),
+                              notes=True, gen=True, slew=True),
+            'laplace_carriers': dict(label='Laplace waves',
+                                     params=['method', 'waveform', 'filter_width_oct',
+                                             'filter_depth_db'] + list(lu.SPECTRUM_KEYS),
+                                     notes=True, gen=True, slew=False),
+            'laplace_fm': dict(label='Laplace FM',
+                               params=['fm_depth'] + list(lu.SPECTRUM_KEYS),
+                               notes=True, gen=True, slew=False),
+            'ca_object_resonators': dict(label='Objects', params=None,
+                                         notes=True, gen=False, slew=False),
+        }
+        for eid, want in expect.items():
+            spec = registry.get(eid)
+            self.assertEqual(spec.label, want['label'], eid)
+            if want['params'] is not None:
+                self.assertEqual([p[0] for p in spec.params], want['params'], eid)
+            self.assertEqual(spec.plays_notes, want['notes'], eid)
+            self.assertEqual(spec.gen_envelope, want['gen'], eid)
+            self.assertEqual(spec.gen_amp_slew, want['slew'], eid)
+        self.assertEqual(registry.get('ca_object_resonators').ranges['radius_mul'],
+                         orz.RADIUS_RANGE)
+        self.assertIsNotNone(registry.get('ca_object_resonators').validate)
+        self.assertEqual(registry.get(lc.ENGINE_ID).choices['method'], lc.METHOD_NAMES)
+
+    def test_the_order_of_the_ids_is_unchanged(self):
+        """The bench buttons and the prototype's tabs are built from it."""
+        ids = registry.ids()
+        self.assertEqual(ids[0], 'laplacian')
+        for eid in self.IDS:
+            self.assertIn(eid, ids)
+        self.assertEqual(ids.index('ca_object_resonators') + 1, ids.index('laplace_carriers'))
+        self.assertEqual(ids.index('laplace_carriers') + 1, ids.index('laplace_fm'))
+
+    def test_an_id_this_engine_never_collapsed_is_refused(self):
+        with self.assertRaises(KeyError):
+            lu.create(CTX, {}, 'gutter_field')
+
+    def test_a_laplace_engine_still_costs_no_numba(self):
+        """A1 of the seam: a host that plays one Laplace line must not pull the
+        resonator bank.  Routing the id through the unified engine may not undo
+        that -- the Events cells are imported only when an axis asks for them."""
+        import subprocess
+        code = ("import sys;"
+                "from casynth_engines import registry;"
+                "from casynth_engines.engine_api import EngineContext;"
+                "registry.create('laplacian', EngineContext(44100, 352, 2, 110.0, 1.0, 6.0),"
+                "                registry.defaults('laplacian'));"
+                "print('numba' in sys.modules,"
+                "      'casynth_engines.object_resonators' in sys.modules)")
+        out = subprocess.run([sys.executable, '-c', code], cwd=ROOT,
+                             capture_output=True, text=True)
+        self.assertEqual(out.stdout.split(), ['False', 'False'], out.stderr[-400:])
 
 
 if __name__ == '__main__':

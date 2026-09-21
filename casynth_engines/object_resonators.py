@@ -2060,7 +2060,18 @@ def overlay(params, rows, cols):
     return dict(text=f"{OVERLAY_TEXT} [{det}, {spec}] [{ev}, {ex}]")
 
 
-register(EngineSpec(ENGINE_ID, LABEL, PARAMS, lambda ctx, params: ObjectResonatorsEngine(ctx, params),
+def _unified(ctx, params):
+    """REQ memory/req-unified-laplace-2026-09-21.md section 5: this id is an
+    ALIAS of the unified Laplace engine with its axes pinned.  The factory asks
+    that engine which cell the id means, and the cell IS this law -- so the
+    parameters, the snapshot and every byte of a record stay what they were, and
+    only ONE place has to know what an id stands for.  The import is deferred to
+    the first instance, so the registry still costs nothing to import."""
+    from . import laplace_unified as lu
+    return lu.create(ctx, params, ENGINE_ID)
+
+
+register(EngineSpec(ENGINE_ID, LABEL, PARAMS, _unified,
                     choices=CHOICES, inactive=inactive, overlay=overlay,
                     ranges={'radius_mul': RADIUS_RANGE}, validate=validate_params,
                     plays_notes=True))
