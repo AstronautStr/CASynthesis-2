@@ -26,7 +26,7 @@ import time
 import numpy as np
 
 from casynth_config import SR, AUDIO_LOOKAHEAD_CHUNKS
-from casynth_host import AudioHost, open_output_stream
+from casynth_host import AudioHost, open_output_stream, audio_choice_load
 from .runner import BLOCK, CHANNELS
 from .engine_api import EngineBlockError
 from .recorder import Recorder
@@ -39,8 +39,25 @@ PAIR_XFADE_SAMPLES = int(round(PAIR_XFADE_MS / 1000.0 * SR))   # 441
 def _default_output_factory(callback):
     """The bench's device: casynth_host opens it, the bench only names its own
     rate and channels (sounddevice stays a lazy import -- the offline path never
-    needs a device)."""
-    return open_output_stream(callback, sr=SR, channels=CHANNELS)
+    needs a device).
+
+    WHICH output is the player's REMEMBERED choice -- the same audio_device.json
+    the prototype writes, because it is the same person and the same pair of
+    ears.  Until 2026-09-21 the bench always took the system default, so choosing
+    an output in the synth changed nothing here at all, and "I picked the device
+    and the bench is still silent" was the honest outcome rather than a mystery.
+    A remembered device that will not open falls back to the default: somebody
+    who named a device wants SOUND, not silence with a reason (the rule
+    gol_synth._open_out already follows)."""
+    want = audio_choice_load()
+    if want is None:
+        return open_output_stream(callback, sr=SR, channels=CHANNELS)
+    try:
+        return open_output_stream(callback, sr=SR, channels=CHANNELS, device=want)
+    except Exception as exc:                        # noqa: BLE001
+        print(f"[audio] remembered output {want!r} did not open: {exc}")
+        print("[audio] falling back to the system default")
+        return open_output_stream(callback, sr=SR, channels=CHANNELS)
 
 
 class LiveEngine:

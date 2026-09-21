@@ -105,6 +105,64 @@ class SharedPieces(unittest.TestCase):
             self.assertGreater(peak, 0.0, f"{eid}: rendered no level at all")
             self.assertGreater(loud, 0, f"{eid}: every sample it returned was zero")
 
+    def test_the_bench_plays_into_the_output_the_player_chose(self):
+        """A3 finished the shared device but not the shared CHOICE: the bench kept
+        opening the system default, so picking an output in the prototype changed
+        nothing there and "I chose the device and the bench is still silent" was
+        the honest outcome.  The remembered choice is one file and one pair of
+        ears -- both hosts read it, and a device that will not open falls back to
+        the default rather than leaving the person with a reason instead of
+        sound."""
+        from casynth_lab import audio_out as ao
+
+        class _Stream:
+            def stop(self):
+                pass
+
+            def close(self):
+                pass
+
+        real_open, real_load = ao.open_output_stream, ao.audio_choice_load
+        asked = []
+
+        def fake_open(cb, sr=None, channels=None, device=None):
+            asked.append(device)
+            if device == 'refuses':
+                raise RuntimeError("that endpoint says no")
+            return _Stream()
+        try:
+            ao.open_output_stream = fake_open
+            ao.audio_choice_load = lambda: 7
+            asked.clear()
+            ao._default_output_factory(lambda *a: None)
+            self.assertEqual(asked, [7], "the bench ignored the remembered output")
+
+            ao.audio_choice_load = lambda: None       # nothing remembered
+            asked.clear()
+            ao._default_output_factory(lambda *a: None)
+            self.assertEqual(asked, [None], "no choice must mean the system default")
+
+            ao.audio_choice_load = lambda: 'refuses'  # remembered, but gone
+            asked.clear()
+            ao._default_output_factory(lambda *a: None)
+            self.assertEqual(asked, ['refuses', None],
+                             "a device that will not open must fall back, not fail")
+        finally:
+            ao.open_output_stream, ao.audio_choice_load = real_open, real_load
+
+    def test_a_probe_never_overwrites_the_players_output_choice(self):
+        """The UI probes drive the OUT menu, and the player's own choice outlives
+        them: every probe that clicks it sets CASYNTH_NO_PERSIST, and the
+        prototype honours that flag before it writes audio_device.json."""
+        proto = open(os.path.join(ROOT, 'gol_synth.py'), encoding='utf-8').read()
+        i = proto.index('audio_choice_save(_opened')          # the write in the menu
+        self.assertIn("CASYNTH_NO_PERSIST", proto[i - 400:i],
+                      "the menu writes the choice without checking the probe flag")
+        for name in ('ui_click_probe.py', 'ui_articulation_probe.py'):
+            src = open(os.path.join(ROOT, 'tests', name), encoding='utf-8').read()
+            if 'audio' in src and 'OUT' in src:
+                self.assertIn('CASYNTH_NO_PERSIST', src, name)
+
     def test_importing_the_engines_does_not_drag_the_bench_in(self):
         """A1: a host imports casynth_engines without numba or the resonator bank."""
         import subprocess
