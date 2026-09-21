@@ -21,6 +21,8 @@
   5-7 records    -- the three scenes, one factor per variant, levels within 0.5 dB, no
     clip, R and Wave bank / Saw byte-identical to the records already listened to,
     Continue exact (also mid-transition and while paused), and the block budget
+  8 threads      -- the block built on a pool of threads is the single-threaded block,
+    byte for byte, plain and under a dragged spectrum knob (2026-09-21)
 
     python tests/test_laplace_fm.py
 
@@ -853,6 +855,97 @@ class KnobDragBudget(unittest.TestCase):
         mean, p99 = float(t.mean()), float(np.percentile(t, 99))
         self.assertLess(mean, budget, f"live A/B with a dragged knob: {mean:.2f} ms per block")
         self.assertLess(p99, 1.5 * budget, f"live A/B with a dragged knob: p99 {p99:.2f} ms")
+
+
+class ThreadedRender(unittest.TestCase):
+    """The block is built on SEVERAL THREADS (2026-09-21) -- and that must be a change
+    of speed only.
+
+    WHY: on the prototype's own field (52x30, Random) this engine cost 6.5 ms of the
+    7.98 ms block, the render thread ran at 83% of real time and the device starved --
+    281 underruns in 12 seconds, with the look-ahead pushed to its 160 ms ceiling.  The
+    arithmetic is ~500k sines a block and one core cannot make that cheaper, so the
+    column passes the render was already cut into now run on a pool.
+
+    WHY IT IS STILL THE SAME SOUND: a pass owns its own slice of the block, reads
+    everything else and the sum over sources never crosses two passes, so every output
+    sample is computed by the same operations in the same order whatever the thread
+    count and the pass size are.  This gate renders the SAME live scene at 1, 2 and 4
+    threads and compares the blocks byte for byte -- including the dragged spectrum
+    knob, where the modulator count (and so the number of passes) is highest."""
+
+    BLOCKS = 80
+    DRAG_BLOCKS = 48
+
+    def _blocks(self, threads, blocks, drag, pooled=None):
+        """The blocks the engine renders on a live field at this thread count.
+        `pooled` (a counter) records how many blocks actually went through the pool,
+        so a gate cannot pass by quietly never using it."""
+        old = lfm.RENDER_THREADS
+        old_pool = lfm.render_pool
+        lfm.RENDER_THREADS = int(threads)
+        if pooled is not None:
+            def counted():
+                p = old_pool()
+                if p is not None:
+                    pooled['n'] += 1
+                return p
+            lfm.render_pool = counted
+        try:
+            g = np.zeros((32, 32), np.uint8)
+            for r, c in KnobDragBudget.FIELD:
+                g[r, c] = 1
+            e = lfm.LaplaceFMEngine(
+                EngineContext(SR, BLOCK, 2, F0, 1.0, KnobDragBudget.RATE),
+                dict(fm_depth=KnobDragBudget.DEPTH, **KnobDragBudget.SETTINGS))
+            e.init(g, None, GAIN)
+            out, ca, gen, harm, way = [], 0, 0, 1.0, -1.0
+            for i in range(blocks):
+                if ca >= (gen + 1) * (SR / KnobDragBudget.RATE):
+                    new = step(g)
+                    exc = events_field(g, new)
+                    g = new
+                    gen += 1
+                    e.update_field(g, exc)
+                if drag:
+                    for _k in range(KnobDragBudget.COMMANDS_PER_BLOCK):
+                        harm += way * KnobDragBudget.STEP
+                        if not (0.0 <= harm <= 1.0):
+                            way = -way
+                            harm = min(max(harm, 0.0), 1.0)
+                        e.set_params(dict(e.params, harm=round(harm, 3)))
+                out.append(e.render(GAIN, i * BLOCK, transpose=1.25)[0])
+                ca += BLOCK
+            return out
+        finally:
+            lfm.RENDER_THREADS = old
+            lfm.render_pool = old_pool
+
+    def test_the_threaded_block_is_the_single_threaded_block(self):
+        for drag, n in ((False, self.BLOCKS), (True, self.DRAG_BLOCKS)):
+            ref = self._blocks(1, n, drag)
+            for threads in (2, 4):
+                pooled = {'n': 0}
+                got = self._blocks(threads, n, drag, pooled)
+                self.assertGreater(pooled['n'], n // 2,
+                                   f"only {pooled['n']} of {n} blocks used the pool at "
+                                   f"{threads} threads -- the gate would prove nothing")
+                for i, (a, b) in enumerate(zip(ref, got)):
+                    self.assertTrue(
+                        np.array_equal(a, b),
+                        f"{'dragged' if drag else 'plain'} block {i} differs at "
+                        f"{threads} threads (worst sample {int(np.abs(a.astype(int) - b.astype(int)).max())})")
+
+    def test_one_thread_builds_no_pool(self):
+        """A machine with one usable core (or CASYNTH_RENDER_THREADS=1) renders the
+        block where it stands -- no threads are started for nothing."""
+        old = lfm.RENDER_THREADS
+        lfm.RENDER_THREADS = 1
+        try:
+            self.assertIsNone(lfm.render_pool())
+        finally:
+            lfm.RENDER_THREADS = old
+        self.assertGreaterEqual(lfm.RENDER_THREADS, 1)
 
 
 class DraggedKnobClicks(unittest.TestCase):

@@ -64,8 +64,18 @@ Time behaviour (REQ section 3) -- the baseline's own scales, no new excitation:
     are not restarted while a state persists.
 Tail rule (both pools): a free slot first -- not releasing and already silent --
 otherwise the quietest one is stolen and counted (display / snapshot `steals`).
+
+Speed (2026-09-21).  The block is ~500k sines: on the prototype's own field it
+cost 6.5 ms of the 7.98 ms block and the device starved (281 underruns in 12 s,
+look-ahead at its ceiling).  The render is therefore cut into column passes and
+the passes RUN ON A POOL (RENDER_THREADS) -- numpy drops the GIL inside sin, so
+they really run at once.  A pass owns its own slice of the block and the sum
+over sources never crosses two passes, so the sound is bit-for-bit what one
+thread produced whatever the thread count is (gate: test_laplace_fm.ThreadedRender).
 """
 import math
+import os
+import threading
 
 import numpy as np
 
@@ -116,6 +126,40 @@ BETA_FREE = 1e-4                  # a spent modulator tail this quiet frees its 
 # (modulator x sample) cells per pass, never fewer than this many samples.
 CHUNK_CELLS = 12000
 CHUNK_MIN = 128
+# ... and the passes of one block run on SEVERAL THREADS (2026-09-21).  A pass owns
+# its own slice of the block and reads everything else, and numpy drops the GIL
+# inside sin / multiply / sum, so the threads really do run at once.  Every output
+# sample is still computed by the same operations in the same order as the
+# single-threaded pass -- the sum over sources is inside a pass, never across two --
+# so the block is bit-for-bit what one thread produced (gate: test_laplace_fm
+# ThreadedRender).  WHY: this engine costs ~6.5 ms of the 7.98 ms block on a live
+# random field, which leaves the device no headroom at all; one core cannot make
+# that cheaper, four can.  CASYNTH_RENDER_THREADS overrides the count (1 = off).
+_CPUS = os.cpu_count() or 1
+RENDER_THREADS = max(1, min(4, _CPUS // 2))
+try:
+    RENDER_THREADS = max(1, int(os.environ.get('CASYNTH_RENDER_THREADS', RENDER_THREADS)))
+except ValueError:
+    pass
+# Below this much work (modulator+carrier rows x samples) a hand-off costs more
+# than it saves, and the block stays on the render thread.
+THREAD_CELLS = 60000
+
+_pool_lock = threading.Lock()
+_pool = None
+
+
+def render_pool():
+    """The worker pool of the FM render, built on first use (never at import: a
+    host that only draws the UI must not pay for threads it will not use)."""
+    global _pool
+    if RENDER_THREADS <= 1:
+        return None
+    with _pool_lock:
+        if _pool is None:
+            from concurrent.futures import ThreadPoolExecutor
+            _pool = ThreadPoolExecutor(RENDER_THREADS, thread_name_prefix='fm-render')
+        return _pool
 
 
 # ── the output filter ─────────────────────────────────────────────────────────
@@ -488,8 +532,8 @@ class _FMSources:
         da = self.amp_tgt[act] - a0
         y = np.empty(n_os)
         chunk = self._chunk(0 if rows is None else len(rows), n_os)
-        for c0 in range(0, n_os, chunk):
-            sl = slice(c0, min(c0 + chunk, n_os))
+
+        def one_pass(sl):
             idx_c = idx[sl]
             ramp_c = ramp_os[sl]
             acc = np.zeros((len(act), len(idx_c)))
@@ -499,6 +543,23 @@ class _FMSources:
                 acc[uniq] = np.add.reduceat(s, starts, axis=0)
             y[sl] = ((a0[:, None] + da[:, None] * ramp_c[None, :])
                      * np.sin(th_c[:, None] + inc_c * idx_c[None, :] + acc)).sum(axis=0)
+
+        passes = [slice(c0, min(c0 + chunk, n_os)) for c0 in range(0, n_os, chunk)]
+        cells = (len(act) + (0 if rows is None else len(rows))) * n_os
+        pool = render_pool() if (len(passes) > 1 and cells >= THREAD_CELLS) else None
+        if pool is None:
+            for sl in passes:
+                one_pass(sl)
+        else:
+            # One hand-off per THREAD, not per pass: the block is cut into equal
+            # RUNS of samples and a worker walks its own run in cache-sized passes,
+            # so the queue is paid once per thread instead of once per pass and the
+            # threads finish together.  A worker writes only its own slices.
+            edge = [round(i * n_os / RENDER_THREADS) for i in range(RENDER_THREADS + 1)]
+            runs = [[slice(c0, min(c0 + chunk, b)) for c0 in range(a, b, chunk)]
+                    for a, b in zip(edge, edge[1:]) if b > a]
+            for _ in pool.map(lambda run: [one_pass(sl) for sl in run], runs):
+                pass
         self.advance(n_os, transpose)
         return y
 
