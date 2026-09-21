@@ -27,6 +27,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
+os.environ.setdefault('CASYNTH_VOLUME', '0.01')   # a gate must not play music at the room
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
 os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 os.environ.setdefault('CASYNTH_RUN_SECONDS', '11')

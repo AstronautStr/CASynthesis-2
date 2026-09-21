@@ -26,6 +26,14 @@ Consult on demand, NOT at session start:
 - **All regression gates in one command: `python check.py`** (59 unit tests +
   golden-master audio byte-exact + UI frame pixel-exact + import/init smoke).
   Legitimate UI change → re-bless in the SAME change: `python check.py --bless-ui`.
+  ~231 s since 2026-09-22: the gates that MEASURE time run first and alone (with a
+  cooldown), the rest run six at a time; every gate is timed and the slowest printed.
+  `python check.py --fast` (~13 s) is the inner loop while working on a change;
+  `--jobs=1` restores the one-at-a-time run, `-v` prints every gate's output.
+  A test that asserts milliseconds must carry `@timing_test` (tests/timing_gate.py),
+  or the parallel wave measures the scheduler instead of the engine.
+  Gates run the instrument at `CASYNTH_VOLUME=0.01` -- a check run must not play
+  music at whoever is sitting there.
 - Tests alone: `python tests/test_casynth_core.py` (stdlib runner, pytest not installed).
 - Versioned baselines live in `tests/golden/` (in git). `artifacts/` is for transient
   diagnostics only (gitignored, swept during /dream) — never keep a baseline there.

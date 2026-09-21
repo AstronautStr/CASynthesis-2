@@ -39,6 +39,8 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from timing_gate import timing_test              # noqa: E402
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
@@ -700,6 +702,7 @@ class Records(unittest.TestCase):
         with self.assertRaises(ValueError):
             other.restore_state(jam_grid(), None, st)
 
+    @timing_test
     def test_block_budget_of_the_two_new_scenes(self):
         import time
         budget_ms = BLOCK / SR * 1000.0
@@ -717,6 +720,7 @@ class Records(unittest.TestCase):
             self.assertLess(p99, budget_ms, f"{case['id']}: p99 {p99:.2f} ms over {budget_ms:.2f}")
 
 
+@timing_test
 class KnobDragBudget(unittest.TestCase):
     """REQ 6.7 on the case the user hit on 2026-09-20: underruns while a knob is
     dragged on a live field.

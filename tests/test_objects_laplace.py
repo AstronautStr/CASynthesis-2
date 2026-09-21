@@ -38,6 +38,8 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from timing_gate import timing_test              # noqa: E402
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
@@ -822,6 +824,7 @@ class ScenesAndCatalogTests(unittest.TestCase):
             self.assertEqual(child.result.get('status'), 'match', child.result)
             self.assertEqual(child.result.get('commit'), rec.commit)
 
+    @timing_test
     def test_block_budget_of_both_sides_on_the_three_scenes(self):
         budget_ms = BLOCK / SR * 1000.0
         for sid in ('ol_glider', 'ol_galaxy', 'ol_neighbor'):

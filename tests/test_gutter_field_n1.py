@@ -22,6 +22,8 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from timing_gate import SKIP as SKIP_TIMING      # noqa: E402
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
@@ -570,6 +572,8 @@ def test_limits_extremes_no_nan_clip_counter_and_prepared_scene():
 # 7. real-time budget: both sides of the scene per block, well under 352 / 44100 s
 # =============================================================================
 def test_realtime_budget_two_sides():
+    if SKIP_TIMING:                     # check.py runs this one alone
+        return
     scene = _scene()
     r = DemoRunner(scene)
     _drive(r, 30, [('start', 0, {})], collect=False)              # warm-up

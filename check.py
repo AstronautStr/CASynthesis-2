@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
 """Run ALL regression gates in one command.
 
-    python check.py              # unit tests + golden-master audio + UI frame + smoke
+    python check.py              # every gate: a parallel wave, then the timed ones alone
+    python check.py --fast       # the inner loop (~1 min): unit, golden master, the seam,
+                                 # the unified engine, the click and panel probes
+    python check.py --jobs=1     # one at a time (the old behaviour, for a slow machine)
+    python check.py -v           # print every gate's output, not just its last line
     python check.py --bless-ui   # re-bless the UI baseline (ONLY after an agreed,
                                  # legitimate UI change -- in the SAME change, not
                                  # "later"; mention re-blessing in the session log)
+
+HOW IT RUNS (2026-09-22).  The gates are independent child processes and the
+machine has cores to spare, so they run SEVERAL AT A TIME -- except the ones that
+MEASURE wall-clock time (a block budget, a real-time replay), which are skipped in
+that wave (CASYNTH_SKIP_TIMING, see tests/timing_gate.py) and run afterwards,
+alone, with nothing else on the cores.  A p99 measured against five other test
+processes measures the scheduler, not the engine.  Every gate is timed and the
+slowest are printed at the end.
 
 Gates (any FAIL -> exit 1):
   1. unit tests        python tests/test_casynth_core.py          (core invariants)
@@ -57,6 +69,7 @@ Gates (any FAIL -> exit 1):
 Keep stdout ASCII-only: the default Windows console codepage (cp1251) chokes on
 fancy glyphs, and agents run this a lot.
 """
+import concurrent.futures as cf
 import os
 import subprocess
 import sys
@@ -65,29 +78,16 @@ import time
 ROOT = os.path.dirname(os.path.abspath(__file__))
 UI_REF = os.path.join(ROOT, "tests", "golden", "ui_frame.png")
 UI_OUT = os.path.join(ROOT, "artifacts", "_ui_check.png")
+DEFAULT_JOBS = max(1, min(6, (os.cpu_count() or 2) // 3))
+COOLDOWN_S = 6.0            # idle before each gate that measures time
+# CASYNTH_VOLUME: the probes drive the real prototype, which opens the real sound
+# card -- a gate run must not play music at the person sitting there (user,
+# 2026-09-22).  1% is audible to a meter and inaudible in the room.
+DUMMY = {"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy", "PYTHONUTF8": "1",
+         "CASYNTH_VOLUME": "0.01"}
 
-
-# How long each gate took, so "the tests are slow" can be answered with numbers
-# instead of a guess (2026-09-22).  Printed per gate and again in the summary.
 TIMES = {}
-
-
-def _run(name, argv, env=None, timeout=180):
-    print(f"--- {name} ---")
-    e = dict(os.environ)
-    if env:
-        e.update(env)
-    t0 = time.perf_counter()
-    try:
-        r = subprocess.run(argv, cwd=ROOT, env=e, timeout=timeout)
-        ok = (r.returncode == 0)
-    except subprocess.TimeoutExpired:
-        TIMES[name] = time.perf_counter() - t0
-        print(f"[FAIL] {name}: timed out after {timeout}s")
-        return False
-    TIMES[name] = time.perf_counter() - t0
-    print(f"[{'PASS' if ok else 'FAIL'}] {name}  ({TIMES[name]:.1f}s)")
-    return ok
+_T0 = time.perf_counter()
 
 
 def _compare_ui(ref_path, out_path):
@@ -110,203 +110,214 @@ def _compare_ui(ref_path, out_path):
     return True
 
 
+class Gate:
+    """One child process.
+
+    timing : the names of the tests in this file that MEASURE time (unittest -k
+             patterns).  They are skipped in the parallel wave and run afterwards,
+             alone; None means the file has none.  `timing=()` means the whole file
+             is re-run alone (a file with its own runner, which knows no -k).
+    fast   : part of the --fast inner loop.
+    """
+    __slots__ = ('label', 'name', 'argv', 'env', 'timeout', 'timing', 'fast')
+
+    def __init__(self, label, name, argv, env=None, timeout=300, timing=None, fast=False):
+        self.label = label
+        self.name = name
+        self.argv = list(argv)
+        self.env = dict(DUMMY if env is None else env)
+        self.timeout = timeout
+        self.timing = timing
+        self.fast = fast
+
+
+def _t(name):
+    return [sys.executable, os.path.join("tests", name)]
+
+
+def gates():
+    py = sys.executable
+    return [
+        Gate("unit tests", "unit tests", _t("test_casynth_core.py"), env={}, fast=True),
+        Gate("demo lab tests (S1-S3)", "demo lab tests", _t("test_demo_lab.py"), timeout=600),
+        Gate("demo lab tests (S4 catalog)", "demo lab S4 tests", _t("test_demo_lab_s4.py"),
+             timeout=900),
+        Gate("demo lab tests (S5 continue)", "demo lab S5 tests", _t("test_demo_lab_s5.py"),
+             timeout=900),
+        Gate("demo lab tests (S6 versions)", "demo lab S6 tests", _t("test_demo_lab_s6.py"),
+             timeout=900),
+        Gate("demo lab tests (S7 catalog check)", "demo lab S7 tests",
+             _t("test_demo_lab_s7.py"), timeout=900),
+        Gate("demo lab tests (S/N engines)", "demo lab S/N tests", _t("test_demo_lab_sn.py"),
+             timeout=900),
+        Gate("network reference N0", "N0 network reference tests",
+             _t("test_network_reference_n0.py"), timeout=600),
+        Gate("network N1 (gutter_field)", "N1 gutter_field tests",
+             _t("test_gutter_field_n1.py"), timeout=600, timing=()),
+        Gate("N1 hypothesis experiments", "N1 hypothesis tests", _t("test_n1_hypotheses.py"),
+             timeout=600),
+        Gate("network N2 (events)", "N2 event-network tests", _t("test_n2_events.py"),
+             timeout=600, timing=("test_engine_timing_budget",)),
+        Gate("network N3 (tuned events)", "N3 tuned-events tests",
+             _t("test_n3_tuned_events.py"), timeout=600,
+             timing=("test_engine_timing_budget",)),
+        Gate("objects N4 (figure resonators)", "N4 object-resonator tests",
+             _t("test_n4_object_resonators.py"), timeout=600,
+             timing=("test_engine_timing_budget_on_both_scenes",)),
+        Gate("objects / Laplace (spectrum law, tails, side gain)", "Objects / Laplace tests",
+             _t("test_objects_laplace.py"), timeout=600,
+             timing=("test_block_budget_of_both_sides_on_the_three_scenes",)),
+        Gate("objects radius / attack (radius range, full masks, attack)",
+             "Objects radius / attack tests", _t("test_objects_radius_attack.py"), timeout=900),
+        Gate("objects events / modal excitation (Births / Deaths, Birth position)",
+             "Objects event-source tests", _t("test_objects_event_source.py"), timeout=900),
+        Gate("objects birth strength (the force of the birth position, M2)",
+             "Objects birth-strength tests", _t("test_objects_birth_strength.py"), timeout=900),
+        Gate("objects decay law (losses from the history of the cells, D1-D3)",
+             "Objects decay-law tests", _t("test_objects_decay.py"), timeout=900),
+        Gate("laplace carriers (the carrier filter / the wave bank on the Laplacian modes)",
+             "Laplace carriers tests", _t("test_laplace_carriers.py"), timeout=900,
+             timing=("test_block_budget_of_the_six_scenes",)),
+        Gate("laplace FM (the modes of a figure modulate its one carrier)",
+             "Laplace FM tests", _t("test_laplace_fm.py"), timeout=900,
+             timing=("KnobDragBudget", "test_block_budget_of_the_two_new_scenes")),
+        Gate("the seam (engines package, contract, shared ring / panel, articulated scene)",
+             "seam tests", _t("test_seam.py"), timeout=600, fast=True),
+        Gate("GEN envelope knobs reach the engines that claim them", "GEN envelope tests",
+             _t("test_gen_envelope.py"), timeout=600),
+        Gate("the unified Laplace engine (axes x voicings, the byte anchors)",
+             "unified Laplace tests", _t("test_laplace_unified.py"), timeout=900, fast=True),
+        Gate("golden master", "golden master",
+             [py, os.path.join("tests", "golden", "golden_master.py")], env={}, fast=True),
+        Gate("ui clicks (the prototype's event loop)", "ui click probe",
+             _t("ui_click_probe.py"), timeout=300, fast=True),
+        Gate("it makes a sound (Random + Play on every engine)", "sound probe",
+             _t("ui_sound_probe.py"), timeout=900),
+        Gate("the panel follows the knobs (a row that starts acting appears)",
+             "panel probe", _t("ui_panel_probe.py"), timeout=300, fast=True),
+        Gate("Save turns a session into an experiment the bench can open", "save probe",
+             _t("ui_save_probe.py"), timeout=600),
+        Gate("the VOICE envelope is audible (note off, HOLD, a played line)",
+             "articulation probe", _t("ui_articulation_probe.py"), timeout=900),
+    ]
+
+
+def _spawn(name, argv, env, timeout, skip_timing):
+    """One child, its output captured whole so parallel gates do not interleave."""
+    e = dict(os.environ)
+    e.update(env)
+    if skip_timing:
+        e['CASYNTH_SKIP_TIMING'] = '1'
+    t0 = time.perf_counter()
+    try:
+        r = subprocess.run(argv, cwd=ROOT, env=e, timeout=timeout, capture_output=True,
+                           text=True, encoding='utf-8', errors='replace')
+        ok, out = (r.returncode == 0), (r.stdout or '') + (r.stderr or '')
+    except subprocess.TimeoutExpired as exc:
+        ok = False
+        out = f"timed out after {timeout}s\n{(exc.stdout or b'')!r}"
+    dt = time.perf_counter() - t0
+    TIMES[name] = TIMES.get(name, 0.0) + dt
+    return ok, out, dt
+
+
+def _report(name, ok, out, dt, verbose):
+    print(f"--- {name} ---")
+    if not ok or verbose:
+        print(out.rstrip())
+    else:
+        tail = [l for l in out.splitlines() if l.strip()]
+        if tail:
+            print(tail[-1])
+    print(f"[{'PASS' if ok else 'FAIL'}] {name}  ({dt:.1f}s)", flush=True)
+
+
 def main():
     bless_ui = "--bless-ui" in sys.argv
+    fast = "--fast" in sys.argv
+    verbose = "-v" in sys.argv or "--verbose" in sys.argv
+    jobs = DEFAULT_JOBS
+    for a in sys.argv[1:]:
+        if a.startswith("--jobs="):
+            jobs = max(1, int(a.split("=", 1)[1]))
     py = sys.executable
     results = []
+    chosen = [g for g in gates() if g.fast or not fast]
 
-    results.append(("unit tests",
-                    _run("unit tests", [py, os.path.join("tests", "test_casynth_core.py")])))
+    # -- wave 1: the tests that MEASURE TIME, alone, on a machine nobody is using -
+    # They come first on purpose: run them after two hundred seconds of six busy
+    # cores and the same code measures 3.3 ms or 5.6 ms depending on how hot the
+    # package got (measured 2026-09-22).
+    if jobs > 1 and len(chosen) > 1:
+        timed = [g for g in chosen if g.timing is not None]
+        if timed:
+            print(f"--- {len(timed)} timed gates first, alone ---", flush=True)
+        for g in timed:
+            # ... and a breath between them.  These gates assert milliseconds, and
+            # a package that has just run a minute of dense arithmetic clocks lower
+            # than a cold one: the same FM drag measures 2.96 ms rested and 5.6 ms
+            # in a row of heavy neighbours (2026-09-22).  COOLDOWN is not a fix for
+            # slow code, it is what makes the measurement mean what it says.
+            time.sleep(COOLDOWN_S)
+            argv = list(g.argv)
+            for pattern in g.timing:
+                argv += ["-k", pattern]
+            ok, out, dt = _spawn(g.name + " (timed)", argv, g.env, g.timeout, False)
+            _report(g.name + " (timed)", ok, out, dt, verbose)
+            results.append((g.label + " -- the timed tests", ok))
 
-    results.append(("demo lab tests (S1-S3)",
-                    _run("demo lab tests", [py, os.path.join("tests", "test_demo_lab.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy"},
-                         timeout=300)))
-
-    results.append(("demo lab tests (S4 catalog)",
-                    _run("demo lab S4 tests", [py, os.path.join("tests", "test_demo_lab_s4.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=600)))
-
-    results.append(("demo lab tests (S5 continue)",
-                    _run("demo lab S5 tests", [py, os.path.join("tests", "test_demo_lab_s5.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=600)))
-
-    results.append(("demo lab tests (S6 versions)",
-                    _run("demo lab S6 tests", [py, os.path.join("tests", "test_demo_lab_s6.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("demo lab tests (S7 catalog check)",
-                    _run("demo lab S7 tests", [py, os.path.join("tests", "test_demo_lab_s7.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("demo lab tests (S/N engines)",
-                    _run("demo lab S/N tests", [py, os.path.join("tests", "test_demo_lab_sn.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("network reference N0",
-                    _run("N0 network reference tests", [py, os.path.join("tests", "test_network_reference_n0.py")],
-                         env={"PYTHONUTF8": "1"}, timeout=300)))
-
-    results.append(("network N1 (gutter_field)",
-                    _run("N1 gutter_field tests", [py, os.path.join("tests", "test_gutter_field_n1.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"}, timeout=600)))
-
-    results.append(("N1 hypothesis experiments",
-                    _run("N1 hypothesis tests", [py, os.path.join("tests", "test_n1_hypotheses.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"}, timeout=300)))
-
-    results.append(("network N2 (events)",
-                    _run("N2 event-network tests", [py, os.path.join("tests", "test_n2_events.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"}, timeout=600)))
-
-    results.append(("network N3 (tuned events)",
-                    _run("N3 tuned-events tests", [py, os.path.join("tests", "test_n3_tuned_events.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"}, timeout=600)))
-
-    results.append(("objects N4 (figure resonators)",
-                    _run("N4 object-resonator tests", [py, os.path.join("tests", "test_n4_object_resonators.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"}, timeout=600)))
-
-    results.append(("objects / Laplace (spectrum law, tails, side gain)",
-                    _run("Objects / Laplace tests", [py, os.path.join("tests", "test_objects_laplace.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"}, timeout=600)))
-
-    results.append(("objects radius / attack (radius range, full masks, attack)",
-                    _run("Objects radius / attack tests", [py, os.path.join("tests", "test_objects_radius_attack.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("objects events / modal excitation (Births / Deaths, Birth position)",
-                    _run("Objects event-source tests", [py, os.path.join("tests", "test_objects_event_source.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("objects birth strength (the force of the birth position, M2)",
-                    _run("Objects birth-strength tests", [py, os.path.join("tests", "test_objects_birth_strength.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("objects decay law (losses from the history of the cells, D1-D3)",
-                    _run("Objects decay-law tests", [py, os.path.join("tests", "test_objects_decay.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("laplace carriers (the carrier filter / the wave bank on the Laplacian modes)",
-                    _run("Laplace carriers tests", [py, os.path.join("tests", "test_laplace_carriers.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("laplace FM (the modes of a figure modulate its one carrier)",
-                    _run("Laplace FM tests", [py, os.path.join("tests", "test_laplace_fm.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("the seam (engines package, contract, shared ring / panel, articulated scene)",
-                    _run("seam tests", [py, os.path.join("tests", "test_seam.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=600)))
-
-    results.append(("GEN envelope knobs reach the engines that claim them",
-                    _run("GEN envelope tests", [py, os.path.join("tests", "test_gen_envelope.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=600)))
-
-    results.append(("the unified Laplace engine (axes x voicings, the byte anchors)",
-                    _run("unified Laplace tests", [py, os.path.join("tests", "test_laplace_unified.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("golden master",
-                    _run("golden master", [py, os.path.join("tests", "golden", "golden_master.py")])))
-
-    # UI frame dump doubles as the smoke test: it imports, inits pygame/audio,
-    # renders exactly one frame and exits 0.
-    target = UI_REF if bless_ui else UI_OUT
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    dump_ok = _run("ui dump + smoke", [py, "gol_synth.py"],
-                   env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                        "CASYNTH_DUMPFRAME": target}, timeout=120)
-    if bless_ui:
-        results.append(("ui baseline", dump_ok))
-        if dump_ok:
-            print(f"[blessed] new UI baseline written to {UI_REF}")
-    elif dump_ok and os.path.exists(UI_REF):
-        results.append(("ui frame", _compare_ui(UI_REF, UI_OUT)))
-    elif dump_ok:
-        results.append(("ui frame", False))
-        print(f"[FAIL] ui frame: baseline missing at {UI_REF} "
-              f"(bless one with: python check.py --bless-ui)")
+    # -- wave 2: every gate, several at a time, with the timed tests skipped ----
+    if jobs > 1 and len(chosen) > 1:
+        print(f"--- {len(chosen)} gates on {jobs} processes; the timed tests follow, alone ---",
+              flush=True)
+        with cf.ThreadPoolExecutor(jobs) as pool:
+            futures = {pool.submit(_spawn, g.name, g.argv, g.env, g.timeout, True): g
+                       for g in chosen}
+            for fut in cf.as_completed(futures):
+                g = futures[fut]
+                ok, out, dt = fut.result()
+                _report(g.name, ok, out, dt, verbose)
+                results.append((g.label, ok))
     else:
-        results.append(("ui dump + smoke", False))
+        for g in chosen:
+            ok, out, dt = _spawn(g.name, g.argv, g.env, g.timeout, False)
+            _report(g.name, ok, out, dt, verbose)
+            results.append((g.label, ok))
 
-    results.append(("ui clicks (the prototype's event loop)",
-                    _run("ui click probe", [py, os.path.join("tests", "ui_click_probe.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=300)))
-
-    results.append(("it makes a sound (Random + Play on every engine)",
-                    _run("sound probe", [py, os.path.join("tests", "ui_sound_probe.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
-
-    results.append(("the panel follows the knobs (a row that starts acting appears)",
-                    _run("panel probe", [py, os.path.join("tests", "ui_panel_probe.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=300)))
-
-    results.append(("Save turns a session into an experiment the bench can open",
-                    _run("save probe", [py, os.path.join("tests", "ui_save_probe.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=600)))
-
-    results.append(("the VOICE envelope is audible (note off, HOLD, a played line)",
-                    _run("articulation probe",
-                         [py, os.path.join("tests", "ui_articulation_probe.py")],
-                         env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
-                              "PYTHONUTF8": "1"},
-                         timeout=900)))
+    # -- the UI frame: a child renders it, this process compares the pixels ----
+    if not fast or bless_ui:
+        target = UI_REF if bless_ui else UI_OUT
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        dump_ok, out, dt = _spawn(
+            "ui dump + smoke", [py, "gol_synth.py"],
+            dict(DUMMY, CASYNTH_DUMPFRAME=target), 300, False)
+        _report("ui dump + smoke", dump_ok, out, dt, verbose)
+        if bless_ui:
+            results.append(("ui baseline", dump_ok))
+            if dump_ok:
+                print(f"[blessed] new UI baseline written to {UI_REF}")
+        elif dump_ok and os.path.exists(UI_REF):
+            results.append(("ui frame", _compare_ui(UI_REF, UI_OUT)))
+        elif dump_ok:
+            results.append(("ui frame", False))
+            print(f"[FAIL] ui frame: baseline missing at {UI_REF} "
+                  f"(bless one with: python check.py --bless-ui)")
+        else:
+            results.append(("ui dump + smoke", False))
 
     print("--- summary ---")
     failed = [n for (n, ok) in results if not ok]
     for n, ok in results:
         print(f"  {'PASS' if ok else 'FAIL'}  {n}")
-    total = sum(TIMES.values())
-    print(f"--- time: {total:.0f}s total, slowest first ---")
-    for n, t in sorted(TIMES.items(), key=lambda kv: -kv[1])[:12]:
-        print(f"  {t:6.1f}s  {100.0 * t / max(total, 1e-9):4.1f}%  {n}")
+    wall = time.perf_counter() - _T0
+    print(f"--- time: {wall:.0f}s wall ({sum(TIMES.values()):.0f}s of gate time), "
+          f"slowest first ---")
+    for n, t in sorted(TIMES.items(), key=lambda kv: -kv[1])[:10]:
+        print(f"  {t:6.1f}s  {n}")
     if failed:
         print(f"RESULT: FAIL ({', '.join(failed)})")
         return 1
-    print("RESULT: ALL GATES PASS")
+    print("RESULT: ALL GATES PASS" + (" (--fast subset)" if fast else ""))
     return 0
 
 

@@ -19,6 +19,8 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from timing_gate import timing_test              # noqa: E402
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
@@ -434,6 +436,7 @@ class EventNetworkTests(unittest.TestCase):
         self.assertEqual(len(d['events']), 8)
         self.assertGreater(max(d['level']), 0.0)
 
+    @timing_test
     def test_engine_timing_budget(self):
         import time
         g = grid(PULSAR_LIKE)

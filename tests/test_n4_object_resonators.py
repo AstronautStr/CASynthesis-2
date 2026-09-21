@@ -28,6 +28,8 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from timing_gate import timing_test              # noqa: E402
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
@@ -894,6 +896,7 @@ class LevelsTimingAndContractTests(unittest.TestCase):
             self.assertLess(abs(float(np.abs(y).max()) - ref['peak_at_scale_0p5_gain_0p028']), 1e-3)
             self.assertLess(float(np.abs(y).max()), 0.1)
 
+    @timing_test
     def test_engine_timing_budget_on_both_scenes(self):
         from casynth_lab import DemoRunner, load_scene
         budget_ms = BLOCK / SR * 1000.0

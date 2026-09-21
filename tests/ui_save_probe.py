@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 
+os.environ.setdefault('CASYNTH_VOLUME', '0.01')   # a gate must not play music at the room
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)

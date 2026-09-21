@@ -100,6 +100,18 @@ _EXPERIMENT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 'lab_catalog', 'local')
 _MESSAGE_S = 12.0                 # how long the toolbar keeps the last message
 
+def _start_volume():
+    """The master volume the instrument opens at: VOL_DEFAULT, or CASYNTH_VOLUME
+    (0..1) when a test run asks for quiet."""
+    want = os.environ.get('CASYNTH_VOLUME')
+    if want is None:
+        return VOL_DEFAULT
+    try:
+        return min(1.0, max(0.0, float(want)))
+    except ValueError:
+        return VOL_DEFAULT
+
+
 # The tab the instrument opens on; any playable engine id (see `playable`).
 DEFAULT_ENGINE = 'laplace_unified'
 
@@ -349,7 +361,12 @@ def main(autoplay_midi=None):
         # next_step_time: absolute perf_counter deadline for the next GOL step.
         # None until the first Play press; reset to now+interval on each Play.
         next_step_time=None,
-        note=NOTE_DEFAULT, vol=VOL_DEFAULT,
+        note=NOTE_DEFAULT,
+        # CASYNTH_VOLUME (a test hook, like CASYNTH_DUMPFRAME): the gates drive
+        # this prototype for real, and it opens the real sound card -- a check.py
+        # run must not play music at whoever is sitting there.  Absent, the
+        # instrument opens where it always did.
+        vol=_start_volume(),
         kb_base=NOTE_DEFAULT,
         sidebar_open=True,
         # The tab the instrument opens on (user's decision 2026-09-22): Laplace+,

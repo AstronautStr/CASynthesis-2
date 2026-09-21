@@ -28,10 +28,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-# a field of a few hundred cells at -11 dBFS rms renders around 0.4..0.6 pre-clip;
-# these thresholds only have to separate SOUND from SILENCE, not judge a level
-MIN_PEAK = 0.02                 # what the synth reports as its own pre-clip peak
-MIN_RMS = 50.0                  # of the recorded int16, out of 32767
+from casynth_config import VOL_DEFAULT                            # noqa: E402
+
+# The probe drives the REAL prototype, which opens the REAL sound card, so it
+# runs the instrument at 1% volume: a gate must not play music at whoever is
+# sitting there (user, 2026-09-22).  The thresholds only separate SOUND from
+# SILENCE, and they follow the volume down with it.
+VOLUME = float(os.environ.setdefault('CASYNTH_VOLUME', '0.01'))
+_SCALE = max(VOLUME, 1e-6) / VOL_DEFAULT
+# a field of a few hundred cells at -11 dBFS rms renders around 0.4..0.6 pre-clip
+MIN_PEAK = 0.02 * _SCALE        # what the synth reports as its own pre-clip peak
+MIN_RMS = 50.0 * _SCALE         # of the recorded int16, out of 32767
 SECONDS = 6
 
 DRIVER = r'''
@@ -44,7 +51,7 @@ os.environ["CASYNTH_RUN_SECONDS"] = "%(seconds)d"
 sys.path.insert(0, %(root)r)
 import pygame
 import gol_synth
-from casynth_config import GRID_H, CELL
+from casynth_config import GRID_H, CELL, VOL_DEFAULT
 BY = GRID_H * CELL + 8
 
 def click(x, y):
