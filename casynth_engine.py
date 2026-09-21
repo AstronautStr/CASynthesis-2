@@ -219,6 +219,23 @@ class VoiceEnvelope:
         self.phase = 3 if self.gate else 0
         self.rel0 = 0.0
 
+    def retrigger(self, attack_s):
+        """Strike a note although the gate never came up: start the attack again.
+
+        A melody is mostly legato -- in the first minute of the MIDI file the
+        prototype ships with, 199 notes close the mono gate 16 times and every
+        one of those gaps is 0.000 s long.  An envelope that only fires on a
+        gate EDGE therefore never fires at all while a line is played, and the
+        A/D/R knobs do nothing that anybody can hear (2026-09-21).  A struck
+        note is an event of its own, so the host says so (gol_synth: one onset
+        counter written by every note-on -- keyboard, mouse, MIDI, file).
+
+        The arithmetic is exactly the gate edge's, so with the default knobs
+        (A = 0, S = 1) it lands on 1.0: a no-op, the historical sound."""
+        self.phase = 1
+        if attack_s <= 0.0:                        # instant attack
+            self.level, self.phase = 1.0, 2
+
     def block(self, gate, attack_s, decay_s, sustain, release_s, dt=CHUNK_S):
         """One chunk on the LIVE knob values (seconds; sustain is a level).
         Returns the level at the end of the chunk."""

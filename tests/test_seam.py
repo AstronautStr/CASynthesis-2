@@ -328,6 +328,33 @@ class VoiceEnvelopeIsOneLaw(unittest.TestCase):
                 got = [venv.block(g, va, vd, vs, vr) for g in gates]
                 self.assertEqual(got, want, f"A={va} D={vd} S={vs} R={vr} gate0={gate0}")
 
+    def test_a_struck_note_restarts_the_attack_under_a_held_gate(self):
+        """The bug a melody exposed: the gate practically never comes up between
+        two notes (199 notes of the shipped MIDI file close the mono gate 16
+        times, every gap 0.000 s long), so an envelope that only fires on a gate
+        EDGE never fires while a line is played.  retrigger() is that edge's
+        arithmetic, asked for by the onset instead."""
+        va, vd, vs, vr = 0.2, 0.1, 0.3, 0.5
+        venv = VoiceEnvelope(gate=True)
+        for _ in range(60):                     # settle on the sustain level
+            venv.block(True, va, vd, vs, vr)
+        self.assertAlmostEqual(venv.level, vs, places=6)
+        venv.retrigger(va)                      # a struck note, gate never moved
+        self.assertEqual(venv.phase, 1)
+        rising = [venv.block(True, va, vd, vs, vr) for _ in range(4)]
+        self.assertTrue(all(b > a for a, b in zip(rising, rising[1:])),
+                        f"the attack did not rise again: {rising}")
+
+    def test_a_struck_note_is_a_no_op_with_the_default_envelope(self):
+        """What keeps every scene and record: A = 0, S = 1 lands on 1.0."""
+        venv = VoiceEnvelope(gate=True)
+        for _ in range(5):
+            venv.retrigger(VOICE_ATTACK_MS_DEFAULT / 1000.0)
+            self.assertEqual(venv.block(True, VOICE_ATTACK_MS_DEFAULT / 1000.0,
+                                        VOICE_DECAY_MS_DEFAULT / 1000.0,
+                                        VOICE_SUSTAIN_DEFAULT,
+                                        VOICE_RELEASE_MS_DEFAULT / 1000.0), 1.0)
+
     def test_the_default_envelope_is_a_no_op_multiplier(self):
         venv = VoiceEnvelope(gate=True)
         for _ in range(50):

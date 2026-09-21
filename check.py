@@ -40,8 +40,10 @@ Gates (any FAIL -> exit 1):
   3c. it makes a sound python tests/ui_sound_probe.py             (Random + Play with the
                        MOUSE on every engine the prototype offers, then: did the level
                        move and was anything recorded -- the question a player asks)
-  3d. note off / HOLD  python tests/ui_hold_probe.py              (letting a key go
-                       releases the note; with HOLD lit it keeps sounding)
+  3d. articulation     python tests/ui_articulation_probe.py      (letting a key go
+                       releases the note; HOLD lit keeps it sounding; and a played
+                       MIDI line re-articulates note by note although its gate
+                       never comes up)
 
 Keep stdout ASCII-only: the default Windows console codepage (cp1251) chokes on
 fancy glyphs, and agents run this a lot.
@@ -250,11 +252,12 @@ def main():
                               "PYTHONUTF8": "1"},
                          timeout=900)))
 
-    results.append(("a key that comes up releases the note (and HOLD latches it)",
-                    _run("hold probe", [py, os.path.join("tests", "ui_hold_probe.py")],
+    results.append(("the VOICE envelope is audible (note off, HOLD, a played line)",
+                    _run("articulation probe",
+                         [py, os.path.join("tests", "ui_articulation_probe.py")],
                          env={"SDL_VIDEODRIVER": "dummy", "SDL_AUDIODRIVER": "dummy",
                               "PYTHONUTF8": "1"},
-                         timeout=600)))
+                         timeout=900)))
 
     print("--- summary ---")
     failed = [n for (n, ok) in results if not ok]

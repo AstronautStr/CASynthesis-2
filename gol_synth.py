@@ -347,6 +347,12 @@ def main(autoplay_midi=None):
         # the mouse on the piano, a MIDI note-off, the file player.  It starts up,
         # so a field sounds the moment the synth opens.
         gate=True,
+        # ONSET counter (2026-09-21): every note-on bumps it, whoever struck the
+        # note -- keyboard, mouse, MIDI device, file player.  The render thread
+        # watches it and re-starts the VOICE attack, because a melody is legato:
+        # the gate almost never comes up between two notes, and an envelope that
+        # only fires on a gate EDGE never fires at all while a line is played.
+        onset=0,
         # HOLD (2026-09-21): while on, a note can only be REPLACED, never released
         # -- the latch the prototype has always had.  Off, the VOICE release runs
         # when the key comes up, which is the only way to hear that block at all
@@ -962,6 +968,7 @@ def main(autoplay_midi=None):
         # The arithmetic lives in casynth_engine.VoiceEnvelope since 2026-09-21 --
         # the bench articulates a scene's notes with the same class, not a copy.
         venv = VoiceEnvelope(gate=last_gate)
+        last_onset = last_rec_onset = state['onset']
         while audio_ctl['alive']:
             if host.full():
                 time.sleep(0.001)      # ring full -> idle briefly
@@ -976,8 +983,17 @@ def main(autoplay_midi=None):
             # the ONLY articulation gate: the oscillator (the CA field) is fed to the
             # engine ALWAYS, so a note change never retriggers a per-mode envelope --
             # it just re-articulates this scalar VCA, which lives OUTSIDE the engine.
+            # A STRUCK note re-articulates even under a held legato line: the
+            # gate edge is not the only thing that starts this envelope, or a
+            # melody (where the gate practically never comes up between notes)
+            # would never hear the A/D/R knobs at all.
+            _attack_s = state['voice_attack_ms'] / 1000.0
+            onset = state['onset']
+            if onset != last_onset:
+                venv.retrigger(_attack_s)
+                last_onset = onset
             level = venv.block(gate,
-                               state['voice_attack_ms'] / 1000.0,
+                               _attack_s,
                                state['voice_decay_ms'] / 1000.0,
                                float(state['voice_sustain']),
                                state['voice_release_ms'] / 1000.0)
@@ -1013,8 +1029,12 @@ def main(autoplay_midi=None):
             meter['clip'] = n_clip > 0
             if rec is not None:
                 rec['chunks'].append(buf)
-                if note != last_note or gate != last_gate:
+                # An onset with the SAME note under a held gate changes neither of
+                # them, and used to leave no trace at all -- so a scene built from
+                # the session re-articulated fewer times than the prototype did.
+                if note != last_note or gate != last_gate or onset != last_rec_onset:
                     rec['midi_onsets'].append((cum, int(note), bool(gate)))
+                    last_rec_onset = onset
                 rec['underruns'] = host.underruns
             last_note, last_gate = note, gate
             cum += len(buf)
@@ -1029,6 +1049,7 @@ def main(autoplay_midi=None):
                 state['midi_held'].append(msg.note)
             state['note'] = msg.note
             state['gate'] = True
+            state['onset'] += 1
         elif msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
             if msg.note in state['midi_held']:
                 state['midi_held'].remove(msg.note)
@@ -1057,6 +1078,7 @@ def main(autoplay_midi=None):
             _mf_held.append(note)           # newest at the end
             state['note'] = note            # last-note priority: jump to the onset
             state['gate'] = True
+            state['onset'] += 1
         else:
             if note in _mf_held:
                 _mf_held.remove(note)
@@ -1166,6 +1188,7 @@ def main(autoplay_midi=None):
                     _kb_held.append(e.key)          # newest last: last-note priority
                     state['note'] = state['kb_base'] + _KB_PIANO[e.key]
                     state['gate'] = True
+                    state['onset'] += 1             # a struck note re-articulates
                 elif e.key == pygame.K_z:
                     state['kb_base'] = max(KB_BASE_MIN, state['kb_base'] - 12)
                     white_keys, black_keys = _make_piano(state['kb_base'], piano_top, W)
@@ -1255,6 +1278,7 @@ def main(autoplay_midi=None):
                         if m is not None:
                             state['note'] = m
                             state['gate'] = True
+                            state['onset'] += 1
                             _mouse_piano['on'] = True    # held until the button comes up
                     else:
                         tab_hit = next((t for t in engine_tabs

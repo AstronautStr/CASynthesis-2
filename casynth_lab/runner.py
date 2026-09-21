@@ -451,6 +451,14 @@ class DemoRunner:
                 self.venv = VoiceEnvelope(gate=self.gate)
             if kind == 'note':
                 self.note = int(args['note'])
+                # A STRUCK note re-articulates even under a held gate -- the same
+                # rule the prototype plays by (2026-09-21).  A scene taken from a
+                # session is mostly legato: without this its VCA would sit at
+                # sustain while the prototype's was being restarted note by note.
+                # With the default envelope (A = 0, S = 1) it lands on 1.0, so no
+                # scene or record made so far changes.
+                v = (self.scene.envelope or {}).get('voice') or VOICE_DEFAULT
+                self.venv.retrigger(v['attack_ms'] / 1000.0)
             else:
                 self.gate = bool(args['on'])
         elif kind == 'select':
