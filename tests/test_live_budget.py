@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """The instrument has to come in time on the fields the user actually played.
 
-Two cases, both read out of his own sessions of 2026-09-22 (the telemetry of
-artifacts/perf/perf_*.npz beside the session log the prototype wrote):
+Three cases.  The first two are read out of his own sessions of 2026-09-22 (the
+telemetry of artifacts/perf/perf_*.npz beside the session log the prototype
+wrote); the third he named himself on 2026-09-22 -- a Random field with the
+Events articulation and the FM voicing -- and it is measured here on the field
+and the knobs the first case already carries.
 
     EventsArticulationBudget   switching `artic` from Env to Events starved the
                                device -- 504 underruns in ten seconds
     HarmDragBudget             dragging `harm` starved it again -- 1000 underruns
                                in 103 seconds, `rend` reaching 165 ms
+    EventsFMBudget             Events + FM on a Random field costs three times
+                               real time -- the cell nothing has optimised yet
 
 Each one carries the field, the knobs, the tempo and the note of the moment the
 underruns began, and asks the render thread for what it owes the device.
@@ -115,6 +120,7 @@ SETTINGS = dict(n=20, spread=1.0, alpha=0.0, shape=1.0, harm=1.0, fullshape=1,
                 dyn=1.0, voice=0, waveform=2, events=0, fm_depth=1.0,
                 radius_mul=1.0, decay_s=0.8, attack_ms=0.0)
 ARTIC_ENV, ARTIC_EVENTS = 0, 1
+VOICE_BANK, VOICE_FM = 0, 1
 STEPS_PER_S = 12.0            # bpm 120 at 1/16T, the division the session was on
 GAIN = MASTER_GAIN * 0.7      # master gain at the volume the player had
 GEN_ENV = (0.0, 0.0, 1.0, 0.1, False)     # gen attack / decay / sustain / release / slew
@@ -201,7 +207,6 @@ HARM_SETTINGS = dict(n=20, spread=1.0, alpha=0.0, shape=1.0, harm=0.75,
                      fullshape=1, dyn=1.0, artic=ARTIC_ENV, voice=0, waveform=2,
                      fm_depth=0.8333333333333334, events=0, radius_mul=1.0,
                      decay_s=0.8, attack_ms=0.0)
-VOICE_BANK, VOICE_FM = 0, 1
 
 
 def grid_of(rows):
@@ -302,25 +307,30 @@ def report(name, got):
     return allv.mean(), float(p[int(n * .99)]), float(b.max())
 
 
+def assert_comes_in_time(case, name, params):
+    """The three things "in time" means, asked of one cell on one field with the
+    knobs standing still.  Every case that does not drag a knob measures here."""
+    mean, plain_p99, worst_boundary = report(name, run_blocks(params))
+    case.assertLess(mean, MEAN_CEILING,
+                    f"{name}: a block costs {mean:.2f} ms of the {BUDGET_MS:.2f} ms "
+                    f"budget on average, over the {MEAN_CEILING:.2f} ms ceiling -- "
+                    f"one second of sound costs "
+                    f"{mean * (1.0 / CHUNK_S) / 1000:.2f} s")
+    case.assertLess(plain_p99, BUDGET_MS,
+                    f"{name}: an ordinary block (no new generation) reaches "
+                    f"{plain_p99:.2f} ms at p99, over the {BUDGET_MS:.2f} ms budget")
+    case.assertLess(worst_boundary, BOUNDARY_CEILING,
+                    f"{name}: the block that takes a new generation costs "
+                    f"{worst_boundary:.2f} ms, more than the {BOUNDARY_CEILING:.0f} ms "
+                    f"of look-ahead the host keeps -- one boundary empties the ring")
+
+
 @timing_test
 class EventsArticulationBudget(unittest.TestCase):
     """The user's 2026-09-22 case: one knob (`artic`) starved the device."""
 
     def _check(self, name, artic):
-        mean, plain_p99, worst_boundary = report(
-            name, run_blocks(dict(SETTINGS, artic=artic)))
-        self.assertLess(mean, MEAN_CEILING,
-                        f"{name}: a block costs {mean:.2f} ms of the {BUDGET_MS:.2f} ms "
-                        f"budget on average, over the {MEAN_CEILING:.2f} ms ceiling -- "
-                        f"one second of sound costs "
-                        f"{mean * (1.0 / CHUNK_S) / 1000:.2f} s")
-        self.assertLess(plain_p99, BUDGET_MS,
-                        f"{name}: an ordinary block (no new generation) reaches "
-                        f"{plain_p99:.2f} ms at p99, over the {BUDGET_MS:.2f} ms budget")
-        self.assertLess(worst_boundary, BOUNDARY_CEILING,
-                        f"{name}: the block that takes a new generation costs "
-                        f"{worst_boundary:.2f} ms, more than the {BOUNDARY_CEILING:.0f} ms "
-                        f"of look-ahead the host keeps -- one boundary empties the ring")
+        assert_comes_in_time(self, name, dict(SETTINGS, artic=artic))
 
     def test_env_holds_real_time(self):
         """The articulation that was fine stays fine -- the anchor a fix to
@@ -331,6 +341,53 @@ class EventsArticulationBudget(unittest.TestCase):
         """Events on the same field and the same settings: what the player heard
         break when he moved `artic`."""
         self._check('Events', ARTIC_EVENTS)
+
+
+@timing_test
+class EventsFMBudget(unittest.TestCase):
+    """THE THIRD CASE (named by the player on 2026-09-22): a Random field, the
+    Events articulation, the FM voicing -- and the device starves again.
+
+    Measured on the field and the knobs above (headless, machine idle), per
+    rendered block of the 7.98 ms budget:
+
+        Events + Bank + Sine     1.93 ms    0.24 s of work per second of sound
+        Events + Bank + Square   3.39 ms    0.42
+        Env    + FM              3.74 ms    0.47
+        Events + FM             25.6  ms    3.21        <- this test
+
+    So it is neither the articulation nor the voicing: it is the CELL where they
+    meet, the one cell of the six that no speed pass has touched.  Two reasons,
+    and both are in unified_events.EventsFMCell.render_float:
+
+    1. the FM law builds its phase sum at OVERSAMPLE x sr, and every mode of
+       every figure is a modulator with a sine of its own -- on this field 1018
+       modulators and 113 carriers, which is 3.2 million sines inside one 7.98 ms
+       block.  _fm_sum alone is 21.1 of the 25.4 ms; _amps is 2.3.
+    2. it is the ONLY kernel of this family still rendering the block on one
+       thread.  The wave bank divides its slots over render_pool and Env + FM
+       divides its samples; this one divides nothing.
+
+    And the work is not where the music is: of those 113 carriers 23 are figures
+    still being struck and 90 are TAILS ringing out, carrying 82% of the
+    modulators.  `n` is no way out either -- at n = 2 (206 modulators) the block
+    still costs 9.05 ms, because the floor is the number of FIGURES, not modes.
+
+    The ceilings are the ones above, unchanged: the knobs stand still here, so
+    this is the 0.6 measurement, not the looser one a drag is allowed."""
+
+    def test_events_fm_holds_real_time(self):
+        """Events + FM: what the player reported on a Random field."""
+        assert_comes_in_time(self, 'Ev+FM',
+                             dict(SETTINGS, artic=ARTIC_EVENTS, voice=VOICE_FM))
+
+    def test_env_fm_holds_real_time(self):
+        """Env + FM on the same field -- the voicing that was fine on the
+        articulation that was fine.  It shares laplace_fm's kernel, its Kaiser
+        FIR and its DC blocker with the cell above, so it is the anchor: a fix to
+        Events + FM must not be a slowdown of the engine the player already had."""
+        assert_comes_in_time(self, 'En+FM',
+                             dict(SETTINGS, artic=ARTIC_ENV, voice=VOICE_FM))
 
 
 @timing_test

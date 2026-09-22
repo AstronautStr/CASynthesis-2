@@ -105,8 +105,8 @@ TAIL_FLOOR = orz.TAIL_FLOOR
 # slot's state is its own), the ramps are what the sample loop computed, and L is
 # still accumulated over slots in ascending slot order -- so the additions happen
 # in the order they always did.  The gate that holds this is
-# tests/test_laplace_unified.ThreadedWaveRender, which runs the same state
-# through one thread and through the pool and compares samples bit for bit.
+# tests/test_laplace_unified.ThreadedRender, which runs the same live scene
+# through one thread and through the pool and compares the blocks bit for bit.
 
 
 @_jit
@@ -393,7 +393,11 @@ def _amps(n, role, ndrive, npulse, nlive, zre, zim, cth, sth,
     row_of[s, j] : the row of `amp` a mode writes, -1 = not carried this block.
     slot_of[s]   : the row of `carr` / `panl` / `panr` a slot writes, -1 = silent.
     `gain` is the block's ramped master gain, sample by sample (the kernel owns
-    that ramp in this engine, so the voicing must get it from here)."""
+    that ramp in this engine, so the voicing must get it from here).
+
+    THE SINGLE LOOP: render_amps below divides this over the pool the same way
+    the wave readout divides its own, and falls back to this form when there is
+    nothing to divide.  It is also what the threading gate compares against."""
     S = role.shape[0]
     qf = cst[en.C_QF]; qs = cst[en.C_QS]; strength = cst[en.C_STRENGTH]
     for s in range(S):
@@ -500,6 +504,166 @@ def _amps(n, role, ndrive, npulse, nlive, zre, zim, cth, sth,
 
 
 @_jit
+def _amps_ramps(n, rr, gg, qq, ints, rb, qb, gain):
+    """The per-sample ramps the whole block shares -- the decay r, the gain g and
+    the packet pole q.  Lifted out of the sample loop so a worker never touches
+    them; the arithmetic, and the order of it, is the sample loop's own."""
+    for t in range(n):
+        k = ints[I_K]
+        left = ints[I_R_LEFT]
+        if left > 0:
+            left -= 1
+            if left == 0:
+                rr[R_CUR] = rr[R_TGT]
+            else:
+                rr[R_CUR] = rr[R_CUR] + rr[R_INC]
+            ints[I_R_LEFT] = left
+        left = ints[I_G_LEFT]
+        if left > 0:
+            left -= 1
+            if left == 0:
+                gg[R_CUR] = gg[R_TGT]
+            else:
+                gg[R_CUR] = gg[R_CUR] + gg[R_INC]
+            ints[I_G_LEFT] = left
+        left = ints[I_Q_LEFT]
+        if left > 0:
+            left -= 1
+            if left == 0:
+                qq[R_CUR] = qq[R_TGT]
+            else:
+                qq[R_CUR] = qq[R_CUR] + qq[R_INC]
+            ints[I_Q_LEFT] = left
+        rb[t] = rr[R_CUR]
+        gain[t] = gg[R_CUR]
+        qb[t] = qq[R_CUR]
+        ints[I_K] = k + 1
+
+
+@_jit
+def _amps_slots(lo, hi, n, slots, role, ndrive, npulse, nlive, zre, zim, cth, sth,
+                wcur, winc, wtgt, wleft, zf, zs, zu, zfm, zsm, zum, pan, pleft,
+                cst, level, slaw, gam_a, gam_t, ksm, sr,
+                row_of, slot_of, amp, carr, panl, panr, rb, qb):
+    """Slots slots[lo:hi] across the whole block: the body of _amps with the two
+    loops turned inside out.  A slot's state is its own and it writes its own
+    rows of `amp` / `carr` / `panl` / `panr`, so two slots share nothing."""
+    qf = cst[en.C_QF]
+    qs = cst[en.C_QS]
+    strength = cst[en.C_STRENGTH]
+    for si in range(lo, hi):
+        s = slots[si]
+        lev = 0.0
+        for t in range(n):
+            r = rb[t]
+            q = qb[t]
+            nl = nlive[s]
+            wl = wleft[s]
+            if wl > 0:
+                wl -= 1
+                if wl == 0:
+                    for j in range(nl):
+                        wcur[s, j] = wtgt[s, j]
+                else:
+                    for j in range(nl):
+                        wcur[s, j] = wcur[s, j] + winc[s, j]
+                wleft[s] = wl
+            pl = pleft[s]
+            if pl > 0:
+                pl -= 1
+                if pl == 0:
+                    pan[s, P_LCUR] = pan[s, P_LTGT]
+                    pan[s, P_RCUR] = pan[s, P_RTGT]
+                else:
+                    pan[s, P_LCUR] = pan[s, P_LCUR] + pan[s, P_LINC]
+                    pan[s, P_RCUR] = pan[s, P_RCUR] + pan[s, P_RINC]
+                pleft[s] = pl
+            p = strength * ((1.0 - qf) * zf[s] - (1.0 - qs) * zs[s]) / (qs - qf)
+            zf[s] = zf[s] * qf
+            zs[s] = zs[s] * qs
+            u = q * zu[s] + (1.0 - q) * p
+            zu[s] = u
+            p = u
+            nd = ndrive[s] if role[s] == ROLE_ACTIVE else npulse[s]
+            adaptive = slaw[s] == 1
+            ssq = 0.0
+            for j in range(nl):
+                re = zre[s, j]
+                im = zim[s, j]
+                c = cth[s, j]
+                sn = sth[s, j]
+                if adaptive:
+                    ga = ksm * gam_a[s, j] + (1.0 - ksm) * gam_t[s, j]
+                    gam_a[s, j] = ga
+                    rj = math.exp(-ga / sr)
+                else:
+                    rj = r
+                if j < nd:
+                    pm = strength * ((1.0 - qf) * zfm[s, j] - (1.0 - qs) * zsm[s, j]) / (qs - qf)
+                    zfm[s, j] = zfm[s, j] * qf
+                    zsm[s, j] = zsm[s, j] * qs
+                    um = q * zum[s, j] + (1.0 - q) * pm
+                    zum[s, j] = um
+                    nre = rj * (c * re - sn * im) + (p + um)
+                else:
+                    nre = rj * (c * re - sn * im)
+                nim = rj * (sn * re + c * im)
+                zre[s, j] = nre
+                zim[s, j] = nim
+                row = row_of[s, j]
+                if row >= 0:
+                    a = wcur[s, j] * math.sqrt(nre * nre + nim * nim)
+                    amp[row, t] = a
+                    ssq += a * a
+            v = slot_of[s]
+            if v >= 0:
+                A = math.sqrt(ssq)
+                carr[v, t] = A
+                panl[v, t] = pan[s, P_LCUR]
+                panr[v, t] = pan[s, P_RCUR]
+                if A > lev:
+                    lev = A
+        level[s] = lev
+
+
+def render_amps(n, role, ndrive, npulse, nlive, zre, zim, cth, sth,
+                wcur, winc, wtgt, wleft, zf, zs, zu, zfm, zsm, zum, pan, pleft,
+                rr, gg, qq, ints, cst, level, slaw, gam_a, gam_t, ksm, sr,
+                row_of, slot_of, amp, carr, panl, panr, gain,
+                scratch=None, threads=None):
+    """One block of the trajectories, the slots divided over the render pool.
+
+    With one thread -- or with too few slots to be worth a hand-off -- it IS
+    _amps, the single loop above."""
+    parts = render_pool.THREADS if threads is None else int(threads)
+    pool = render_pool.pool(threads)
+    head = (n, role, ndrive, npulse, nlive, zre, zim, cth, sth,
+            wcur, winc, wtgt, wleft, zf, zs, zu, zfm, zsm, zum, pan, pleft)
+    if pool is None or parts <= 1:
+        _amps(*head, rr, gg, qq, ints, cst, level, slaw, gam_a, gam_t, ksm, sr,
+              row_of, slot_of, amp, carr, panl, panr, gain)
+        return
+    if scratch is None or scratch.n != n or scratch.slots.shape[0] < role.shape[0]:
+        scratch = FMScratch(role.shape[0], row_of.shape[1], n, n)
+    n_slots = _live_slots(role, scratch.slots)
+    if n_slots < 2 * parts:
+        _amps(*head, rr, gg, qq, ints, cst, level, slaw, gam_a, gam_t, ksm, sr,
+              row_of, slot_of, amp, carr, panl, panr, gain)
+        return
+    level[:] = 0.0                       # a free slot reports no level, as before
+    _amps_ramps(n, rr, gg, qq, ints, scratch.rb, scratch.qb, gain)
+    rest = (n, scratch.slots, role, ndrive, npulse, nlive, zre, zim, cth, sth,
+            wcur, winc, wtgt, wleft, zf, zs, zu, zfm, zsm, zum, pan, pleft,
+            cst, level, slaw, gam_a, gam_t, ksm, sr,
+            row_of, slot_of, amp, carr, panl, panr, scratch.rb, scratch.qb)
+    spans = render_pool.ranges(n_slots, parts)
+    futures = [pool.submit(_amps_slots, a, b, *rest) for a, b in spans[1:]]
+    _amps_slots(spans[0][0], spans[0][1], *rest)     # the caller takes a share
+    for f in futures:
+        f.result()
+
+
+@_jit
 def _fm_sum(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
             panl, panl_prev, panr, panr_prev, row_start, inc_mod, th_mod,
             inc_c, th_c, out_l, out_r):
@@ -508,7 +672,12 @@ def _fm_sum(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
 
     The trajectories arrive on the audio clock and are read linearly between
     consecutive samples (sub-sample os-1 of a group IS that sample), so an index
-    never steps.  `*_prev` is the value the last block ended on."""
+    never steps.  `*_prev` is the value the last block ended on.
+
+    THE SINGLE LOOP, kept as it was written: render_fm below is what the cell
+    calls, and this is the reference its gate compares against (the wave bank
+    keeps laplace_carriers.render_reference for the same reason).  The law tests
+    of tests/test_laplace_unified read the law off this form."""
     V = carr.shape[0]
     for m in range(n_os):
         t = m // oversample
@@ -538,6 +707,163 @@ def _fm_sum(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
             R += (r0 + (panr[v, t] - r0) * fr) * y
         out_l[m] = L
         out_r[m] = R
+
+
+# ── the same sum, built by CARRIER instead of by sample (2026-09-22) ──────────
+#
+# WHY.  On the prototype's own Random field this cell cost 25.6 ms of the 7.98 ms
+# block -- three times real time, and the device starved the moment the player
+# put the FM voicing on the Events articulation (the case
+# tests/test_live_budget.EventsFMBudget carries).  The reason is the law itself:
+# every mode of every figure is a modulator with a sine of its own, and the sum
+# is built at OVERSAMPLE x sr, so that field asks for 1018 modulators and 113
+# carriers = 3.2 million sines inside one block.  _fm_sum alone was 21.1 of those
+# 25.6 ms, and it was the only kernel of this family still on one thread: the
+# wave bank divides its slots, Env + FM divides its samples, this one divided
+# nothing.
+#
+# The SAMPLES cannot be divided here either -- a modulator's phase free-runs from
+# the value the state gave it, so sample m needs m - 1 -- but the CARRIERS can: a
+# carrier shares nothing with its neighbour except the sum at the very end.  So
+# the sum became two passes, the shape the wave readout already has:
+#
+#   _fm_slots   a RANGE OF CARRIERS, each carried across the whole oversampled
+#               block, writing what that carrier sounds; this is the pass the
+#               workers share
+#   _fm_mix     the pan and the sum over carriers IN CARRIER ORDER
+#
+# The bytes do not move.  A carrier's modulators are its own rows of `amp` and of
+# `th_mod` (the rows are grouped by slot), so each phase advances once per
+# oversampled sample in the order it always did; the pan is applied and L is
+# accumulated over carriers in ascending order, which is the order the single
+# loop added them in.  The gate is tests/test_laplace_unified.ThreadedRender.
+
+
+@_jit
+def _fm_slots(v0, v1, n_os, oversample, index, amp, amp_prev, carr, carr_prev,
+              row_start, inc_mod, th_mod, inc_c, th_c, yv):
+    """The carriers [v0, v1) of one block, each with its own modulators -- the
+    arithmetic of _fm_sum with the two loops turned inside out."""
+    for v in range(v0, v1):
+        k0 = row_start[v]
+        k1 = row_start[v + 1]
+        thc = th_c[v]
+        for m in range(n_os):
+            t = m // oversample
+            fr = (m % oversample + 1) / oversample
+            acc = 0.0
+            for k in range(k0, k1):
+                a0 = amp_prev[k] if t == 0 else amp[k, t - 1]
+                a = a0 + (amp[k, t] - a0) * fr
+                acc += index * a * math.sin(th_mod[k])
+                thn = th_mod[k] + inc_mod[k]
+                if thn >= TWO_PI:
+                    thn -= TWO_PI
+                th_mod[k] = thn
+            A0 = carr_prev[v] if t == 0 else carr[v, t - 1]
+            A = A0 + (carr[v, t] - A0) * fr
+            yv[v, m] = A * math.sin(thc + acc)
+            thn = thc + inc_c
+            if thn >= TWO_PI:
+                thn -= TWO_PI
+            thc = thn
+        th_c[v] = thc
+
+
+@_jit
+def _fm_mix(n_os, oversample, yv, n_v, panl, panl_prev, panr, panr_prev,
+            out_l, out_r):
+    """The pan and the sum over carriers -- in carrier order, the order the
+    single loop added them in."""
+    for m in range(n_os):
+        t = m // oversample
+        fr = (m % oversample + 1) / oversample
+        L = 0.0
+        R = 0.0
+        for v in range(n_v):
+            y = yv[v, m]
+            l0 = panl_prev[v] if t == 0 else panl[v, t - 1]
+            r0 = panr_prev[v] if t == 0 else panr[v, t - 1]
+            L += (l0 + (panl[v, t] - l0) * fr) * y
+            R += (r0 + (panr[v, t] - r0) * fr) * y
+        out_l[m] = L
+        out_r[m] = R
+
+
+class FMScratch:
+    """The room one FM block needs: the ramps the trajectories share, the live
+    slots, the trajectories themselves, and what each carrier sounded sample by
+    OVERSAMPLED sample.  A cell keeps one -- on the field above `yv` is 113 x 2816
+    doubles and `amp` is 1018 x 352, and asking the OS for 5 MB 125 times a second
+    is exactly the kind of cost these splits are meant to remove.
+
+    Nothing here is cleared between blocks except the two index maps: the kernels
+    write every element they read (every row of `amp` on every sample, every
+    carrier of `carr` / `panl` / `panr`, every sample of `l_os` / `r_os`), and the
+    one case that does not -- a block with no carrier at all -- clears the two
+    oversampled buffers itself."""
+
+    __slots__ = ('n', 'n_os', 'rb', 'qb', 'slots', 'yv', 'row_of', 'slot_of',
+                 'l_os', 'r_os', '_amp', '_carr', '_panl', '_panr')
+
+    GRAIN = 128                          # `amp` grows in whole handfuls of rows
+
+    def __init__(self, slots_max, modes_max, n, n_os):
+        slots_max = max(int(slots_max), 1)
+        self.n = int(n)
+        self.n_os = int(n_os)
+        self.rb = np.zeros(n)
+        self.qb = np.zeros(n)
+        self.slots = np.zeros(slots_max, np.int64)
+        self.yv = np.zeros((slots_max, int(n_os)))
+        self.row_of = np.full((slots_max, max(int(modes_max), 1)), -1, np.int64)
+        self.slot_of = np.full(slots_max, -1, np.int64)
+        self.l_os = np.zeros(int(n_os))
+        self.r_os = np.zeros(int(n_os))
+        self._amp = np.zeros((self.GRAIN, n))
+        self._carr = np.zeros((slots_max, n))
+        self._panl = np.zeros((slots_max, n))
+        self._panr = np.zeros((slots_max, n))
+
+    def room(self, k, v):
+        """`amp`, `carr`, `panl`, `panr` for a block of k modes and v carriers,
+        and the two index maps emptied.  The buffers only ever grow."""
+        k = max(int(k), 1)
+        v = max(int(v), 1)
+        if self._amp.shape[0] < k:
+            rows = -(-k // self.GRAIN) * self.GRAIN
+            self._amp = np.zeros((rows, self.n))
+        self.row_of.fill(-1)
+        self.slot_of.fill(-1)
+        return (self._amp[:k], self._carr[:v], self._panl[:v], self._panr[:v])
+
+
+def render_fm(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
+              panl, panl_prev, panr, panr_prev, row_start, inc_mod, th_mod,
+              inc_c, th_c, out_l, out_r, scratch=None, threads=None):
+    """One block of the FM readout, the carriers divided over the render pool.
+
+    With one thread -- or with too few carriers to be worth a hand-off -- it IS
+    _fm_sum, the single loop above."""
+    n_v = carr.shape[0]
+    parts = render_pool.THREADS if threads is None else int(threads)
+    pool = render_pool.pool(threads)
+    if pool is None or parts <= 1 or n_v < 2 * parts:
+        _fm_sum(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
+                panl, panl_prev, panr, panr_prev, row_start, inc_mod, th_mod,
+                inc_c, th_c, out_l, out_r)
+        return
+    if scratch is None or scratch.n_os != n_os or scratch.yv.shape[0] < n_v:
+        scratch = FMScratch(n_v, 1, n_os // oversample, n_os)
+    rest = (n_os, oversample, index, amp, amp_prev, carr, carr_prev, row_start,
+            inc_mod, th_mod, inc_c, th_c, scratch.yv)
+    spans = render_pool.ranges(n_v, parts)
+    futures = [pool.submit(_fm_slots, a, b, *rest) for a, b in spans[1:]]
+    _fm_slots(spans[0][0], spans[0][1], *rest)       # the caller takes a share
+    for f in futures:
+        f.result()
+    _fm_mix(n_os, oversample, scratch.yv, n_v, panl, panl_prev, panr, panr_prev,
+            out_l, out_r)
 
 
 # -- band-limited wave tables, kept across blocks ------------------------------
@@ -760,6 +1086,8 @@ class EventsFMCell(_EventsCell):
         self.dc_xr = self.dc_yr = 0.0
         self._gain = np.zeros(self.n)
         self._out = np.zeros((self.n, 2))
+        # the room one block needs, kept for the life of the cell (see FMScratch)
+        self._scratch = FMScratch(S, M, self.n, self.n * self.oversample)
         self._n_rows = 0
         self._n_carriers = 0
 
@@ -771,32 +1099,31 @@ class EventsFMCell(_EventsCell):
         obj = self.obj
         obj.begin_block(gain, transpose, gain_prev)
         n, os = self.n, self.oversample
-        S, M = obj.role.shape[0], obj.zre.shape[1]
         sel, freq = self._selection(transpose, audible_only=True)
         slots = np.nonzero(sel.any(axis=1))[0]
         rs, rj = np.nonzero(sel)
         V, K = len(slots), len(rs)
         self._n_rows, self._n_carriers = K, V
-        row_of = np.full((S, M), -1, np.int64)
-        slot_of = np.full(S, -1, np.int64)
+        sc = self._scratch
+        row_of, slot_of = sc.row_of, sc.slot_of
+        amp, carr, panl, panr = sc.room(K, V)
         row_of[rs, rj] = np.arange(K)
         slot_of[slots] = np.arange(V)
         zre0 = obj.zre[rs, rj].copy()            # the state the block STARTS from
         zim0 = obj.zim[rs, rj].copy()
-        amp = np.zeros((max(K, 1), n))
-        carr = np.zeros((max(V, 1), n))
-        panl = np.zeros((max(V, 1), n))
-        panr = np.zeros((max(V, 1), n))
-        _amps(n, obj.role, obj.ndrive, obj.npulse, obj.nlive, obj.zre, obj.zim,
-              obj.cth, obj.sth, obj.wcur, obj.winc, obj.wtgt, obj.wleft, obj.zf,
-              obj.zs, obj.zu, obj.zfm, obj.zsm, obj.zum, obj.pan, obj.pleft,
-              obj.rr, obj.gg, obj.qq, obj.ints, obj.consts, obj.level, obj.slaw,
-              obj.gam_a, obj.gam_t, obj.ksm, obj.sr,
-              row_of, slot_of, amp, carr, panl, panr, self._gain)
+        render_amps(n, obj.role, obj.ndrive, obj.npulse, obj.nlive, obj.zre,
+                    obj.zim, obj.cth, obj.sth, obj.wcur, obj.winc, obj.wtgt,
+                    obj.wleft, obj.zf, obj.zs, obj.zu, obj.zfm, obj.zsm, obj.zum,
+                    obj.pan, obj.pleft, obj.rr, obj.gg, obj.qq, obj.ints,
+                    obj.consts, obj.level, obj.slaw, obj.gam_a, obj.gam_t,
+                    obj.ksm, obj.sr, row_of, slot_of, amp, carr, panl, panr,
+                    self._gain, scratch=self._scratch)
         n_os = n * os
-        l_os = np.zeros(n_os)
-        r_os = np.zeros(n_os)
-        if V:
+        l_os, r_os = sc.l_os, sc.r_os
+        if not V:
+            l_os[:] = 0.0          # nothing sounds, and nothing wrote the buffers
+            r_os[:] = 0.0
+        else:
             # rows are grouped by slot because np.nonzero walks s ascending
             row_start = np.append(np.searchsorted(rs, slots), K).astype(np.int64)
             th_c = self.th_c[slots].copy()
@@ -806,10 +1133,10 @@ class EventsFMCell(_EventsCell):
             # clock; + one sub-sample because sub-sample os-1 of a group IS the
             # audio sample the phase was read from
             th_mod = np.mod(np.arctan2(zim0, zre0) + HALF_PI + inc_mod, TWO_PI)
-            _fm_sum(n_os, os, self.index, amp, self.amp_last[rs, rj],
-                    carr, self.carr_last[slots], panl, self.panl_last[slots],
-                    panr, self.panr_last[slots], row_start, inc_mod, th_mod,
-                    inc_c, th_c, l_os, r_os)
+            render_fm(n_os, os, self.index, amp, self.amp_last[rs, rj],
+                      carr, self.carr_last[slots], panl, self.panl_last[slots],
+                      panr, self.panr_last[slots], row_start, inc_mod, th_mod,
+                      inc_c, th_c, l_os, r_os, scratch=self._scratch)
             self.th_c[slots] = th_c
         self.amp_last[:] = 0.0
         self.carr_last[:] = 0.0

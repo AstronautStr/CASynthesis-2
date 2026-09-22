@@ -949,6 +949,82 @@ class TheNewFM(unittest.TestCase):
         self.assertEqual(float(cell.th_c[src]), 0.0)
 
 
+class ThreadedRender(unittest.TestCase):
+    """Both Events voicings build their block on SEVERAL THREADS -- and that must
+    be a change of speed only.
+
+    The wave readout divides its SLOTS (2026-09-22, the `artic` case) and the FM
+    readout divides its CARRIERS (2026-09-22, the Events + FM case): in both the
+    samples cannot be divided -- a mode is a recurrence and a modulator's phase
+    free-runs -- but two slots share nothing except the sum at the end, and that
+    sum is still taken in slot order.  So every output sample is computed by the
+    same operations in the same order whatever the thread count is.
+
+    This gate renders the SAME field at 1, 2 and 4 threads and compares the
+    blocks byte for byte.  The field is crowded on purpose: the split is skipped
+    when there are fewer slots than two per worker, and a gate that never split
+    would prove nothing -- so it also counts the blocks that really went through
+    the pool."""
+
+    BLOCKS = 12
+
+    @staticmethod
+    def crowd():
+        """A field of about a hundred figures -- what a Random field gives the
+        tracker, and the only kind of scene where the pool is used at all."""
+        rng = np.random.default_rng(7)
+        return (rng.random((30, 52)) < 0.35).astype(np.uint8)
+
+    def _blocks(self, threads, axes, split=None):
+        old = uev.render_pool.THREADS
+        old_ranges = uev.render_pool.ranges
+        uev.render_pool.THREADS = int(threads)
+        if split is not None:
+            def counted(n, parts):
+                split['n'] += 1
+                return old_ranges(n, parts)
+            uev.render_pool.ranges = counted
+        try:
+            e = uni(artic=lu.ARTIC_EVENTS, **axes)
+            g = self.crowd()
+            e.init(g, None, 0.0)
+            out = []
+            for i in range(self.BLOCKS):
+                if i % 2 == 1:
+                    new = step(g)
+                    e.update_field(new, events_field(g, new))
+                    g = new
+                buf, _peak, _clip = e.render(GAIN, i * BLOCK)
+                out.append(buf.copy())
+            return out
+        finally:
+            uev.render_pool.THREADS = old
+            uev.render_pool.ranges = old_ranges
+
+    def _same(self, axes, what):
+        ref = self._blocks(1, axes)
+        for threads in (2, 4):
+            split = {'n': 0}
+            got = self._blocks(threads, axes, split)
+            self.assertGreater(
+                split['n'], self.BLOCKS // 2,
+                f"{what}: only {split['n']} of {self.BLOCKS} blocks were divided at "
+                f"{threads} threads -- the gate would prove nothing")
+            for i, (a, b) in enumerate(zip(ref, got)):
+                self.assertTrue(
+                    np.array_equal(a, b),
+                    f"{what}: block {i} on {threads} threads differs from the single "
+                    f"loop at {int(np.argmax(a != b))} of {a.size} samples")
+
+    def test_the_wave_block_is_the_single_threaded_block(self):
+        """Events + Bank + Square: the slots divided over the pool."""
+        self._same(dict(voice=lu.VOICE_BANK, waveform=lc.WF_SQUARE), 'wave')
+
+    def test_the_fm_block_is_the_single_threaded_block(self):
+        """Events + FM: the carriers divided over the pool."""
+        self._same(dict(voice=lu.VOICE_FM, fm_depth=1.0), 'FM')
+
+
 class RegistryEntry(unittest.TestCase):
     """The engine as a host reads it before building an instance."""
 
