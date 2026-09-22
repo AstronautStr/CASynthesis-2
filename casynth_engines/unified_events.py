@@ -543,57 +543,45 @@ def _fm_sum(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
 # -- band-limited wave tables, kept across blocks ------------------------------
 
 class WaveTables:
-    """A row per (waveform, EXACT sounding frequency), stable across blocks.
+    """The pool of band-limited tables this cell reads -- which is the ONE pool
+    laplace_carriers keeps (2026-09-22).
 
-    The wave law takes b(h f) at the frequency of the wave that actually sounds,
-    so a table belongs to ONE frequency and is never shared with a neighbour
-    (REQ section 4).  Rows are therefore kept rather than rebuilt: a figure
-    retunes rarely and a block only looks its modes up.  A full pool starts over
-    -- the sound never depends on a hit, only the cost does.
+    It used to be a second pool on top of that one: every table was built through
+    lc.wavetable (so it landed in lc's buffer) and then COPIED into a buffer of
+    its own, and when that one filled it threw its whole buffer away and started
+    at 16 rows.  Rows already written into tab_a / tab_b for the block in flight
+    then pointed past the new buffer, and the readout -- a compiled kernel with no
+    bounds check -- walked off the end of memory.  That is how the user's
+    instrument died on 2026-09-22: an access violation, no traceback, the window
+    simply gone.  Dragging `harm` reached it in seconds, because it asks for a
+    table at a frequency that has never sounded, on every mode, on every frame.
 
-    Cost note for the log: a NOTE multiplies every frequency, so a played line
-    asks for a fresh set of tables per note (one irfft of TABLE_N each).  That is
-    the transposition risk of REQ section 9 and it is left standing here: the
-    cheaper key it proposes (the harmonic COUNT) replaces the law's cosine taper
-    with a brickwall, which is a deviation for the Researcher to rule on."""
+    So the cell asks lc.table_rows for a whole block at once: one pool, one LRU,
+    rows that no second frequency can take while this block is reading them, and
+    -1 for a frequency the pool cannot serve (the kernel reads that as Re z).
+    This class is what is left -- the buffer and its length, for the kernel."""
 
-    def __init__(self, cap=512, table_n=lc.TABLE_N):
-        self.cap = int(cap)
+    def __init__(self, cap=None, table_n=lc.TABLE_N):
         self.table_n = int(table_n)
-        self.index = {}
-        self.rebuilds = 0
-        self._clear(16)
 
-    def _clear(self, size):
-        # row 0 is never read (a -1 means Re z); the pool GROWS by doubling, never
-        # by a reallocation per table -- a Life field retunes its figures at every
-        # step, and copying the whole pool for each new resonance cost more than
-        # the block it was built for
-        self.buf = np.zeros((int(size), self.table_n))
-        self.n_rows = 1
+    @property
+    def buf(self):
+        b = lc.table_buffer()
+        return _EMPTY_TABLES if b is None else b
 
-    def clear(self):
-        self._clear(16)
-        self.index = {}
-        self.rebuilds += 1
+    def rows(self, waveform, freqs, sr, new_block=True):
+        return lc.table_rows(waveform, freqs, sr, new_block=new_block)
 
-    def row(self, waveform, f, sr):
-        key = (int(waveform), float(f))
-        got = self.index.get(key)
-        if got is not None:
-            return got
-        if len(self.index) >= self.cap:
-            self.clear()
-        tab = lc.wavetable(waveform, f, sr)
-        if self.n_rows >= self.buf.shape[0]:
-            grown = np.zeros((self.buf.shape[0] * 2, self.table_n))
-            grown[:self.n_rows] = self.buf[:self.n_rows]
-            self.buf = grown
-        r = self.n_rows
-        self.buf[r] = tab
-        self.n_rows = r + 1
-        self.index[key] = r
-        return r
+    @property
+    def index(self):                     # what display() counts
+        return lc._TAB_ROW
+
+    @property
+    def rebuilds(self):
+        return lc._TAB_DECLINED[0]
+
+
+_EMPTY_TABLES = np.zeros((1, lc.TABLE_N))    # nothing has been built yet
 
 
 def objects_params(params):
@@ -694,12 +682,16 @@ class EventsBankCell(_EventsCell):
         if self.wave == lc.WF_SINE and self.wave_prev == lc.WF_SINE:
             return
         uniq, inv = np.unique(freq[sel], return_inverse=True)
+        first = True
         for wf, dst in ((self.wave_prev, self.tab_a), (self.wave, self.tab_b)):
             if wf == lc.WF_SINE:
                 continue
-            rows = np.array([self.tables.row(wf, float(f), self.sr) for f in uniq],
-                            dtype=np.int64)
-            dst[sel] = rows[inv]
+            # one ask for the whole block: see WaveTables.  A -1 comes back for a
+            # frequency the pool cannot serve, and the kernel reads that as Re z.
+            # A blend asks twice for the SAME block, so the second ask must not
+            # count as a new one or it would evict the rows of the first.
+            dst[sel] = self.tables.rows(wf, uniq, self.sr, new_block=first)[inv]
+            first = False
 
     def render_float(self, gain, gain_prev, transpose, env=None):
         obj = self.obj
@@ -728,7 +720,7 @@ class EventsBankCell(_EventsCell):
         d.update(voicing='bank', wave=int(self.wave),
                  wave_name=lc.WAVE_NAMES[int(self.wave)],
                  wave_tables=len(self.tables.index),
-                 table_rebuilds=int(self.tables.rebuilds))
+                 tables_declined=int(self.tables.rebuilds))
         return d
 
 

@@ -190,6 +190,14 @@ def direct_wave(waveform, f, phase0, n, sr=SR):
 _TAB_BUF = None                         # (rows, TABLE_N) float64
 _TAB_ROW = collections.OrderedDict()    # (waveform, f, sr) -> row, least recent FIRST
 _TAB_ROWS0 = 32                         # rows of the first allocation
+# Which block last asked for a row.  A row handed to THIS block may not be given
+# away again inside it: two modes would then read one table, and that is a wrong
+# timbre nobody can trace (2026-09-22).  A block that wants more distinct
+# frequencies than the pool holds is told -1 for the rest -- see table_rows.
+_TAB_EPOCH = {}                         # row -> the serial of the block that took it
+_TAB_NOW = [0]                          # the block being served
+_TAB_DECLINED = [0]                     # modes sent back to Re(z) because of the cap
+_TAB_BUILT = [0]                        # tables actually transformed (diagnostics)
 
 
 def _build_table(waveform, f, sr):
@@ -234,13 +242,26 @@ def _spectra_of(waveform, freqs, sr, out):
 
 
 def _reserve_row(key):
-    """The row `key` will live in -- evicting the least recently used one when the
-    cache is full.  Reserving every row BEFORE any table is built matters: the
-    buffer grows by reallocation, and it must not be replaced while a worker is
-    writing into it."""
+    """The row `key` will live in, or -1 when every row the pool holds is already
+    serving THIS block.
+
+    Reserving every row BEFORE any table is built matters twice over: the buffer
+    grows by reallocation and must not be replaced while a worker writes into it,
+    and a row this block is already reading must not be handed to a second
+    frequency -- which is what used to happen when a drag asked for more tables
+    than the pool holds.  The Events pool went further and threw the whole buffer
+    away mid-block, so rows already written into tab_a / tab_b pointed past the
+    new one and the readout walked off the end of memory: an access violation with
+    no traceback, which is how the user's instrument died on 2026-09-22."""
     global _TAB_BUF
     if len(_TAB_ROW) >= TABLE_CACHE_MAX:
-        _old, row = _TAB_ROW.popitem(last=False)     # LRU: reuse its row
+        row = -1
+        for k in _TAB_ROW:                           # LRU first, skipping this block's
+            if _TAB_EPOCH.get(_TAB_ROW[k], -1) != _TAB_NOW[0]:
+                row = _TAB_ROW.pop(k)
+                break
+        if row < 0:
+            return -1                                # the pool is entirely in use
     else:
         row = len(_TAB_ROW)
         if _TAB_BUF is None:
@@ -250,10 +271,11 @@ def _reserve_row(key):
             grown[:len(_TAB_BUF)] = _TAB_BUF
             _TAB_BUF = grown
     _TAB_ROW[key] = row
+    _TAB_EPOCH[row] = _TAB_NOW[0]
     return row
 
 
-def table_rows(waveform, freqs, sr=SR):
+def table_rows(waveform, freqs, sr=SR, new_block=True):
     """int64 rows of the table buffer for a WHOLE BLOCK's frequencies, building
     the ones that are new -- all of them in one inverse transform, over the render
     pool.
@@ -266,10 +288,24 @@ def table_rows(waveform, freqs, sr=SR):
     table, one at a time, on the render thread, is the worst way to pay it: the
     rows of an irfft are independent, so they batch AND divide, bit for bit.
 
-    Rows handed out for ONE block are safe, as for table_row: a block asks for
-    fewer rows than the cache holds, and every row it asks for is moved to the
-    recent end before anything is evicted."""
+    EVERY ROW IS THIS BLOCK'S OWN.  A row already given to this call is never
+    given to a second frequency, so two modes can never read one table; and when
+    a block wants more distinct frequencies than the pool holds, the ones it
+    cannot serve come back as -1, which every caller reads as "this mode is the
+    sine line" (Re z).  That is what a drag of `harm` does -- it pulls every mode
+    of every figure toward its own whole harmonic, so one block asked for 1130
+    distinct tables where the pool holds 512.  The alternative was reading a
+    neighbour's table, or a buffer that no longer existed.
+
+    The frequencies are served LOWEST FIRST, so what the cap costs is the top of
+    the spectrum: a high wave carries few harmonics under the band limit and is
+    already close to the sine it falls back to."""
     wf, srf = int(waveform), float(sr)
+    if new_block:                        # a new block: no row is spoken for yet
+        _TAB_NOW[0] += 1                 # (a caller that asks twice for ONE block
+                                         #  -- two waveforms of a blend -- passes
+                                         #  new_block=False the second time, or the
+                                         #  second ask would evict the first's rows)
     out = np.empty(len(freqs), np.int64)
     need = {}                            # new frequency -> where it goes in `out`
     for i, f in enumerate(freqs):
@@ -277,17 +313,26 @@ def table_rows(waveform, freqs, sr=SR):
         row = _TAB_ROW.get(key)
         if row is not None:
             _TAB_ROW.move_to_end(key)    # every hit first, so none is evicted below
+            _TAB_EPOCH[row] = _TAB_NOW[0]
             out[i] = row
         else:
             need.setdefault(float(f), []).append(i)
     if not need:
         return out
-    fresh = list(need)
+    fresh = sorted(need)                 # lowest first: the cap costs the top end
     rows = np.empty(len(fresh), np.int64)
     for j, f in enumerate(fresh):
         rows[j] = _reserve_row((wf, f, srf))
         for i in need[f]:
             out[i] = rows[j]
+    keep = np.flatnonzero(rows >= 0)
+    if len(keep) != len(fresh):
+        _TAB_DECLINED[0] += len(fresh) - len(keep)
+        fresh = [fresh[j] for j in keep]
+        rows = rows[keep]
+        if not len(fresh):
+            return out
+    _TAB_BUILT[0] += len(fresh)
     specs = np.zeros((len(fresh), TABLE_N // 2 + 1), dtype=complex)
     _spectra_of(wf, fresh, srf, specs)
     buf = _TAB_BUF                       # reserved above, so this array is final
@@ -310,7 +355,7 @@ def table_rows(waveform, freqs, sr=SR):
 
 def table_row(waveform, f, sr=SR):
     """Row of the table buffer holding this wave's table, building it if it is
-    new (table_rows on one frequency)."""
+    new (table_rows on one frequency); -1 if the pool has no row to spare."""
     return int(table_rows(waveform, (float(f),), sr)[0])
 
 
@@ -325,8 +370,12 @@ def wavetable(waveform, f, sr=SR):
     (cached by the EXACT frequency: b(h*f) belongs to this wave, not to an octave).
 
     This is a VIEW of the cache's buffer, good for as long as the caller is inside
-    the block that asked for it; anything that outlives that must copy."""
+    the block that asked for it; anything that outlives that must copy.  If the
+    pool had no row to spare (see table_rows), the table is built here and owned
+    by the caller -- never row -1, which is a table of somebody else's wave."""
     row = table_row(waveform, f, sr)         # may grow the buffer -- read it after
+    if row < 0:
+        return _build_table(waveform, float(f), float(sr))
     return _TAB_BUF[row]
 
 
@@ -480,11 +529,20 @@ class _BankVoices:
         phase0 = self.phase[k]
         amp0, dA = amp_cur[k], amp_tgt[k] - amp_cur[k]
         pan0, dP = self.pan_cur[k], pan_tgt[k] - self.pan_cur[k]
-        rows_all = tabs = None
+        rows_all = tabs = band = no_table = None
         if waveform != WF_SINE:              # every row first, then the buffer they index
             rows_all = table_rows(waveform, freq, sr)
             tabs = table_buffer()
-        else:
+            # a frequency the pool could not serve reads as the sine line, the
+            # same answer the Events kernel gives at tab = -1 (table_rows).  The
+            # usual block has none of those, and then nothing below looks again.
+            missing = rows_all < 0
+            if missing.all():
+                rows_all = None
+            elif missing.any():
+                no_table = missing
+                rows_all = np.where(missing, 0, rows_all)
+        if waveform == WF_SINE or rows_all is None or no_table is not None:
             band = band_limit(freq, sr)
 
         def columns(a, b):
@@ -496,7 +554,7 @@ class _BankVoices:
             for s0 in range(0, len(k), SLAB):
                 sl = slice(s0, min(s0 + SLAB, len(k)))
                 ph = phase0[sl][:, None] + inc[sl][:, None] * idx_c[None, :]
-                if waveform == WF_SINE:
+                if waveform == WF_SINE or rows_all is None:
                     wave = np.sin(ph)
                     if (band[sl] != 1.0).any():   # b == 1.0 is the bit-exact legacy path
                         wave = np.where(band[sl][:, None] == 1.0, wave,
@@ -509,6 +567,10 @@ class _BankVoices:
                     i1 = (i0 + 1) % TABLE_N
                     rws = rows_all[sl][:, None]
                     wave = tabs[rws, i0] * (1.0 - frac) + tabs[rws, i1] * frac
+                    if no_table is not None:
+                        m = no_table[sl]
+                        if m.any():
+                            wave[m] = band[sl][m][:, None] * np.sin(ph[m])
                 amp = amp0[sl][:, None] + dA[sl][:, None] * ramp_c[None, :]
                 pan = pan0[sl][:, None] + dP[sl][:, None] * ramp_c[None, :]
                 wave *= amp

@@ -50,6 +50,7 @@ already pins that byte for byte -- it is "does it come in time":
 Stdlib runner (pytest is not installed).  Measures time: @timing_test, so
 check.py runs it alone (tests/timing_gate.py)."""
 import os
+import subprocess
 import sys
 import time
 import unittest
@@ -134,8 +135,16 @@ MEAN_CEILING = 0.6 * BUDGET_MS
 BOUNDARY_CEILING = float(AUDIO_LOOKAHEAD_MS)
 # ...and for a knob being DRAGGED, the same first thing said of the whole render
 # thread: everything it owes the device -- the blocks, the knob it is told about
-# and the field it is handed -- in well under real time.
-RENDER_SHARE_CEILING = 0.6
+# and the field it is handed -- under real time with room to recover.
+#
+# The ceiling is looser here than the 0.6 above, and deliberately: a drag is a
+# TRANSIENT, and the host keeps AUDIO_LOOKAHEAD_MS of finished sound for exactly
+# that.  At 0.75 every block leaves a quarter of its own length to refill the
+# ring, so a drag draws the ring down slowly and a pause refills it; the case as
+# the user hit it spent 0.90 and the ring emptied.  What the ceiling may NOT do is
+# excuse a cost that is there when nothing moves -- that is what the two cases
+# above measure, at 0.6, with the knobs standing still.
+RENDER_SHARE_CEILING = 0.75
 
 UI_FRAME_S = 1.0 / 60.0       # the prototype's frame loop, so a drag posts at 60 Hz
 DRAG_STEP = 1.0 / 48.0        # a hand moving about 2 px of a 96 px track per frame
@@ -366,6 +375,35 @@ class HarmDragBudget(unittest.TestCase):
         """Env + FM, the engine the rest of it was played on."""
         self._check('Env+FM', dict(HARM_SETTINGS, voice=VOICE_FM))
 
+
+
+class WavePoolSurvives(unittest.TestCase):
+    """The crash of 2026-09-22: the wave-table pool overflowed and the readout
+    walked off the end of memory (0xc0000005, no traceback, the window gone).
+
+    It has to be a CHILD process, because the bug does not raise -- it kills the
+    interpreter.  The repro drags `harm` on Events + Square, which asks for a
+    table at ~1130 distinct frequencies where the pool holds 512; before the fix
+    it pointed a mode at row 512 of a 256-row buffer within six blocks.
+
+    This one does not measure time, so it runs in the parallel wave with the
+    rest."""
+
+    def test_a_drag_that_overflows_the_table_pool_does_not_kill_the_process(self):
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              'wave_pool_repro.py')
+        env = dict(os.environ, PYTHONUTF8='1', SDL_VIDEODRIVER='dummy',
+                   SDL_AUDIODRIVER='dummy')
+        out = subprocess.run([sys.executable, script, '240'], cwd=ROOT, env=env,
+                             capture_output=True, text=True, encoding='utf-8',
+                             errors='replace', timeout=600)
+        print('  ' + (out.stdout or '').strip())
+        self.assertEqual(out.returncode, 0,
+                         f"the repro exited {out.returncode} (a return code that is "
+                         f"no Python error means the process was killed -- the "
+                         f"access violation)\n{(out.stdout or '')[-2000:]}"
+                         f"\n{(out.stderr or '')[-2000:]}")
+        self.assertIn('SURVIVED', out.stdout or '')
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
