@@ -9,6 +9,7 @@ envelope).  Shared by the live synth (gol_synth.py), offline replay
 Defaults reproduce the historical sound bit-for-bit (see casynth_config ADSR notes).
 """
 import colorsys
+import threading
 
 import numpy as np
 from scipy import ndimage
@@ -107,7 +108,70 @@ def hsv(h, v):
     return (int(r * 255), int(g * 255), int(b * 255))
 
 
+# ── the same field, analysed once ────────────────────────────────────────────
+# Two threads ask this question at the same time and get the same answer.  The UI
+# thread analyses the field to COLOUR it and to draw the spectrum strip; the render
+# thread's engine analyses it to SOUND it (the Env cells of the Laplace family call
+# analyse from set_params / set_field).  On a standing field they ask once per
+# generation, which is cheap -- but while a spectrum knob is DRAGGED they ask on
+# every UI frame, with identical arguments, and the work is real: 2.7 ms per call
+# on the prototype's own Random field with the start settings, 60 times a second,
+# twice.  In the user's 05:04 session of 2026-09-22 that was 278 + 291 ms out of
+# the 1886 ms the instrument spent on 1596 ms of sound (tests/test_live_budget).
+#
+# So the result is remembered by what it was computed FROM.  The cache changes no
+# number: a hit returns a fresh copy of the same arrays, so a caller that writes
+# into what it gets -- laplace_unified's Env cell overwrites every voice's `pan`
+# -- cannot reach what the other thread will be handed.  Four entries is enough
+# for the two threads and a generation boundary between them.
+_ANALYSE_CAP = 4
+_ANALYSE_LOCK = threading.Lock()
+_ANALYSE_CACHE = {}                    # key -> (labels, voices, color), insertion-ordered
+
+
+def _analyse_key(grid, f0, engine_id, params, exc):
+    return (grid.shape, grid.tobytes(), float(f0), engine_id,
+            tuple(sorted(params.items())),
+            None if exc is None else exc.tobytes())
+
+
+def _analyse_copy(out):
+    """An independent copy of one answer -- what every caller gets, hit or miss."""
+    labels, voices, color = out
+    return (labels.copy(),
+            [{k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in v0.items()}
+             for v0 in voices],
+            dict(color))
+
+
+def analyse_cache_clear():
+    """Forget every remembered analysis (tests that count calls, and anything
+    that wants the memory back)."""
+    with _ANALYSE_LOCK:
+        _ANALYSE_CACHE.clear()
+
+
 def analyse(grid, f0, engine_id, params, exc=None):
+    """`_analyse` on the field, remembered by its arguments (see the note above).
+    The numbers are the ones _analyse computes; what changes is how often."""
+    grid = np.asarray(grid)
+    try:
+        key = _analyse_key(grid, f0, engine_id, params, exc)
+    except TypeError:                  # a parameter that cannot be a key: just work
+        return _analyse(grid, f0, engine_id, params, exc)
+    with _ANALYSE_LOCK:
+        got = _ANALYSE_CACHE.get(key)
+    if got is not None:
+        return _analyse_copy(got)
+    out = _analyse(grid, f0, engine_id, params, exc)
+    with _ANALYSE_LOCK:
+        _ANALYSE_CACHE[key] = out
+        while len(_ANALYSE_CACHE) > _ANALYSE_CAP:
+            _ANALYSE_CACHE.pop(next(iter(_ANALYSE_CACHE)))
+    return _analyse_copy(out)
+
+
+def _analyse(grid, f0, engine_id, params, exc=None):
     """Segment the field into connected objects and compute voices via the
     SELECTED engine.
 

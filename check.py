@@ -46,9 +46,11 @@ Gates (any FAIL -> exit 1):
   1v. unified Laplace  python tests/test_laplace_unified.py       (articulation x
                        voicing on one spectrum: the axes, the four byte anchors of the
                        engines it collapsed, and an axis switch that never clicks)
-  1w. events in time   python tests/test_events_budget.py         (the user's 2026-09-22
-                       field and knobs: the Events articulation must come in time, the
-                       Env one must stay as cheap as it was -- MEASURES TIME)
+  1w. live budget      python tests/test_live_budget.py           (the two cases the
+                       user's own sessions caught on 2026-09-22 -- switching `artic` to
+                       Events, and dragging `harm` -- must come in time on his field
+                       and his knobs, and the paths that were fine must stay fine;
+                       MEASURES TIME)
   2. golden master     python tests/golden/golden_master.py       (audio, byte-exact)
   3. ui frame + smoke  CASYNTH_DUMPFRAME render of gol_synth.py   (pixel-exact vs
                        tests/golden/ui_frame.png; doubles as the import/init smoke)
@@ -190,8 +192,8 @@ def gates():
              _t("test_gen_envelope.py"), timeout=600),
         Gate("the unified Laplace engine (axes x voicings, the byte anchors)",
              "unified Laplace tests", _t("test_laplace_unified.py"), timeout=900, fast=True),
-        Gate("the Events articulation comes in time (the user's 2026-09-22 field)",
-             "events budget", _t("test_events_budget.py"), timeout=600, timing=()),
+        Gate("the instrument comes in time on the fields the user played",
+             "live budget", _t("test_live_budget.py"), timeout=600, timing=()),
         Gate("golden master", "golden master",
              [py, os.path.join("tests", "golden", "golden_master.py")], env={}, fast=True),
         Gate("ui clicks (the prototype's event loop)", "ui click probe",

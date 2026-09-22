@@ -202,17 +202,43 @@ def _build_table(waveform, f, sr):
     return np.fft.irfft(spec, TABLE_N)
 
 
-def table_row(waveform, f, sr=SR):
-    """Row of the table buffer holding this wave's table, building it if it is new
-    and evicting the least recently used row when the cache is full.  Rows handed
-    out for ONE block are safe: a block asks for fewer rows than the cache holds,
-    and every row it asks for is moved to the recent end."""
+def _spectra_of(waveform, freqs, sr, out):
+    """The half-spectra of a WHOLE SET of band-limited waves, into the rows of
+    `out` (zeroed, one row per frequency).
+
+    The same numbers harmonic_coeffs gives one wave at a time, over a harmonic
+    grid shared by all of them: c_h b(h f) at row f, column h.  A harmonic the
+    band limit zeroes contributes nothing either way, so the grid may reach past
+    a wave's own last harmonic -- and it stops at the last bin the table has.
+    (Written for the `harm` drag, which asks for tens of new tables per block and
+    was paying numpy call overhead per wave -- 2026-09-22.)"""
+    f = np.asarray(freqs, dtype=float)
+    zero = BAND_ZERO * sr
+    ok = np.isfinite(f) & (f > 0.0)
+    if not ok.any():
+        return
+    h_top = min(TABLE_N // 2 - 1, int(math.floor(zero / float(f[ok].min()))) + 1)
+    if h_top < 1:
+        return
+    h = np.arange(1, h_top + 1, dtype=np.int64)
+    if waveform == WF_SINE:
+        h = h[:1]
+    elif waveform == WF_SQUARE:
+        h = h[h % 2 == 1]
+    hf = h.astype(float)
+    c = (1.0 / hf) if waveform != WF_SINE else np.ones(len(h))
+    nu = hf[None, :] * f[ok][:, None]
+    coef = c[None, :] * band_limit(nu, sr)
+    coef[nu >= zero] = 0.0                  # b is already 0 there; say so exactly
+    out[np.flatnonzero(ok)[:, None], h[None, :]] = -1j * coef * (TABLE_N / 2.0)
+
+
+def _reserve_row(key):
+    """The row `key` will live in -- evicting the least recently used one when the
+    cache is full.  Reserving every row BEFORE any table is built matters: the
+    buffer grows by reallocation, and it must not be replaced while a worker is
+    writing into it."""
     global _TAB_BUF
-    key = (int(waveform), float(f), float(sr))
-    row = _TAB_ROW.get(key)
-    if row is not None:
-        _TAB_ROW.move_to_end(key)
-        return row
     if len(_TAB_ROW) >= TABLE_CACHE_MAX:
         _old, row = _TAB_ROW.popitem(last=False)     # LRU: reuse its row
     else:
@@ -223,9 +249,69 @@ def table_row(waveform, f, sr=SR):
             grown = np.zeros((min(TABLE_CACHE_MAX, len(_TAB_BUF) * 2), TABLE_N))
             grown[:len(_TAB_BUF)] = _TAB_BUF
             _TAB_BUF = grown
-    _TAB_BUF[row] = _build_table(waveform, f, sr)
     _TAB_ROW[key] = row
     return row
+
+
+def table_rows(waveform, freqs, sr=SR):
+    """int64 rows of the table buffer for a WHOLE BLOCK's frequencies, building
+    the ones that are new -- all of them in one inverse transform, over the render
+    pool.
+
+    Why in one go (2026-09-22).  `harm` pulls every mode of every figure toward a
+    whole harmonic, so dragging it asks for a table at a frequency that has never
+    sounded before -- on the user's 05:04 session, 8723 tables over 200 blocks,
+    0.6 s of the 1.9 s the instrument spent on 1.6 s of sound.  A table is
+    TABLE_N = 8192 samples, so the transform is the cost, and a transform per
+    table, one at a time, on the render thread, is the worst way to pay it: the
+    rows of an irfft are independent, so they batch AND divide, bit for bit.
+
+    Rows handed out for ONE block are safe, as for table_row: a block asks for
+    fewer rows than the cache holds, and every row it asks for is moved to the
+    recent end before anything is evicted."""
+    wf, srf = int(waveform), float(sr)
+    out = np.empty(len(freqs), np.int64)
+    need = {}                            # new frequency -> where it goes in `out`
+    for i, f in enumerate(freqs):
+        key = (wf, float(f), srf)
+        row = _TAB_ROW.get(key)
+        if row is not None:
+            _TAB_ROW.move_to_end(key)    # every hit first, so none is evicted below
+            out[i] = row
+        else:
+            need.setdefault(float(f), []).append(i)
+    if not need:
+        return out
+    fresh = list(need)
+    rows = np.empty(len(fresh), np.int64)
+    for j, f in enumerate(fresh):
+        rows[j] = _reserve_row((wf, f, srf))
+        for i in need[f]:
+            out[i] = rows[j]
+    specs = np.zeros((len(fresh), TABLE_N // 2 + 1), dtype=complex)
+    _spectra_of(wf, fresh, srf, specs)
+    buf = _TAB_BUF                       # reserved above, so this array is final
+
+    def build(a, b):
+        buf[rows[a:b]] = np.fft.irfft(specs[a:b], TABLE_N, axis=1)
+
+    pool = rp.pool()
+    parts = rp.THREADS
+    if pool is None or parts <= 1 or len(fresh) < 2 * parts:
+        build(0, len(fresh))
+    else:
+        spans = rp.ranges(len(fresh), parts)
+        futures = [pool.submit(build, a, b) for a, b in spans[1:]]
+        build(spans[0][0], spans[0][1])              # the caller takes a share
+        for fut in futures:
+            fut.result()
+    return out
+
+
+def table_row(waveform, f, sr=SR):
+    """Row of the table buffer holding this wave's table, building it if it is
+    new (table_rows on one frequency)."""
+    return int(table_rows(waveform, (float(f),), sr)[0])
 
 
 def table_buffer():
@@ -396,8 +482,7 @@ class _BankVoices:
         pan0, dP = self.pan_cur[k], pan_tgt[k] - self.pan_cur[k]
         rows_all = tabs = None
         if waveform != WF_SINE:              # every row first, then the buffer they index
-            rows_all = np.array([table_row(waveform, float(f), sr) for f in freq],
-                                dtype=np.int64)
+            rows_all = table_rows(waveform, freq, sr)
             tabs = table_buffer()
         else:
             band = band_limit(freq, sr)
