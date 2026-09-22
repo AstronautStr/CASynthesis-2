@@ -58,9 +58,12 @@ Gates (any FAIL -> exit 1):
   3e. panel rows       python tests/ui_panel_probe.py             (a knob that decides
                        whether ANOTHER row acts -- Laplace+ `shape` over `dyn` --
                        must make that row appear, without clicking anything else)
-  3f. save an experiment python tests/ui_save_probe.py           (play, click Save,
-                       and ask the BENCH whether the record it wrote is one it can
-                       list, replay byte-exact and continue from)
+  3f. save an experiment python tests/ui_save_probe.py           (play PAST the
+                       recorder's rolling window, click Save, and ask the BENCH
+                       whether the record it wrote is one it can list, replay
+                       byte-exact and continue from -- while the instrument keeps
+                       drawing frames throughout the render, which it did not
+                       until 2026-09-22)
   3d. articulation     python tests/ui_articulation_probe.py      (letting a key go
                        releases the note; HOLD lit keeps it sounding; and a played
                        MIDI line re-articulates note by note although its gate

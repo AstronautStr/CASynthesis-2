@@ -19,7 +19,7 @@ import math
 import numpy as np
 
 from casynth_config import SR
-from .recorder import Recorder
+from .recorder import Recorder, WINDOW_SECONDS_DEFAULT
 from .runner import BLOCK, DemoRunner
 from .scene import scene_from_doc
 
@@ -32,11 +32,19 @@ def record(catalog, doc, seconds, title=None, note='', commands=(), on_block=Non
     on_block : optional callback(i, n_blocks) for a progress bar.
     """
     runner = DemoRunner(scene_from_doc(doc))
-    rec = Recorder(runner, None)
+    n_blocks = int(math.ceil(float(seconds) * SR / BLOCK))
+    # The Recorder keeps only the LAST `window_seconds` of audio in a ring -- the
+    # live bench records a ROLLING window.  An offline build is the whole render,
+    # so the ring is sized to it; with the default 30 s window a longer render
+    # came back cut to 30 s and the frame check below refused the record
+    # (2026-09-22: the prototype's Save on a session longer than half a minute).
+    # Shorter renders keep the default window, so their cuts are unchanged.
+    rec = Recorder(runner, None,
+                   window_seconds=max(WINDOW_SECONDS_DEFAULT,
+                                      n_blocks * BLOCK / float(SR)))
     runner.post('start', at=0)
     for kind, at, args in commands:
         runner.post(kind, at=at, **dict(args or {}))
-    n_blocks = int(math.ceil(float(seconds) * SR / BLOCK))
     for i in range(n_blocks):
         before = runner.out_samples
         blk = runner.next_block()

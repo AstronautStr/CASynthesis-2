@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Does Save turn what was played into an EXPERIMENT the bench can open?  Headless.
+"""Does Save turn what was played into an EXPERIMENT the bench can open -- without
+freezing the instrument, and for a session longer than half a minute?  Headless.
 
 WHY THIS EXISTS.  The instrument and the bench kept their work apart: a session
 was a pile of _session_*.npz files a person had to convert by hand, while the
@@ -9,13 +10,28 @@ closes that: the session the prototype logs all along becomes a scene
 (casynth_session.scene_from_session) and that scene is rendered into a record
 through the bench's own Recorder / Catalog.save (casynth_lab.offline_record).
 
-So this plays the prototype for a few seconds, clicks Save, and then asks the
-BENCH's own reader whether what came out is a record it can list, replay
-byte-exact and continue from.
+So this plays the prototype, clicks Save, and then asks the BENCH's own reader
+whether what came out is a record it can list, replay byte-exact and continue
+from.
+
+It also holds the two things that were WRONG with that first Save (2026-09-22,
+the user's report: "the synth freezes when I press Save"):
+
+  * the render ran on the FRAME LOOP.  It costs about half the session's length
+    (28 s for a minute played), so the window stopped drawing and stopped
+    answering -- a hang, as far as anyone at the instrument could tell.  The
+    probe wraps draw_frame and measures the worst gap between two frames while
+    the save is in flight: a save on the frame loop makes that gap the whole
+    render.
+  * the Recorder keeps a ROLLING window (30 s by default) and the offline build
+    demanded every frame back, so a session longer than that window failed with
+    "cut ... frames, expected ...".  The probe therefore plays LONGER than the
+    window and asks the record how many seconds it holds.
 
 Run: python tests/ui_save_probe.py      (exit 0 = the experiment is in the catalog)
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -27,16 +43,19 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from casynth_config import GRID_H, CELL                            # noqa: E402
+from casynth_lab.recorder import WINDOW_SECONDS_DEFAULT            # noqa: E402
 
 BY = GRID_H * CELL + 8
 SAVE_X = 349                               # middle of the Save button
-SECONDS = 10
+PLAY_S = WINDOW_SECONDS_DEFAULT + 5.0      # past the recorder's rolling window
+WATCH_S = 8.0                              # how long the loop is watched mid-save
+MAX_GAP_MS = 3000.0                        # a frozen loop shows up as seconds
+MIN_SECONDS = WINDOW_SECONDS_DEFAULT       # the record must be the whole session
 
 DRIVER = r'''
 import os, sys, threading, time
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ["SDL_AUDIODRIVER"] = "dummy"
-os.environ["CASYNTH_RUN_SECONDS"] = "%(seconds)d"
 os.environ["CASYNTH_NO_PERSIST"] = "1"
 sys.path.insert(0, %(root)r)
 import pygame
@@ -44,6 +63,26 @@ import gol_synth
 gol_synth._EXPERIMENT_ROOT = %(root_out)r
 
 BY, SAVE_X = %(by)d, %(save_x)d
+PLAY_S, WATCH_S = %(play)f, %(watch)f
+
+# The gap between two draws IS the time the window answered nobody.  Wrapping the
+# draw measures the freeze directly, which is what the report was about.
+_fr = {'n': 0, 'last': None, 'gap': 0.0, 'watch': False}
+_draw = gol_synth.draw_frame
+
+
+def _counted(*a, **kw):
+    now = time.perf_counter()
+    if _fr['watch']:
+        _fr['n'] += 1
+        if _fr['last'] is not None and now - _fr['last'] > _fr['gap']:
+            _fr['gap'] = now - _fr['last']
+    _fr['last'] = now
+    return _draw(*a, **kw)
+
+
+gol_synth.draw_frame = _counted
+
 
 def click(x, y):
     pygame.event.post(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(x, y), button=1))
@@ -56,12 +95,19 @@ def drive():
     click(52, BY + 20)                   # Play
     pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_a, mod=0,
                                          unicode='a', scancode=4))
-    time.sleep(3.0)                      # play a few generations
+    time.sleep(PLAY_S)                   # play PAST the recorder's rolling window
     pygame.event.post(pygame.event.Event(pygame.KEYUP, key=pygame.K_a, mod=0, scancode=4))
     time.sleep(0.3)
     print("[probe] Save", flush=True)
+    _fr['n'], _fr['last'], _fr['gap'], _fr['watch'] = 0, None, 0.0, True
     click(SAVE_X, BY + 20)
-    time.sleep(2.5)                      # the offline render happens on this click
+    time.sleep(WATCH_S)                  # the render happens in the BACKGROUND now
+    _fr['watch'] = False
+    print("[probe] ui %%d frames, worst gap %%.0f ms"
+          %% (_fr['n'], _fr['gap'] * 1000.0), flush=True)
+    # Quitting waits for a save still in flight (gol_synth joins the worker), so
+    # this also proves the record survives a quit taken mid-render.
+    pygame.event.post(pygame.event.Event(pygame.QUIT))
     print("[probe] done", flush=True)
 
 threading.Thread(target=drive, daemon=True).start()
@@ -72,16 +118,37 @@ gol_synth.main()
 def main():
     out_root = tempfile.mkdtemp(prefix='casynth_save_')
     env = dict(os.environ, PYTHONUTF8='1')
-    code = DRIVER % {'seconds': SECONDS, 'root': ROOT, 'by': BY, 'save_x': SAVE_X,
-                     'root_out': out_root}
+    code = DRIVER % {'root': ROOT, 'by': BY, 'save_x': SAVE_X, 'play': PLAY_S,
+                     'watch': WATCH_S, 'root_out': out_root}
     run = subprocess.run([sys.executable, '-c', code], cwd=ROOT, env=env,
                          capture_output=True, text=True, encoding='utf-8',
-                         timeout=SECONDS + 240)
-    said = [l for l in (run.stdout or '').splitlines() if l.startswith('[save]')]
+                         timeout=PLAY_S + WATCH_S + 300)
+    out = run.stdout or ''
+    said = [l for l in out.splitlines() if l.startswith('[save]')]
     if run.returncode != 0:
         print(f"[FAIL] the prototype exited {run.returncode}\n{(run.stderr or '')[-1500:]}")
         return 1
     try:
+        # 1. the instrument kept drawing while the session rendered
+        m = re.search(r'\[probe\] ui (\d+) frames, worst gap ([0-9.]+) ms', out)
+        if not m:
+            print("[FAIL] the probe never reported the frame loop")
+            return 1
+        frames, gap = int(m.group(1)), float(m.group(2))
+        if frames < 30:
+            print(f"[FAIL] only {frames} frames drawn in {WATCH_S:.0f}s of saving: "
+                  "the save is holding the frame loop")
+            return 1
+        if gap > MAX_GAP_MS:
+            print(f"[FAIL] the window froze for {gap:.0f} ms during the save "
+                  f"(limit {MAX_GAP_MS:.0f} ms) -- the render is back on the frame loop")
+            return 1
+        if not any('Rendering' in s for s in said):
+            print("[FAIL] the frame loop never reported the save's progress. "
+                  "What it said: " + ' | '.join(said))
+            return 1
+
+        # 2. what it wrote is an experiment the bench can open
         from casynth_lab.catalog import Catalog
         cat = Catalog(root=out_root)
         ids = cat.ids()
@@ -93,6 +160,10 @@ def main():
         seconds = rec.seconds
         if pcm is None or len(pcm) == 0:
             print("[FAIL] the record holds no audio")
+            return 1
+        if seconds < MIN_SECONDS:
+            print(f"[FAIL] the record is {seconds:.1f}s of a {PLAY_S:.0f}s session: "
+                  f"the recorder's {WINDOW_SECONDS_DEFAULT:.0f}s window cut it")
             return 1
         if not rec.can_continue():
             print("[FAIL] the record cannot be continued (no end snapshot)")
@@ -106,7 +177,9 @@ def main():
             print("[FAIL] the experiment is silent")
             return 1
         print(f"[PASS] Save wrote {ids[-1]} ({seconds:.1f}s, peak {peak}); "
-              f"the bench lists it, replays it byte-exact and can continue it")
+              f"the bench lists it, replays it byte-exact and can continue it; "
+              f"the instrument drew {frames} frames while it rendered "
+              f"(worst gap {gap:.0f} ms)")
         return 0
     finally:
         shutil.rmtree(out_root, ignore_errors=True)

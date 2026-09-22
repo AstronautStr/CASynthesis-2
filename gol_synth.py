@@ -946,6 +946,12 @@ def main(autoplay_midi=None):
         return None
 
     _message = {'text': '', 'at': 0.0}
+    # A save in flight (2026-09-22).  Rendering the session offline costs about
+    # half its length (28 s for a minute played), and it used to run ON THE MAIN
+    # THREAD: the window stopped drawing and stopped answering Windows, i.e. the
+    # instrument froze on the click.  It runs on its own thread now; this dict is
+    # the only thing the two share -- the worker writes, the loop reads.
+    _save_job = {'thread': None, 'label': '', 'progress': None, 'printed': -1}
 
     def do(bid):
         nonlocal grid, exc_field
@@ -981,6 +987,46 @@ def main(autoplay_midi=None):
         _message['at'] = time.perf_counter()
         print(f"[save] {text}")
 
+    def _rec_snapshot(r):
+        """A consistent copy of the session log, taken on the MAIN thread.
+
+        The log keeps growing while a save runs in the background, and a scene
+        built from logs of unequal length is not the session anybody played.
+        The arrays inside are never touched again once appended (every grid goes
+        in as a .copy()), so copying the LISTS is enough -- and a list copy is
+        microseconds, which is all the click is allowed to cost."""
+        snap = dict(r)
+        for k, v in r.items():
+            if isinstance(v, list):
+                snap[k] = list(v)
+        return snap
+
+    def _save_pump():
+        """Once per frame: say how far the save has got.
+
+        The line is printed from the MAIN LOOP, so it is also the evidence that
+        the loop is still turning while the session renders -- until 2026-09-22
+        it could not be, because the render held this thread."""
+        th = _save_job['thread']
+        if th is None or not th.is_alive() or _save_job['progress'] is None:
+            return
+        mark = int(_save_job['progress'] * 4)
+        if mark > _save_job['printed']:
+            _save_job['printed'] = mark
+            print(f"[save] {_save_job['label']} {_save_job['progress'] * 100:.0f}%",
+                  flush=True)
+
+    def _toolbar_message():
+        """What the toolbar shows: a save in flight reports itself, otherwise the
+        last message until it ages out."""
+        th = _save_job['thread']
+        if th is not None and th.is_alive():
+            if _save_job['progress'] is None:
+                return _save_job['label']
+            return f"{_save_job['label']} {_save_job['progress'] * 100:.0f}%"
+        return (_message['text']
+                if time.perf_counter() - _message['at'] < _MESSAGE_S else '')
+
     def _save_experiment():
         """What has been played becomes an EXPERIMENT in the catalog the bench
         reads: a record with its scene, its WAV, its end snapshot to Continue
@@ -999,7 +1045,18 @@ def main(autoplay_midi=None):
 
         The offline render is not the audio that came out of the speakers -- it
         is what the scene produces without the dips of a busy machine, which is
-        what an experiment is for; the live WAV stays with the session dump."""
+        what an experiment is for; the live WAV stays with the session dump.
+
+        The CLICK only decides that a save should happen and hands the log to a
+        worker thread: the render costs roughly half the session's length, which
+        the frame loop cannot be asked to wait for (the instrument would stop
+        drawing, stop answering the keyboard, and Windows would grey it out as
+        "not responding" -- what this looked like from the outside was a hang).
+        Everything below the snapshot therefore runs in `_save_worker`."""
+        th = _save_job['thread']
+        if th is not None and th.is_alive():
+            _say("Save: the previous one is still being written")
+            return
         if rec is None:
             _say("Save: this run keeps no session log (CASYNTH_NO_RECORD)")
             return
@@ -1011,8 +1068,23 @@ def main(autoplay_midi=None):
         except Exception as exc:                       # noqa: BLE001
             _say(f"Save: the bench is not available here ({exc})")
             return
+        snap = _rec_snapshot(rec)
+        _save_job['label'] = 'Saving the session'
+        _save_job['progress'] = None
+        _save_job['printed'] = -1
+        _save_job['thread'] = threading.Thread(
+            target=_save_worker, args=(snap, _catalog, _offrec),
+            name='casynth-save', daemon=True)
+        _save_job['thread'].start()
+        print("[save] saving the session as an experiment; the instrument keeps "
+              "playing while it renders", flush=True)
+
+    def _save_worker(snap, _catalog, _offrec):
+        """The save itself, off the frame loop.  It touches nothing the UI owns:
+        it reads the session SNAPSHOT it was handed, writes its own files, and
+        reports back through _save_job (progress) and _say (the final line)."""
         try:
-            ts = _dump_session(rec, prefix=_SESSION_PREFIX)
+            ts = _dump_session(snap, prefix=_SESSION_PREFIX)
             doc, info = scene_from_session(ts, prefix=_SESSION_PREFIX,
                                            title=f"session {ts}")
         except SessionError as exc:
@@ -1022,12 +1094,19 @@ def main(autoplay_midi=None):
             _say(f"Save failed: {exc}")
             return
         seconds = max(0.5, info['samples'] / float(SR))
+        _save_job['label'] = f"Rendering {seconds:.0f}s"
+        _save_job['progress'] = 0.0
+
+        def _tick(i, n):
+            _save_job['progress'] = (i + 1) / float(max(1, n))
+
         try:
             cat = _catalog.Catalog(root=_EXPERIMENT_ROOT)
             rid, _snap = _offrec.record(
                 cat, doc, seconds, title=f"Session {ts}",
                 note=(f"Played in the prototype on {engines.label(info['engine'])}; "
-                      f"{info['steps']} automaton steps, {info['onsets']} note events."))
+                      f"{info['steps']} automaton steps, {info['onsets']} note events."),
+                on_block=_tick)
         except Exception as exc:                       # noqa: BLE001
             _say(f"Save failed: {exc}")
             return
@@ -1843,8 +1922,7 @@ def main(autoplay_midi=None):
             audio_name=_out_name(),
             # the Min / Max field being typed into, if any (see range_edit)
             range_edit=range_edit, range_error=_range_error['at'],
-            message=(_message['text']
-                     if time.perf_counter() - _message['at'] < _MESSAGE_S else ''),
+            message=_toolbar_message(),
             # 'ok' it plays there / 'pending' not opened yet / 'failed' it refused
             audio_state=('ok' if audio_ok else
                          ('pending' if not _device['opened'] else 'failed')),
@@ -1862,6 +1940,7 @@ def main(autoplay_midi=None):
             budget['lookahead'] = AUDIO_LOOKAHEAD_CHUNKS
         draw_frame(screen, (font, small), state, lay, rt)
         pygame.display.flip()
+        _save_pump()
 
         if not _device['opened']:
             _device['opened'] = True
@@ -1889,6 +1968,14 @@ def main(autoplay_midi=None):
           f"({budget['lookahead'] * CHUNK_S * 1000.0:.0f} ms); underruns {host.underruns}")
     if rec is not None and _rec_audio:
         _dump_session(rec)
+
+    # A save started just before quitting still has to land: the worker holds its
+    # own snapshot of the session, so nothing above can spoil it, but the process
+    # must not leave while it renders.
+    _save_th = _save_job['thread']
+    if _save_th is not None and _save_th.is_alive():
+        print("[save] finishing the save before quitting", flush=True)
+        _save_th.join()
 
     pygame.quit()
 
