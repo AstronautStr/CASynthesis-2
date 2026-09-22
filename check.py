@@ -197,6 +197,8 @@ def gates():
              "unified Laplace tests", _t("test_laplace_unified.py"), timeout=900, fast=True),
         Gate("the instrument comes in time on the fields the user played",
              "live budget", _t("test_live_budget.py"), timeout=600, timing=()),
+        Gate("a spectrum knob does not decompose the field again (counted, not timed)",
+             "knob drag work", _t("test_knob_drag_work.py"), timeout=300, fast=True),
         Gate("golden master", "golden master",
              [py, os.path.join("tests", "golden", "golden_master.py")], env={}, fast=True),
         Gate("events master (the Events cells of Laplace+, byte-exact)", "events master",

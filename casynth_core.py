@@ -29,6 +29,8 @@ Extracted 1:1 from mapping_bench.py; the Laplacian path matches the (newer,
 researcher-fixed) gol_life_synth_laplacian.py copy.  Both apps import from here.
 """
 
+import collections
+import hashlib
 import threading
 
 import numpy as np
@@ -57,11 +59,87 @@ _GUARD = 0.45 * SR         # anti-alias guard frequency (Hz)
 # The lock changes no arithmetic and no ordering -- the bytes are the same.
 _EIGH_LOCK = threading.Lock()
 
+# ── the same matrix, decomposed once ─────────────────────────────────────────
+# The eigen-decomposition of a figure's Laplacian depends on the FIELD alone; the
+# spectrum knobs (n, spread, alpha, shape, harm, dyn) act only on the cheap part
+# after it -- which modes are picked, the harmonic pull, the amplitude law.  Yet
+# every knob value used to run LAPACK again on every figure: on the UI thread
+# (the display's analyse), on the render thread (the Env cells' set_params) and
+# in the Events articulation's _retune_all -- twenty-odd solves per frame of a
+# drag, the single most expensive thing the instrument did (audit of 2026-09-22,
+# memory/log/2026-09-22-perf-audit.md; the gate is tests/test_knob_drag_work.py).
+#
+# So the result is remembered by the BYTES of the matrix.  Nothing changes in
+# the numbers: a hit hands back the very arrays LAPACK produced for that input,
+# frozen read-only so no caller can alter what the next one gets.  The values-only
+# solve and the vectors solve are kept apart -- LAPACK's two drivers do not agree
+# in the last bits of the eigenvalues, and `shape` decides which one the law
+# reads, so mixing them would move bits.  Bounded LRU; a lock, because the UI and
+# the render thread ask at once.
+_EIG_CAP = 256
+_EIG_LOCK = threading.Lock()
+_EIG_VALS = collections.OrderedDict()      # key -> eigenvalues
+_EIG_FULL = collections.OrderedDict()      # key -> (eigenvalues, eigenvectors)
+_EIG_STATS = {'hits': 0, 'misses': 0}
+
+
+def _eig_key(a):
+    a = np.ascontiguousarray(a, dtype=float)
+    return (a.shape, hashlib.blake2b(a.tobytes(), digest_size=16).digest()), a
+
+
+def _eig_get(cache, key):
+    with _EIG_LOCK:
+        got = cache.get(key)
+        if got is not None:
+            cache.move_to_end(key)
+            _EIG_STATS['hits'] += 1
+        else:
+            _EIG_STATS['misses'] += 1
+        return got
+
+
+def _eig_put(cache, key, value):
+    with _EIG_LOCK:
+        cache[key] = value
+        cache.move_to_end(key)
+        while len(cache) > _EIG_CAP:
+            cache.popitem(last=False)
+
+
+def eigen_cache_clear():
+    """Forget every remembered decomposition (tests that count solves)."""
+    with _EIG_LOCK:
+        _EIG_VALS.clear()
+        _EIG_FULL.clear()
+        _EIG_STATS['hits'] = _EIG_STATS['misses'] = 0
+
+
+def eigvalsh_sym(a):
+    """np.linalg.eigvalsh, remembered by the matrix (read-only result)."""
+    key, a = _eig_key(a)
+    got = _eig_get(_EIG_VALS, key)
+    if got is not None:
+        return got
+    w = np.linalg.eigvalsh(a)
+    w.flags.writeable = False
+    _eig_put(_EIG_VALS, key, w)
+    return w
+
 
 def eigh_sym(a):
-    """np.linalg.eigh, serialized across threads (see _EIGH_LOCK)."""
+    """np.linalg.eigh, serialized across threads (see _EIGH_LOCK) and remembered
+    by the matrix (read-only results)."""
+    key, a = _eig_key(a)
+    got = _eig_get(_EIG_FULL, key)
+    if got is not None:
+        return got
     with _EIGH_LOCK:
-        return np.linalg.eigh(a)
+        w, v = np.linalg.eigh(a)
+    w.flags.writeable = False
+    v.flags.writeable = False
+    _eig_put(_EIG_FULL, key, (w, v))
+    return w, v
 
 def extract(grid, size=PATCH_SIZE):
     """Return a size×size patch centered on the centroid of live cells.
@@ -301,7 +379,7 @@ def laplacian_modes(L, f0, n=N_PARTIALS_DEFAULT, spread=0.0, alpha=1.0, shape=0.
     if shape > 0.0:
         eigs, vecs = eigh_sym(L)
     else:
-        eigs = np.linalg.eigvalsh(L)
+        eigs = eigvalsh_sym(L)
     nonzero_mask = eigs > 1e-6
     nonzero_idx = np.where(nonzero_mask)[0]
     nonzero_sq = np.sqrt(np.maximum(eigs[nonzero_mask], 0.0))
