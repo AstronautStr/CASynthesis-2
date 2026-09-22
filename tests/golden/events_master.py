@@ -200,10 +200,12 @@ def main():
         if n and audio.shape[1:] == ra.shape[1:]:
             diff = np.abs(audio[:n].astype(np.int64) - ra[:n].astype(np.int64))
             first = int(np.argmax(diff.max(axis=1) > 0)) if diff.max() else -1
+            n_diff = int(np.count_nonzero(diff))
             print(f"[FAIL] {name}: audio differs from baseline: shapes ref={ra.shape} "
-                  f"out={audio.shape} max|diff|={int(diff.max())} first at sample {first} "
-                  f"(block {first // BLOCK if first >= 0 else '-'}); state "
-                  f"{'same' if state == rs else 'DIFFERS'} (wrote {path})")
+                  f"out={audio.shape} max|diff|={int(diff.max())} LSB, "
+                  f"{n_diff} of {diff.size} values differ ({100.0 * n_diff / diff.size:.3f} %), "
+                  f"first at sample {first} (block {first // BLOCK if first >= 0 else '-'}); "
+                  f"state {'same' if state == rs else 'DIFFERS'} (wrote {path})")
         else:
             print(f"[FAIL] {name}: shape mismatch ref={ra.shape} out={audio.shape} "
                   f"(wrote {path})")

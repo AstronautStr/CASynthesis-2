@@ -46,7 +46,8 @@ def kernels():
            'fg._fill_laplacian': fg._fill_laplacian,
            'fg._periodic_mean': fg._periodic_mean}
     for name in ('_live_slots', '_wave_ramps', '_wave_slots', '_wave_mix', '_amps',
-                 '_amps_ramps', '_amps_slots', '_fm_sum', '_fm_slots', '_fm_mix'):
+                 '_amps_ramps', '_amps_slots', '_fm_sum', '_fm_slots', '_fm_mix',
+                 '_fm_sum_table', '_fm_slots_table'):
         out['uev.' + name] = getattr(uev, name)
     return out
 

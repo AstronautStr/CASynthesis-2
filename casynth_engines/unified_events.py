@@ -54,6 +54,7 @@ them the prototype's default tab -- never pull numba or the 2000-line resonator
 bank just to play a Laplace line (the seam's A1 win).
 """
 import math
+import os
 
 import numpy as np
 
@@ -79,6 +80,29 @@ P_LCUR, P_LINC, P_LTGT, P_RCUR, P_RINC, P_RTGT = range(6)
 H_PREV, H_MIX = 0, 1
 HALF_PI = math.pi / 2.0
 TAIL_FLOOR = orz.TAIL_FLOOR
+
+# ── the sine of the FM readout (2026-09-23) ──────────────────────────────────
+# The Events + FM block is 3.5 million sines: 120 carriers and ~1100 modulators
+# (84 % of them on tails of figures already dead) at OVERSAMPLE x sr, which cost
+# 8.5 ms of the 7.98 ms block cold and 12 warm -- the sound fell out entirely
+# (user sessions of 2026-09-22).  The law is the count; what a sine COSTS is
+# not.  A table of SINE_TABLE_N points a period, read with linear interpolation,
+# is two loads and a multiply where libm's sin is ~30 operations: 21 -> 11 ms a
+# block on one thread on the live field (measured), an error of ~3e-7 peak,
+# -122 dB relative RMS against the exact sine -- 60 dB under the tolerance the
+# FM law itself sets (-60 dB, memory/req-laplace-fm-2026-09-20.md section 4)
+# and 26 dB under the int16 output's own floor.  It is NOT bit for bit: a
+# double differs in its eighth digit, and where an output sample sits on a
+# rounding edge the int16 lands on the neighbour.  tests/golden/events_master
+# pins the table; CASYNTH_FM_SINE=libm restores the exact sine for an A/B.
+# The Env + FM cell (laplace_fm, numpy's sin) and every catalog record are
+# untouched.
+SINE_TABLE_N = 4096
+_SINE_LUT = np.sin(np.arange(SINE_TABLE_N + 1) * (TWO_PI / SINE_TABLE_N))   # + a guard at 2 pi
+_SINE_SCALE = SINE_TABLE_N / TWO_PI
+FM_SINE = os.environ.get('CASYNTH_FM_SINE', 'table').strip().lower()
+if FM_SINE not in ('table', 'libm'):                # pragma: no cover
+    FM_SINE = 'table'
 
 
 # ── Saw / Square: the law's kernel with a branched readout ───────────────────
@@ -772,6 +796,104 @@ def _fm_slots(v0, v1, n_os, oversample, index, amp, amp_prev, carr, carr_prev,
 
 
 @_jit
+def _fm_sum_table(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
+                  panl, panl_prev, panr, panr_prev, row_start, inc_mod, th_mod,
+                  inc_c, th_c, out_l, out_r, lut, scale, n_lut):
+    """_fm_sum with the table sine (module note): a modulator's phase is kept
+    in [0, 2 pi) and reads the table directly; the carrier's argument
+    theta + acc is unbounded and is wrapped first."""
+    V = carr.shape[0]
+    for m in range(n_os):
+        t = m // oversample
+        fr = (m % oversample + 1) / oversample
+        L = 0.0
+        R = 0.0
+        for v in range(V):
+            acc = 0.0
+            for k in range(row_start[v], row_start[v + 1]):
+                a0 = amp_prev[k] if t == 0 else amp[k, t - 1]
+                a = a0 + (amp[k, t] - a0) * fr
+                th = th_mod[k]
+                p = th * scale
+                i = int(p)
+                f = p - i
+                if i >= n_lut:
+                    i = n_lut - 1
+                    f = 1.0
+                acc += index * a * (lut[i] + (lut[i + 1] - lut[i]) * f)
+                thn = th + inc_mod[k]
+                if thn >= TWO_PI:
+                    thn -= TWO_PI
+                th_mod[k] = thn
+            A0 = carr_prev[v] if t == 0 else carr[v, t - 1]
+            A = A0 + (carr[v, t] - A0) * fr
+            x = th_c[v] + acc
+            x = x - TWO_PI * math.floor(x / TWO_PI)
+            p = x * scale
+            i = int(p)
+            f = p - i
+            if i >= n_lut:
+                i = n_lut - 1
+                f = 1.0
+            y = A * (lut[i] + (lut[i + 1] - lut[i]) * f)
+            thn = th_c[v] + inc_c
+            if thn >= TWO_PI:
+                thn -= TWO_PI
+            th_c[v] = thn
+            l0 = panl_prev[v] if t == 0 else panl[v, t - 1]
+            r0 = panr_prev[v] if t == 0 else panr[v, t - 1]
+            L += (l0 + (panl[v, t] - l0) * fr) * y
+            R += (r0 + (panr[v, t] - r0) * fr) * y
+        out_l[m] = L
+        out_r[m] = R
+
+
+@_jit
+def _fm_slots_table(v0, v1, n_os, oversample, index, amp, amp_prev, carr, carr_prev,
+                    row_start, inc_mod, th_mod, inc_c, th_c, yv, lut, scale, n_lut):
+    """_fm_slots with the table sine -- the carriers [v0, v1) of one block."""
+    for v in range(v0, v1):
+        k0 = row_start[v]
+        k1 = row_start[v + 1]
+        thc = th_c[v]
+        for m in range(n_os):
+            t = m // oversample
+            fr = (m % oversample + 1) / oversample
+            acc = 0.0
+            for k in range(k0, k1):
+                a0 = amp_prev[k] if t == 0 else amp[k, t - 1]
+                a = a0 + (amp[k, t] - a0) * fr
+                th = th_mod[k]
+                p = th * scale
+                i = int(p)
+                f = p - i
+                if i >= n_lut:
+                    i = n_lut - 1
+                    f = 1.0
+                acc += index * a * (lut[i] + (lut[i + 1] - lut[i]) * f)
+                thn = th + inc_mod[k]
+                if thn >= TWO_PI:
+                    thn -= TWO_PI
+                th_mod[k] = thn
+            A0 = carr_prev[v] if t == 0 else carr[v, t - 1]
+            A = A0 + (carr[v, t] - A0) * fr
+            x = thc + acc
+            x = x - TWO_PI * math.floor(x / TWO_PI)
+            p = x * scale
+            i = int(p)
+            f = p - i
+            if i >= n_lut:
+                i = n_lut - 1
+                f = 1.0
+            yv[v, m] = A * (lut[i] + (lut[i + 1] - lut[i]) * f)
+            thn = thc + inc_c
+            if thn >= TWO_PI:
+                thn -= TWO_PI
+            thc = thn
+        th_c[v] = thc
+
+
+@_jit
 def _fm_mix(n_os, oversample, yv, n_v, panl, panl_prev, panr, panr_prev,
             out_l, out_r):
     """The pan and the sum over carriers -- in carrier order, the order the
@@ -847,20 +969,30 @@ def render_fm(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
     With one thread -- or with too few carriers to be worth a hand-off -- it IS
     _fm_sum, the single loop above."""
     n_v = carr.shape[0]
+    table = FM_SINE == 'table'
     parts = render_pool.THREADS if threads is None else int(threads)
     pool = render_pool.pool(threads)
     if pool is None or parts <= 1 or n_v < 2 * parts:
-        _fm_sum(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
-                panl, panl_prev, panr, panr_prev, row_start, inc_mod, th_mod,
-                inc_c, th_c, out_l, out_r)
+        if table:
+            _fm_sum_table(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
+                          panl, panl_prev, panr, panr_prev, row_start, inc_mod, th_mod,
+                          inc_c, th_c, out_l, out_r, _SINE_LUT, _SINE_SCALE, SINE_TABLE_N)
+        else:
+            _fm_sum(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
+                    panl, panl_prev, panr, panr_prev, row_start, inc_mod, th_mod,
+                    inc_c, th_c, out_l, out_r)
         return
     if scratch is None or scratch.n_os != n_os or scratch.yv.shape[0] < n_v:
         scratch = FMScratch(n_v, 1, n_os // oversample, n_os)
     rest = (n_os, oversample, index, amp, amp_prev, carr, carr_prev, row_start,
             inc_mod, th_mod, inc_c, th_c, scratch.yv)
+    kernel = _fm_slots
+    if table:
+        kernel = _fm_slots_table
+        rest = rest + (_SINE_LUT, _SINE_SCALE, SINE_TABLE_N)
     spans = render_pool.ranges(n_v, parts)
-    futures = [pool.submit(_fm_slots, a, b, *rest) for a, b in spans[1:]]
-    _fm_slots(spans[0][0], spans[0][1], *rest)       # the caller takes a share
+    futures = [pool.submit(kernel, a, b, *rest) for a, b in spans[1:]]
+    kernel(spans[0][0], spans[0][1], *rest)          # the caller takes a share
     for f in futures:
         f.result()
     _fm_mix(n_os, oversample, scratch.yv, n_v, panl, panl_prev, panr, panr_prev,
@@ -961,6 +1093,11 @@ def warm_kernels():
             row_start, one, one, 0.0, one, l_os, r_os)
     _fm_slots(0, 0, 0, lfm.OVERSAMPLE, 1.0, amp, one, carr, one, row_start, one, one,
               0.0, one, yv)
+    _fm_sum_table(0, lfm.OVERSAMPLE, 1.0, amp, one, carr, one, panl, one, panr, one,
+                  row_start, one, one, 0.0, one, l_os, r_os, _SINE_LUT, _SINE_SCALE,
+                  SINE_TABLE_N)
+    _fm_slots_table(0, 0, 0, lfm.OVERSAMPLE, 1.0, amp, one, carr, one, row_start, one,
+                    one, 0.0, one, yv, _SINE_LUT, _SINE_SCALE, SINE_TABLE_N)
     _fm_mix(0, lfm.OVERSAMPLE, yv, 0, panl, one, panr, one, l_os, r_os)
     # the geometry the tracker runs at every boundary
     fg.laplacian_matrix(np.array([[0, 0], [0, 1]], np.int64), 4, 4)
