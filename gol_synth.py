@@ -59,6 +59,7 @@ RUN
 """
 
 
+import gc
 import os
 import sys
 import ctypes
@@ -257,6 +258,7 @@ def main(autoplay_midi=None):
     _dbg = bool(os.environ.get('CASYNTH_DEBUG_AUDIO'))
     audio_ok = False
     _device = {'opened': False}
+    _frozen = {'done': False}          # gc.freeze() done (see the frame loop)
 
     def _open_device():
         """Open the output once the first frame has been drawn and the render
@@ -1948,6 +1950,19 @@ def main(autoplay_midi=None):
         if not _device['opened']:
             _device['opened'] = True
             audio_ok = _open_device()
+        if not _frozen['done'] and _device['opened'] and _handed['id'] is not None:
+            # Everything that exists now -- numpy, scipy, numba and its kernels,
+            # pygame, the pattern library, the device, the engine just built and
+            # warmed: ~173 000 tracked objects the instrument never frees -- is
+            # moved out of the collector's reach.  A full collection used to
+            # walk it all, 25-30 ms with the GIL held, and the render thread
+            # and the device callback stalled with it (both user sessions of
+            # 2026-09-22, underruns at exactly those moments).  From here on a
+            # full pass walks only what a frame makes.  Once, on the first
+            # frame that has both the device and the engine (the engine is
+            # handed over on the second frame).  Gate: tests/test_gc_pause.py.
+            gc.freeze()
+            _frozen['done'] = True
 
         if _dumpframe is not None:
             pygame.image.save(screen, _dumpframe)

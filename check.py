@@ -206,6 +206,8 @@ def gates():
              timeout=300, fast=True),
         Gate("switching an axis compiles nothing on the render thread (counted)",
              "events kernels warm", _t("test_events_kernels_warm.py"), timeout=300, fast=True),
+        Gate("a full garbage collection cannot stall the instrument",
+             "gc pause", _t("test_gc_pause.py"), timeout=300, fast=True),
         Gate("golden master", "golden master",
              [py, os.path.join("tests", "golden", "golden_master.py")], env={}, fast=True),
         Gate("events master (the Events cells of Laplace+, byte-exact)", "events master",
