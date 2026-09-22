@@ -166,6 +166,13 @@ class SoundEngine:
         takes part in the sound."""
         return None
 
+    def warm(self):
+        """Do on the CALLER'S thread whatever a later block would otherwise do
+        for the first time on the render thread -- compile a kernel, build a
+        cell.  Optional; the base class has nothing to warm.  A host calls it
+        right after creating the engine, before handing it to the render
+        thread (2026-09-22: the unified engine's Events cells)."""
+
     # -- helpers for subclasses -------------------------------------------------
     def _check_transpose(self, transpose):
         """Refuse a note an engine cannot play instead of playing a wrong one."""

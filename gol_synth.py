@@ -1246,6 +1246,9 @@ def main(autoplay_midi=None):
         e = engines.create(eid, _engine_ctx(), dict(params))
         _engine_tell(e)
         e.init(spec['grid'], spec['exc'], gain)
+        # whatever a later block would do for the first time on the render
+        # thread (compile a kernel, build a cell) happens here, on this one
+        e.warm()
         return e
 
     def _hand_engine():

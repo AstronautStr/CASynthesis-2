@@ -59,6 +59,7 @@ import numpy as np
 
 from casynth_config import TWO_PI, _RAMP
 from . import object_resonators as orz
+from . import figures as fg
 from . import laplace_carriers as lc
 from . import laplace_fm as lfm
 from . import event_network as en
@@ -908,6 +909,62 @@ class WaveTables:
 
 
 _EMPTY_TABLES = np.zeros((1, lc.TABLE_N))    # nothing has been built yet
+
+
+def warm_kernels():
+    """Compile (or load from numba's cache) every kernel an Events cell can run,
+    on the CALLER'S thread, before any cell exists.
+
+    A cell is created on the first switch of an axis -- inside set_params, on
+    the render thread -- and creating it used to load the kernels of the
+    Objects bank and of the voicings right there: 159-189 ms inside one block
+    and a burst of underruns on every first click of `artic` (both user
+    sessions of 2026-09-22).  The host builds the ENGINE on its own thread for
+    exactly this reason, so the engine's warm() calls this from there.
+
+    Every kernel is called with an EMPTY range of work (n = 0, no slots, no
+    carriers) on throwaway arrays of the exact types the cells pass, so numba
+    specialises the same signatures the real blocks use and nothing -- no pool,
+    no table, no state -- is touched.  Gate: tests/test_events_kernels_warm.py."""
+    from .engine_api import EngineContext
+    ctx = EngineContext(orz.SR_REQUIRED, orz.BLOCK_REQUIRED, 2, 110.0, 1.0, 2.0)
+    o = orz.ObjectResonatorsEngine(ctx, dict(objects_params(dict(
+        n=12, spread=0.0, alpha=1.0, shape=0.0, harm=0.0, fullshape=1, dyn=0.0,
+        events=0, radius_mul=1.0, decay_s=0.8, attack_ms=0.0))))   # compiles _render
+    S, M, n = o.role.shape[0], o.zre.shape[1], int(ctx.block)
+    slots = np.zeros(S, np.int64)
+    _live_slots(o.role, slots)
+    rb, gb, qb, mb, gain = (np.zeros(n) for _ in range(5))
+    cl, cr = np.zeros((S, n)), np.zeros((S, n))
+    tab = np.full((S, M), -1, np.int64)
+    out = np.zeros((n, 2))
+    _wave_ramps(0, o.rr, o.gg, o.qq, o.ints, _RAMP, 0, rb, gb, qb, mb)
+    state = (o.role, o.ndrive, o.npulse, o.nlive, o.zre, o.zim, o.cth, o.sth,
+             o.wcur, o.winc, o.wtgt, o.wleft, o.zf, o.zs, o.zu, o.zfm, o.zsm, o.zum,
+             o.pan, o.pleft)
+    _wave_slots(0, 0, 0, slots, *state, o.consts, o.level, o.slaw, o.gam_a, o.gam_t,
+                o.ksm, o.sr, tab, tab, _EMPTY_TABLES, lc.TABLE_N, 0, rb, qb, mb, cl, cr)
+    _wave_mix(0, slots, 0, cl, cr, gb, o.hp_h, o.hp, orz.OUT_SCALE, out)
+    row_of = np.full((S, M), -1, np.int64)
+    slot_of = np.full(S, -1, np.int64)
+    amp, carr, panl, panr = (np.zeros((1, n)) for _ in range(4))
+    _amps(0, *state, o.rr, o.gg, o.qq, o.ints, o.consts, o.level, o.slaw, o.gam_a,
+          o.gam_t, o.ksm, o.sr, row_of, slot_of, amp, carr, panl, panr, gain)
+    _amps_ramps(0, o.rr, o.gg, o.qq, o.ints, rb, qb, gain)
+    _amps_slots(0, 0, 0, slots, *state, o.consts, o.level, o.slaw, o.gam_a, o.gam_t,
+                o.ksm, o.sr, row_of, slot_of, amp, carr, panl, panr, rb, qb)
+    one = np.zeros(1)
+    row_start = np.zeros(2, np.int64)
+    yv = np.zeros((1, 0))
+    l_os, r_os = np.zeros(0), np.zeros(0)
+    _fm_sum(0, lfm.OVERSAMPLE, 1.0, amp, one, carr, one, panl, one, panr, one,
+            row_start, one, one, 0.0, one, l_os, r_os)
+    _fm_slots(0, 0, 0, lfm.OVERSAMPLE, 1.0, amp, one, carr, one, row_start, one, one,
+              0.0, one, yv)
+    _fm_mix(0, lfm.OVERSAMPLE, yv, 0, panl, one, panr, one, l_os, r_os)
+    # the geometry the tracker runs at every boundary
+    fg.laplacian_matrix(np.array([[0, 0], [0, 1]], np.int64), 4, 4)
+    fg.periodic_mean(np.array([1.0, 2.0]), 4)
 
 
 def objects_params(params):

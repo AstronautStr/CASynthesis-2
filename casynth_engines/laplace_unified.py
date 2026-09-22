@@ -519,6 +519,16 @@ class UnifiedLaplaceEngine(GenEnvelopeKnobs, SoundEngine):
     def reset(self, gain=0.0):
         self.init(self._grid, self._exc, gain)
 
+    def warm(self):
+        """Compile the kernels of the Events cells now, on this thread.  A
+        switch of `artic` creates its cell inside set_params, on the render
+        thread, and the first one in the process used to load the kernels there
+        (159-189 ms in one block, a burst of underruns -- both user sessions of
+        2026-09-22).  The import is here, not at module level, so a host that
+        only ever plays the Env cells still pays nothing (the seam's A1)."""
+        from . import unified_events as uev
+        uev.warm_kernels()
+
     def display(self):
         lay = self._active() or (self._layers[0] if self._layers else None)
         d = dict(unified=True, artic=int(self._p('artic')), voice=int(self._p('voice')),

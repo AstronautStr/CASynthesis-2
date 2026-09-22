@@ -204,6 +204,8 @@ def gates():
         Gate("the wave-table pool holds every wave a standing field sounds (counted)",
              "wave pool holds the field", _t("test_wave_pool_holds_the_field.py"),
              timeout=300, fast=True),
+        Gate("switching an axis compiles nothing on the render thread (counted)",
+             "events kernels warm", _t("test_events_kernels_warm.py"), timeout=300, fast=True),
         Gate("golden master", "golden master",
              [py, os.path.join("tests", "golden", "golden_master.py")], env={}, fast=True),
         Gate("events master (the Events cells of Laplace+, byte-exact)", "events master",
