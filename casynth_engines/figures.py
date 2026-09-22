@@ -53,6 +53,13 @@ Everything left is a tail / a new figure.
 import numpy as np
 from scipy import ndimage
 
+try:
+    import numba as _numba
+    _jit = _numba.njit(cache=True, nogil=True)
+except ImportError:                    # pragma: no cover
+    def _jit(f):
+        return f
+
 STRUCT8 = np.ones((3, 3), np.uint8)
 MOVE_MAX = 1.5                 # zero-overlap continuation: centre displacement <= this
 TIE_EPS = 1e-9
@@ -117,6 +124,57 @@ def torus_delta(x, a, n):
     return np.mod(np.asarray(x, np.float64) - a + n / 2.0, n) - n / 2.0
 
 
+@_jit
+def _periodic_mean(x, n, prev, has_prev):
+    """periodic_mean as one pass over the cuts.
+
+    The array form built an (n, len(x)) matrix and ran eight numpy calls over it;
+    tracking the figures of a Random field asks for two of these per figure per
+    generation, on the render thread, where the calls cost more than the
+    arithmetic (2026-09-22, profiled for tests/test_live_budget).  Same
+    operations, same order, same bits -- the sums are the short ones numpy adds
+    straight through."""
+    m = x.shape[0]
+    half = n / 2.0
+    mus = np.empty(n)
+    F = np.empty(n)
+    best = np.inf
+    for si in range(n):
+        s = float(si)
+        acc = 0.0
+        for k in range(m):
+            acc += s + ((x[k] - s) % n)
+        mu = acc / m
+        f = 0.0
+        for k in range(m):
+            d = (x[k] - mu + half) % n - half
+            f += d * d
+        mus[si] = mu % n
+        F[si] = f
+        if f < best:
+            best = f
+    tol = best + TIE_EPS * max(1.0, best)
+    out = 0.0
+    dist_out = 0.0
+    found = False
+    for si in range(n):
+        if F[si] > tol:
+            continue
+        mu = mus[si]
+        if not found:                         # the first candidate, in cut order
+            found = True
+            out = mu
+            dist_out = abs((mu - prev + half) % n - half) if has_prev else 0.0
+        elif has_prev:                        # nearest to the previous centre,
+            d = abs((mu - prev + half) % n - half)      # ties by the lower centre
+            if d < dist_out or (d == dist_out and mu < out):
+                out = mu
+                dist_out = d
+        elif mu < out:                        # no previous centre: the lowest
+            out = mu
+    return out
+
+
 def periodic_mean(x, n, prev=None):
     """The periodic centre of integer coordinates x on a circle of length n
     (docstring of the module); `prev` = the previous centre for the tie rule."""
@@ -124,19 +182,8 @@ def periodic_mean(x, n, prev=None):
     n = int(n)
     if x.size == 0:
         raise ValueError("periodic_mean: no cells")
-    s = np.arange(n, dtype=np.float64)[:, None]
-    xu = s + np.mod(x[None, :] - s, n)
-    mu = xu.mean(axis=1)
-    d = np.mod(x[None, :] - mu[:, None] + n / 2.0, n) - n / 2.0
-    F = (d * d).sum(axis=1)
-    best = float(F.min())
-    cand = np.nonzero(F <= best + TIE_EPS * max(1.0, best))[0]
-    mus = np.mod(mu[cand], n)
-    if prev is not None and cand.size > 1:
-        dist = np.abs(torus_delta(mus, float(prev), n))
-        order = np.lexsort((mus, dist))
-        return float(mus[order[0]])
-    return float(mus.min())
+    return float(_periodic_mean(x, n, 0.0 if prev is None else float(prev),
+                                prev is not None))
 
 
 def centre_of(cells, rows, cols, prev=None):
@@ -214,27 +261,47 @@ def shape_key(cells, rows, cols):
     return (int(rows), int(cols), canonical_cells(cells, rows, cols).tobytes())
 
 
+@_jit
+def _fill_laplacian(cells, rows, cols, index, L):
+    """L = D - A, one cell at a time.  The eight offsets of a cell are walked in
+    the order (-1,-1) ... (1,1) and a neighbour already joined to this cell is not
+    joined twice -- on a torus narrow enough two offsets can land on the same cell,
+    which is what the `seen` matrix of the array form guarded against.
+
+    Every entry is a small whole number, so the matrix is the SAME bit for bit
+    however it is filled: -1.0 off the diagonal and the degree on it."""
+    n = cells.shape[0]
+    for k in range(n):
+        index[cells[k, 0], cells[k, 1]] = k
+    for k in range(n):
+        r = cells[k, 0]
+        c = cells[k, 1]
+        deg = 0.0
+        for dr in range(-1, 2):
+            rr = (r + dr) % rows
+            for dc in range(-1, 2):
+                if dr == 0 and dc == 0:
+                    continue
+                j = index[rr, (c + dc) % cols]
+                if j >= 0 and j != k and L[k, j] == 0.0:
+                    L[k, j] = -1.0
+                    deg += 1.0
+        L[k, k] = deg
+
+
 def laplacian_matrix(cells, rows, cols):
     """float64 (N, N): L = D - A of the unweighted 8-connectivity graph of the
-    cells, neighbours taken modulo the torus (each neighbour counted once)."""
+    cells, neighbours taken modulo the torus (each neighbour counted once).
+
+    A block boundary of the Events articulation builds one of these per figure --
+    twenty-odd of them, every generation, on the render thread -- so the fill is
+    a compiled loop rather than eight masked passes with an np.add.at and an
+    N x N `seen` buffer (2026-09-22, profiled for tests/test_live_budget)."""
     cells = np.asarray(cells, np.int64)
     n = len(cells)
     index = np.full((rows, cols), -1, np.int64)
-    index[cells[:, 0], cells[:, 1]] = np.arange(n)
     L = np.zeros((n, n))
-    seen = np.zeros((n, n), bool)
-    for dr in (-1, 0, 1):
-        for dc in (-1, 0, 1):
-            if dr == 0 and dc == 0:
-                continue
-            j = index[np.mod(cells[:, 0] + dr, rows), np.mod(cells[:, 1] + dc, cols)]
-            i = np.nonzero(j >= 0)[0]
-            j = j[i]
-            keep = (j != i) & ~seen[i, j]
-            i, j = i[keep], j[keep]
-            seen[i, j] = True
-            L[i, j] -= 1.0
-            np.add.at(L, (i, i), 1.0)
+    _fill_laplacian(cells, int(rows), int(cols), index, L)
     return L
 
 

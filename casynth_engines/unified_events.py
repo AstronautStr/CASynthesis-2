@@ -62,6 +62,7 @@ from . import object_resonators as orz
 from . import laplace_carriers as lc
 from . import laplace_fm as lfm
 from . import event_network as en
+from . import render_pool
 
 try:
     import numba as _numba
@@ -80,25 +81,52 @@ TAIL_FLOOR = orz.TAIL_FLOOR
 
 
 # ── Saw / Square: the law's kernel with a branched readout ───────────────────
+#
+# THE BLOCK IS BUILT BY SLOT, NOT BY SAMPLE (2026-09-22).  Reading a mode back as
+# a wave costs an atan2 and a sqrt PER MODE PER SAMPLE: on the prototype's own
+# Random field that is 1040 live modes x 352 samples = 366 000 of each inside one
+# 7.98 ms block, and the device starved the moment the player moved `artic` to
+# Events -- 504 underruns in ten seconds, the case tests/test_live_budget.py
+# carries.  Measured there: the recurrence itself is 1.5 ms and the readout 6.3.
+#
+# The SAMPLES cannot be divided -- every mode is a recurrence, sample t needs
+# t - 1 -- which is why render_pool's own split (a range of samples, what FM and
+# the wave bank use) does not apply here.  The SLOTS can: two slots share nothing
+# but the ramps the whole block rides and the sum at the very end.  So the kernel
+# became three passes:
+#
+#   _wave_ramps   the ramps the block shares -- r, g, q and the blend -- one cheap
+#                 pass over the samples, the same arithmetic in the same order
+#   _wave_slots   a RANGE OF SLOTS, each carried across the whole block, writing
+#                 what it contributes to L and R; this is the pass workers share
+#   _wave_mix     the sum over slots IN SLOT ORDER, the DC blocker, the output
+#
+# The bytes do not move.  Every slot does its own operations in its own order (a
+# slot's state is its own), the ramps are what the sample loop computed, and L is
+# still accumulated over slots in ascending slot order -- so the additions happen
+# in the order they always did.  The gate that holds this is
+# tests/test_laplace_unified.ThreadedWaveRender, which runs the same state
+# through one thread and through the pool and compares samples bit for bit.
+
 
 @_jit
-def _render_wave(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth,
-                 wcur, winc, wtgt, wleft, zf, zs, zu, zfm, zsm, zum, pan, pleft,
-                 rr, gg, qq, ints, cst, hp_h, hp, out_scale, level,
-                 slaw, gam_a, gam_t, ksm, sr,
-                 tab_a, tab_b, tabs, table_n, blending, bramp):
-    """object_resonators._render with `a_j |z_j| W(phi_j)` in place of Re(z_j).
+def _live_slots(role, slots):
+    """The slots that are not free, in ascending order -- the order the single
+    loop visited them in, which is the order their contributions are summed."""
+    k = 0
+    for s in range(role.shape[0]):
+        if role[s] != ROLE_FREE:
+            slots[k] = s
+            k += 1
+    return k
 
-    tab_a / tab_b [s, j] : the row of `tabs` a mode reads, -1 = read Re(z).
-    `blending` (0/1) mixes the two readouts across the block on `bramp` -- the
-    one-block glide a waveform change gets.  The phase is READ OUT of the state
-    (arg z + pi/2), never kept beside it: a mode that the tracker moves to a tail
-    slot carries its phase with its own z, and nothing can fall out of step."""
-    S = role.shape[0]
-    qf = cst[en.C_QF]; qs = cst[en.C_QS]; strength = cst[en.C_STRENGTH]
-    scale = table_n / TWO_PI
-    for s in range(S):
-        level[s] = 0.0
+
+@_jit
+def _wave_ramps(n, rr, gg, qq, ints, bramp, blending, rb, gb, qb, mb):
+    """The per-sample ramps the whole block shares: the decay r, the gain g, the
+    packet pole q and the waveform blend.  Lifted out of the sample loop so a
+    worker never touches them -- the arithmetic, and the order of it, is the
+    sample loop's own."""
     for t in range(n):
         k = ints[I_K]
         left = ints[I_R_LEFT]
@@ -125,16 +153,42 @@ def _render_wave(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth,
             else:
                 qq[R_CUR] = qq[R_CUR] + qq[R_INC]
             ints[I_Q_LEFT] = left
-        r = rr[R_CUR]
-        g = gg[R_CUR]
-        q = qq[R_CUR]
-        mixb = bramp[t] if blending == 1 else 1.0
-        L = 0.0
-        R = 0.0
-        for s in range(S):
-            if role[s] == ROLE_FREE:
-                continue
-            nl = nlive[s]
+        rb[t] = rr[R_CUR]
+        gb[t] = gg[R_CUR]
+        qb[t] = qq[R_CUR]
+        mb[t] = bramp[t] if blending == 1 else 1.0
+        ints[I_K] = k + 1
+
+
+@_jit
+def _wave_slots(lo, hi, n, slots, role, ndrive, npulse, nlive, zre, zim, cth, sth,
+                wcur, winc, wtgt, wleft, zf, zs, zu, zfm, zsm, zum, pan, pleft,
+                cst, level, slaw, gam_a, gam_t, ksm, sr,
+                tab_a, tab_b, tabs, table_n, blending, rb, qb, mb, cl, cr):
+    """Slots slots[lo:hi] across the whole block: `a_j |z_j| W(phi_j)` in place of
+    Re(z_j), the readout of object_resonators._render.
+
+    tab_a / tab_b [s, j] : the row of `tabs` a mode reads, -1 = read Re(z).
+    `blending` (0/1) mixes the two readouts across the block on `bramp` -- the
+    one-block glide a waveform change gets.  The phase is READ OUT of the state
+    (arg z + pi/2), never kept beside it: a mode that the tracker moves to a tail
+    slot carries its phase with its own z, and nothing can fall out of step.
+
+    cl / cr [s, t] : what this slot adds to L and R, summed by _wave_mix."""
+    qf = cst[en.C_QF]; qs = cst[en.C_QS]; strength = cst[en.C_STRENGTH]
+    scale = table_n / TWO_PI
+    for si in range(lo, hi):
+        s = slots[si]
+        nl = nlive[s]
+        # neither the role nor the decay law changes inside a block, so what the
+        # sample loop re-read every sample is read once here
+        nd = ndrive[s] if role[s] == ROLE_ACTIVE else npulse[s]
+        adaptive = slaw[s] == 1
+        lev = 0.0
+        for t in range(n):
+            r = rb[t]
+            q = qb[t]
+            mixb = mb[t]
             wl = wleft[s]
             if wl > 0:
                 wl -= 1
@@ -161,8 +215,6 @@ def _render_wave(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth,
             u = q * zu[s] + (1.0 - q) * p
             zu[s] = u
             p = u
-            nd = ndrive[s] if role[s] == ROLE_ACTIVE else npulse[s]
-            adaptive = slaw[s] == 1
             acc = 0.0
             for j in range(nl):
                 re = zre[s, j]
@@ -228,19 +280,102 @@ def _render_wave(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth,
                 acc += wcur[s, j] * val
             b = acc
             a = b if b >= 0.0 else -b
-            if a > level[s]:
-                level[s] = a
-            L += pan[s, P_LCUR] * b
-            R += pan[s, P_RCUR] * b
+            if a > lev:
+                lev = a
+            cl[s, t] = pan[s, P_LCUR] * b
+            cr[s, t] = pan[s, P_RCUR] * b
+        level[s] = lev
+
+
+@_jit
+def _wave_mix(n, slots, n_slots, cl, cr, gb, hp_h, hp, out_scale, out):
+    """The sum over slots -- in slot order, the order the sample loop added them
+    in -- then the engine's DC blocker and the block's gain."""
+    for t in range(n):
+        L = 0.0
+        R = 0.0
+        for si in range(n_slots):
+            s = slots[si]
+            L += cl[s, t]
+            R += cr[s, t]
         yL = hp_h * ((hp[0, H_PREV] + L) - hp[0, H_MIX])
         hp[0, H_PREV] = yL
         hp[0, H_MIX] = L
         yR = hp_h * ((hp[1, H_PREV] + R) - hp[1, H_MIX])
         hp[1, H_PREV] = yR
         hp[1, H_MIX] = R
+        g = gb[t]
         out[t, 0] = yL * out_scale * g
         out[t, 1] = yR * out_scale * g
-        ints[I_K] = k + 1
+
+
+class WaveScratch:
+    """The room one wave block needs: the shared ramps and the per-slot halves of
+    L and R.  A cell keeps one -- allocating 2 x S x n floats 125 times a second
+    is exactly the kind of cost this split is meant to remove."""
+
+    __slots__ = ('n', 'rb', 'gb', 'qb', 'mb', 'cl', 'cr', 'slots')
+
+    def __init__(self, slots_max, n):
+        self.n = int(n)
+        self.rb = np.zeros(n)
+        self.gb = np.zeros(n)
+        self.qb = np.zeros(n)
+        self.mb = np.zeros(n)
+        self.cl = np.zeros((slots_max, n))
+        self.cr = np.zeros((slots_max, n))
+        self.slots = np.zeros(slots_max, np.int64)
+
+
+def render_wave(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth,
+                wcur, winc, wtgt, wleft, zf, zs, zu, zfm, zsm, zum, pan, pleft,
+                rr, gg, qq, ints, cst, hp_h, hp, out_scale, level,
+                slaw, gam_a, gam_t, ksm, sr,
+                tab_a, tab_b, tabs, table_n, blending, bramp,
+                scratch=None, threads=None):
+    """One block of the wave readout, the slots divided over the render pool.
+
+    `threads=1` renders where it stands and is the byte reference; any other
+    count changes nothing but who does which slot (see the module note)."""
+    S = role.shape[0]
+    if scratch is None or scratch.n != n or scratch.cl.shape[0] < S:
+        scratch = WaveScratch(S, n)
+    level[:] = 0.0                       # a free slot reports no level, as before
+    n_slots = _live_slots(role, scratch.slots)
+    _wave_ramps(n, rr, gg, qq, ints, bramp, blending,
+                scratch.rb, scratch.gb, scratch.qb, scratch.mb)
+    rest = (n, scratch.slots, role, ndrive, npulse, nlive, zre, zim, cth, sth,
+            wcur, winc, wtgt, wleft, zf, zs, zu, zfm, zsm, zum, pan, pleft,
+            cst, level, slaw, gam_a, gam_t, ksm, sr,
+            tab_a, tab_b, tabs, table_n, blending,
+            scratch.rb, scratch.qb, scratch.mb, scratch.cl, scratch.cr)
+    parts = render_pool.THREADS if threads is None else int(threads)
+    pool = render_pool.pool(threads)
+    # a handful of slots is not worth a hand-off: the workers would spend more on
+    # being started than on the slots they were given
+    if pool is None or parts <= 1 or n_slots < 2 * parts:
+        _wave_slots(0, n_slots, *rest)
+    else:
+        spans = render_pool.ranges(n_slots, parts)
+        futures = [pool.submit(_wave_slots, a, b, *rest) for a, b in spans[1:]]
+        _wave_slots(spans[0][0], spans[0][1], *rest)   # the caller takes a share
+        for f in futures:
+            f.result()
+    _wave_mix(n, scratch.slots, n_slots, scratch.cl, scratch.cr, scratch.gb,
+              hp_h, hp, out_scale, out)
+
+
+def _render_wave(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth,
+                 wcur, winc, wtgt, wleft, zf, zs, zu, zfm, zsm, zum, pan, pleft,
+                 rr, gg, qq, ints, cst, hp_h, hp, out_scale, level,
+                 slaw, gam_a, gam_t, ksm, sr,
+                 tab_a, tab_b, tabs, table_n, blending, bramp):
+    """render_wave on ONE thread -- the form the byte gates call."""
+    render_wave(n, out, role, ndrive, npulse, nlive, zre, zim, cth, sth,
+                wcur, winc, wtgt, wleft, zf, zs, zu, zfm, zsm, zum, pan, pleft,
+                rr, gg, qq, ints, cst, hp_h, hp, out_scale, level,
+                slaw, gam_a, gam_t, ksm, sr,
+                tab_a, tab_b, tabs, table_n, blending, bramp, threads=1)
 
 
 # ── FM: the same articulation read as amplitude trajectories ─────────────────
@@ -408,57 +543,45 @@ def _fm_sum(n_os, oversample, index, amp, amp_prev, carr, carr_prev,
 # -- band-limited wave tables, kept across blocks ------------------------------
 
 class WaveTables:
-    """A row per (waveform, EXACT sounding frequency), stable across blocks.
+    """The pool of band-limited tables this cell reads -- which is the ONE pool
+    laplace_carriers keeps (2026-09-22).
 
-    The wave law takes b(h f) at the frequency of the wave that actually sounds,
-    so a table belongs to ONE frequency and is never shared with a neighbour
-    (REQ section 4).  Rows are therefore kept rather than rebuilt: a figure
-    retunes rarely and a block only looks its modes up.  A full pool starts over
-    -- the sound never depends on a hit, only the cost does.
+    It used to be a second pool on top of that one: every table was built through
+    lc.wavetable (so it landed in lc's buffer) and then COPIED into a buffer of
+    its own, and when that one filled it threw its whole buffer away and started
+    at 16 rows.  Rows already written into tab_a / tab_b for the block in flight
+    then pointed past the new buffer, and the readout -- a compiled kernel with no
+    bounds check -- walked off the end of memory.  That is how the user's
+    instrument died on 2026-09-22: an access violation, no traceback, the window
+    simply gone.  Dragging `harm` reached it in seconds, because it asks for a
+    table at a frequency that has never sounded, on every mode, on every frame.
 
-    Cost note for the log: a NOTE multiplies every frequency, so a played line
-    asks for a fresh set of tables per note (one irfft of TABLE_N each).  That is
-    the transposition risk of REQ section 9 and it is left standing here: the
-    cheaper key it proposes (the harmonic COUNT) replaces the law's cosine taper
-    with a brickwall, which is a deviation for the Researcher to rule on."""
+    So the cell asks lc.table_rows for a whole block at once: one pool, one LRU,
+    rows that no second frequency can take while this block is reading them, and
+    -1 for a frequency the pool cannot serve (the kernel reads that as Re z).
+    This class is what is left -- the buffer and its length, for the kernel."""
 
-    def __init__(self, cap=512, table_n=lc.TABLE_N):
-        self.cap = int(cap)
+    def __init__(self, cap=None, table_n=lc.TABLE_N):
         self.table_n = int(table_n)
-        self.index = {}
-        self.rebuilds = 0
-        self._clear(16)
 
-    def _clear(self, size):
-        # row 0 is never read (a -1 means Re z); the pool GROWS by doubling, never
-        # by a reallocation per table -- a Life field retunes its figures at every
-        # step, and copying the whole pool for each new resonance cost more than
-        # the block it was built for
-        self.buf = np.zeros((int(size), self.table_n))
-        self.n_rows = 1
+    @property
+    def buf(self):
+        b = lc.table_buffer()
+        return _EMPTY_TABLES if b is None else b
 
-    def clear(self):
-        self._clear(16)
-        self.index = {}
-        self.rebuilds += 1
+    def rows(self, waveform, freqs, sr, new_block=True):
+        return lc.table_rows(waveform, freqs, sr, new_block=new_block)
 
-    def row(self, waveform, f, sr):
-        key = (int(waveform), float(f))
-        got = self.index.get(key)
-        if got is not None:
-            return got
-        if len(self.index) >= self.cap:
-            self.clear()
-        tab = lc.wavetable(waveform, f, sr)
-        if self.n_rows >= self.buf.shape[0]:
-            grown = np.zeros((self.buf.shape[0] * 2, self.table_n))
-            grown[:self.n_rows] = self.buf[:self.n_rows]
-            self.buf = grown
-        r = self.n_rows
-        self.buf[r] = tab
-        self.n_rows = r + 1
-        self.index[key] = r
-        return r
+    @property
+    def index(self):                     # what display() counts
+        return lc._TAB_ROW
+
+    @property
+    def rebuilds(self):
+        return lc._TAB_DECLINED[0]
+
+
+_EMPTY_TABLES = np.zeros((1, lc.TABLE_N))    # nothing has been built yet
 
 
 def objects_params(params):
@@ -535,6 +658,9 @@ class EventsBankCell(_EventsCell):
         self.wave_prev = self.wave
         self._sig = None
         self._out = np.zeros((self.n, 2))
+        # the room a wave block needs, kept for the life of the cell (see the
+        # module note above render_wave)
+        self._scratch = WaveScratch(S, self.n)
 
     def set_params(self, params):
         super().set_params(params)
@@ -556,12 +682,16 @@ class EventsBankCell(_EventsCell):
         if self.wave == lc.WF_SINE and self.wave_prev == lc.WF_SINE:
             return
         uniq, inv = np.unique(freq[sel], return_inverse=True)
+        first = True
         for wf, dst in ((self.wave_prev, self.tab_a), (self.wave, self.tab_b)):
             if wf == lc.WF_SINE:
                 continue
-            rows = np.array([self.tables.row(wf, float(f), self.sr) for f in uniq],
-                            dtype=np.int64)
-            dst[sel] = rows[inv]
+            # one ask for the whole block: see WaveTables.  A -1 comes back for a
+            # frequency the pool cannot serve, and the kernel reads that as Re z.
+            # A blend asks twice for the SAME block, so the second ask must not
+            # count as a new one or it would evict the rows of the first.
+            dst[sel] = self.tables.rows(wf, uniq, self.sr, new_block=first)[inv]
+            first = False
 
     def render_float(self, gain, gain_prev, transpose, env=None):
         obj = self.obj
@@ -571,15 +701,16 @@ class EventsBankCell(_EventsCell):
         if self.wave == lc.WF_SINE and self.wave_prev == lc.WF_SINE:
             obj._kernel(self.n, out)                    # the law's own kernel
         else:
-            _render_wave(self.n, out, obj.role, obj.ndrive, obj.npulse, obj.nlive,
-                         obj.zre, obj.zim, obj.cth, obj.sth, obj.wcur, obj.winc,
-                         obj.wtgt, obj.wleft, obj.zf, obj.zs, obj.zu, obj.zfm,
-                         obj.zsm, obj.zum, obj.pan, obj.pleft, obj.rr, obj.gg,
-                         obj.qq, obj.ints, obj.consts, obj.hp_h, obj.hp,
-                         orz.OUT_SCALE, obj.level, obj.slaw, obj.gam_a, obj.gam_t,
-                         obj.ksm, obj.sr, self.tab_a, self.tab_b,
-                         self.tables.buf, self.tables.table_n,
-                         1 if self.wave_prev != self.wave else 0, _RAMP)
+            render_wave(self.n, out, obj.role, obj.ndrive, obj.npulse, obj.nlive,
+                        obj.zre, obj.zim, obj.cth, obj.sth, obj.wcur, obj.winc,
+                        obj.wtgt, obj.wleft, obj.zf, obj.zs, obj.zu, obj.zfm,
+                        obj.zsm, obj.zum, obj.pan, obj.pleft, obj.rr, obj.gg,
+                        obj.qq, obj.ints, obj.consts, obj.hp_h, obj.hp,
+                        orz.OUT_SCALE, obj.level, obj.slaw, obj.gam_a, obj.gam_t,
+                        obj.ksm, obj.sr, self.tab_a, self.tab_b,
+                        self.tables.buf, self.tables.table_n,
+                        1 if self.wave_prev != self.wave else 0, _RAMP,
+                        scratch=self._scratch)
         obj.end_block()
         self.wave_prev = self.wave
         return out.copy()
@@ -589,7 +720,7 @@ class EventsBankCell(_EventsCell):
         d.update(voicing='bank', wave=int(self.wave),
                  wave_name=lc.WAVE_NAMES[int(self.wave)],
                  wave_tables=len(self.tables.index),
-                 table_rebuilds=int(self.tables.rebuilds))
+                 tables_declined=int(self.tables.rebuilds))
         return d
 
 

@@ -939,6 +939,23 @@ class ObjectResonatorsEngine(SoundEngine):
             return 0.0
         return float(np.max(np.hypot(self.zre[s, :nl], self.zim[s, :nl])))
 
+    def _quietest_tail(self):
+        """The tail slot holding the least energy, ties going to the lowest index
+        -- the slot `min(range(...), key=(self._energy(t), t))` used to find.
+
+        It is the same numbers, taken over all 96 tails at once instead of one
+        call of _energy per tail: an eviction asked for 96 of them, a block
+        boundary evicts a dozen times, and on the prototype's own Random field
+        that search was a third of the whole boundary (2026-09-22, profiled for
+        tests/test_live_budget)."""
+        lo, hi = N_ACTIVE, N_ACTIVE + N_TAILS
+        nl = self.nlive[lo:hi]
+        mag = np.hypot(self.zre[lo:hi], self.zim[lo:hi])
+        j = np.arange(mag.shape[1])
+        e = np.where(j[None, :] < nl[:, None], mag, -np.inf).max(axis=1)
+        e[nl == 0] = 0.0                       # a slot with no mode holds nothing
+        return lo + int(np.argmin(e))
+
     def _zero_modes(self, s, idx):
         self.zre[s, idx] = 0.0
         self.zim[s, idx] = 0.0
@@ -1003,7 +1020,7 @@ class ObjectResonatorsEngine(SoundEngine):
         fdst = self._free_slot(N_ACTIVE + N_TAILS, N_SLOTS)
         if fdst < 0:
             return -1
-        q = min(range(N_ACTIVE, N_ACTIVE + N_TAILS), key=lambda t: (self._energy(t), t))
+        q = self._quietest_tail()
         self._move_slot(q, fdst)
         self._fade_slot(fdst)
         self.counters[C_EVICT] += 1
