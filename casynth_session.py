@@ -66,7 +66,13 @@ def _dump_session(rec, prefix="_session"):
     # midi_in: device-arrival timing (perf_counter, note, gate) -- ground-truth input.
     midi_in_log = (np.array(rec.get('midi_in', []), dtype=float)
                    if rec.get('midi_in') else np.zeros((0, 3)))
+    # field_applied (2026-09-22): (serial, rendered sample, device silence,
+    # generation, steps taken) -- where each field started to sound, written by
+    # the render thread; the scene puts the automaton's steps on it.
+    field_applied = (np.array(rec.get('field_applied', []), dtype=float)
+                     if rec.get('field_applied') else np.zeros((0, 6)))
     np.savez_compressed(f"{base}.npz", frames=frames, gens=gens, grids=grids,
+                        field_applied=field_applied,
                         notes=notes, step_prevs=step_prevs,
                         sr=SR, chunk_s=CHUNK_S,
                         bpm=rec.get('bpm', BPM_DEFAULT),
@@ -425,16 +431,29 @@ def scene_from_session(ts, prefix="_session", title=None, listen=''):
                 edits += 1
     # the automaton steps: the prototype takes them on a WALL clock, so a scene
     # that re-renders the session must take them where they were RECORDED, not on
-    # its own sample clock.  The frame log says how many steps had happened by
-    # each frame (column 5) and where the render thread was then (column 6).
+    # its own sample clock.  Since 2026-09-22 the render thread logs where each
+    # field started to SOUND (field_applied: serial, rendered sample, device
+    # silence, generation, steps taken by then) -- a stepped field is held for
+    # the beat, so the frame that logged the step is not where it sounded.  An
+    # older session has only the frame log: how many steps had happened by each
+    # frame (column 5) and where the render thread was then (column 6).
     steps = 0
-    for i in range(1, len(frames)):
-        done = int(frames[i, 5])
-        at = int(at_sample[i])
-        at -= offset
-        while steps < done and at > 0:
-            steps += 1
-            script.append(dict(at=at, kind='step', args={}))
+    applied = d['field_applied'] if 'field_applied' in d.files else np.zeros((0, 6))
+    if len(applied):
+        for row in applied[np.argsort(applied[:, 1], kind='stable')]:
+            done = int(row[4])
+            at = int(row[1]) - offset
+            while steps < done and at > 0:
+                steps += 1
+                script.append(dict(at=at, kind='step', args={}))
+    else:
+        for i in range(1, len(frames)):
+            done = int(frames[i, 5])
+            at = int(at_sample[i])
+            at -= offset
+            while steps < done and at > 0:
+                steps += 1
+                script.append(dict(at=at, kind='step', args={}))
     script.sort(key=lambda c: c['at'])
 
     env = dict(voice=dict(attack_ms=float(first['voice_attack_ms']),

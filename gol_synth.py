@@ -311,10 +311,47 @@ def main(autoplay_midi=None):
     # state['gen'] cannot serve for this, because Clear resets it to 0 and the
     # engine would then miss the change.  The same number is column 5 of the frame
     # log, so a recorded session can be placed on it later.
-    _serial = {'n': 0}
+    _serial = {'n': 0, 'apply_at': None}
+    _beat = {'next': None, 'spp': None, 'la': None}   # the device-clock beat chain (_stepped)
 
     def _touched():
+        """The field changed by hand (or by Random / Clear / Step): it sounds on
+        the next block, whatever the render thread is doing."""
         _serial['n'] += 1
+        _serial['apply_at'] = None
+
+    def _stepped(deadline):
+        """The automaton stepped on its own clock: the new generation is
+        stamped with the DEVICE frame it starts sounding at -- its wall-clock
+        deadline plus the ring's current look-ahead and a margin, counted from
+        the device's own position now -- so it lands on the beat however late
+        the render thread is (config: GEN_LEAD_BLOCKS).  Without a device
+        (played stays 0) the stamp is in the past and the field sounds at
+        once, as before."""
+        _serial['n'] += 1
+        lead = (deadline + (host.lookahead + GEN_LEAD_BLOCKS) * CHUNK_S
+                - time.perf_counter())
+        target = host.ring.position() + int(round(lead * SR))
+        # The beat is a chain on the device clock: each stamp is the previous
+        # one plus exactly one step, so the callback's own jitter (its frames
+        # arrive in bursts of 13 ms on MME) never reaches the rhythm.  The
+        # wall-clock target only anchors the chain -- at Play, at a tempo
+        # change, and whenever the two have drifted apart by more than four
+        # blocks (a long stall, the clocks' own drift; the target itself
+        # jitters by a callback, 13 ms on MME, and must not re-anchor the chain
+        # on its own).
+        spp = int(round(_step_interval() * SR))
+        nxt = _beat['next']
+        if nxt is not None and _beat['la'] != host.lookahead:
+            # the ring deepened (a dropout bought a block of look-ahead): the
+            # whole beat moves later by exactly that, not by a jittery re-anchor
+            nxt += (host.lookahead - _beat['la']) * _N_CHUNK
+        if nxt is None or _beat['spp'] != spp or abs(nxt - target) > 4 * _N_CHUNK:
+            nxt = target
+        _serial['apply_at'] = nxt
+        _beat['next'] = nxt + spp
+        _beat['spp'] = spp
+        _beat['la'] = host.lookahead
 
     # The analysis the VISUALS are drawn from, kept until the field or a knob
     # moves (the sound has its own, inside the engine on the render thread).
@@ -352,6 +389,12 @@ def main(autoplay_midi=None):
                    # of rendering.  Comparing its IOIs to midi_onsets' IOIs separates
                    # input jitter (USB-MIDI / arp / swing) from render jitter.
                    midi_in=[],
+                   # field_applied: (serial, rendered sample, device silence so
+                   # far, generation, steps taken, ring look-ahead) -- where
+                   # each field started to SOUND; written by the render thread.
+                   # The scene built from the session puts the steps on the
+                   # rendered sample.
+                   field_applied=[],
                    bpm=BPM_DEFAULT, div_idx=DIV_DEFAULT)
         if _rec_audio:
             print("[CASYNTH_RECORD on] capturing audio + field + all knobs; "
@@ -963,6 +1006,7 @@ def main(autoplay_midi=None):
                 # Schedule first step one interval from now so the user hears the
                 # current generation first, then the clock starts ticking.
                 state['next_step_time'] = time.perf_counter() + _step_interval()
+                _beat['next'] = None          # the beat chain starts afresh
         elif bid == "step":
             prev = grid.copy()
             grid = step(grid)
@@ -1294,8 +1338,22 @@ def main(autoplay_midi=None):
         if spec is None or eng['obj'] is None:   # nothing to play yet: silence
             return _SILENT.copy(), 0.0, 0
         if eng['serial'] != spec['serial']:
-            eng['obj'].update_field(spec['grid'], spec['exc'])
-            eng['serial'] = spec['serial']
+            # A field the automaton stepped carries the device frame it starts
+            # sounding at; this block is heard at t_samples + the silence the
+            # device has played, so the field waits for the block that reaches
+            # its frame (and its knobs, below, do not wait).  A field changed
+            # by hand carries None and sounds now.
+            due = spec['apply_at']
+            if due is None or t_samples + host.ring.silence >= due:
+                eng['obj'].update_field(spec['grid'], spec['exc'])
+                eng['serial'] = spec['serial']
+                if rec is not None:
+                    # where this field started to sound: the rendered sample,
+                    # the device silence so far (device frame = their sum), the
+                    # generation and the steps taken by then
+                    rec['field_applied'].append((spec['serial'], t_samples,
+                                                 host.ring.silence, spec['gen'],
+                                                 spec['steps'], host.lookahead))
         if eng['params'] != spec['params'] and eng['id'] == spec['engine']:
             eng['obj'].set_params(dict(spec['params']))
             eng['params'] = dict(spec['params'])
@@ -1796,7 +1854,7 @@ def main(autoplay_midi=None):
                 grid = step(grid)
                 exc_field = events_field(prev_grid, grid)
                 state['gen'] += 1
-                _touched()
+                _stepped(state['next_step_time'])
                 state['next_step_time'] += interval
                 n_steps += 1
                 if rec is not None:
@@ -1854,7 +1912,12 @@ def main(autoplay_midi=None):
         # into the UI thread's own variables.
         render_spec['cur'] = {'voices': voices, 'base_f0': base_f0,
                               'grid': grid.copy(), 'exc': exc_field,
-                              'serial': _serial['n'], 'engine': state['engine'],
+                              'serial': _serial['n'], 'gen': state['gen'],
+                              'steps': (len(rec['steps']) if rec is not None else 0),
+                              # the device frame this field is to start sounding
+                              # at (an automaton step), or None: on the next block
+                              'apply_at': _serial['apply_at'],
+                              'engine': state['engine'],
                               'params': dict(_ep)}
         _ur_now = host.underruns
         ur_delta = _ur_now - _ur['prev']

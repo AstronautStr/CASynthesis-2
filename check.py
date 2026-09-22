@@ -210,6 +210,8 @@ def gates():
              "gc pause", _t("test_gc_pause.py"), timeout=300, fast=True),
         Gate("a frame in which nothing changed costs almost nothing to draw (counted)",
              "frame work", _t("test_frame_work.py"), timeout=300, fast=True),
+        Gate("the automaton keeps its tempo on the audio clock while the render thread stalls",
+             "generation clock", _t("test_generation_clock.py"), timeout=300, timing=()),
         Gate("golden master", "golden master",
              [py, os.path.join("tests", "golden", "golden_master.py")], env={}, fast=True),
         Gate("events master (the Events cells of Laplace+, byte-exact)", "events master",

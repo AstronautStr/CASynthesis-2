@@ -134,6 +134,16 @@ class BlockRing:
         self.block = int(block)
         self.channels = int(channels)
         self.underruns = 0
+        # The DEVICE's own clock (2026-09-22): frames it has asked for, and how
+        # many of them were silence because the ring was dry.  A rendered sample
+        # `cum` is heard at device frame cum + silence, which is what a host
+        # needs to put an event on the beat regardless of how late the render
+        # thread is (gol_synth: the automaton's generations).
+        self.played = 0
+        self.silence = 0
+        # (played, perf_counter) of the last callback, written as ONE tuple so
+        # a reader on another thread never pairs a new count with an old time
+        self._clock = (0, 0.0)
         self._q = queue.Queue()
         self._resid = {'buf': None, 'pos': 0}
 
@@ -176,6 +186,8 @@ class BlockRing:
         """Write `frames` samples into outdata from the ring; silence + one
         underrun when it runs dry."""
         filled = 0
+        self.played += int(frames)
+        self._clock = (self.played, time.perf_counter())
         while filled < frames:
             if self._resid['buf'] is None:
                 try:
@@ -184,6 +196,7 @@ class BlockRing:
                 except queue.Empty:
                     outdata[filled:] = 0
                     self.underruns += 1
+                    self.silence += int(frames) - filled
                     return
             buf, pos = self._resid['buf'], self._resid['pos']
             take = min(frames - filled, len(buf) - pos)
@@ -194,6 +207,16 @@ class BlockRing:
                 self._resid['buf'] = None
             else:
                 self._resid['pos'] = pos
+
+    def position(self):
+        """The device's position now, in its own frames: what the last
+        callback reported, advanced by the wall time since (the callbacks come
+        every 13 ms on MME, too coarse a grid for a beat).  0 before the first
+        callback."""
+        played, at = self._clock
+        if at <= 0.0:
+            return 0
+        return played + int((time.perf_counter() - at) * 44100.0)
 
     def drain(self, frames):
         """Consume `frames` without outputting them: the live synth keeps
