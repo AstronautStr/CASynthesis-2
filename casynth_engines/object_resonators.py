@@ -947,7 +947,7 @@ class ObjectResonatorsEngine(SoundEngine):
         call of _energy per tail: an eviction asked for 96 of them, a block
         boundary evicts a dozen times, and on the prototype's own Random field
         that search was a third of the whole boundary (2026-09-22, profiled for
-        tests/test_events_budget)."""
+        tests/test_live_budget)."""
         lo, hi = N_ACTIVE, N_ACTIVE + N_TAILS
         nl = self.nlive[lo:hi]
         mag = np.hypot(self.zre[lo:hi], self.zim[lo:hi])

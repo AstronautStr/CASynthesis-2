@@ -131,7 +131,7 @@ def _periodic_mean(x, n, prev, has_prev):
     The array form built an (n, len(x)) matrix and ran eight numpy calls over it;
     tracking the figures of a Random field asks for two of these per figure per
     generation, on the render thread, where the calls cost more than the
-    arithmetic (2026-09-22, profiled for tests/test_events_budget).  Same
+    arithmetic (2026-09-22, profiled for tests/test_live_budget).  Same
     operations, same order, same bits -- the sums are the short ones numpy adds
     straight through."""
     m = x.shape[0]
@@ -296,7 +296,7 @@ def laplacian_matrix(cells, rows, cols):
     A block boundary of the Events articulation builds one of these per figure --
     twenty-odd of them, every generation, on the render thread -- so the fill is
     a compiled loop rather than eight masked passes with an np.add.at and an
-    N x N `seen` buffer (2026-09-22, profiled for tests/test_events_budget)."""
+    N x N `seen` buffer (2026-09-22, profiled for tests/test_live_budget)."""
     cells = np.asarray(cells, np.int64)
     n = len(cells)
     index = np.full((rows, cols), -1, np.int64)

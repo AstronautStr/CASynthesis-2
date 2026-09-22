@@ -86,7 +86,7 @@ TAIL_FLOOR = orz.TAIL_FLOOR
 # a wave costs an atan2 and a sqrt PER MODE PER SAMPLE: on the prototype's own
 # Random field that is 1040 live modes x 352 samples = 366 000 of each inside one
 # 7.98 ms block, and the device starved the moment the player moved `artic` to
-# Events -- 504 underruns in ten seconds, the case tests/test_events_budget.py
+# Events -- 504 underruns in ten seconds, the case tests/test_live_budget.py
 # carries.  Measured there: the recurrence itself is 1.5 ms and the readout 6.3.
 #
 # The SAMPLES cannot be divided -- every mode is a recurrence, sample t needs
