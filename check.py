@@ -199,6 +199,8 @@ def gates():
              "live budget", _t("test_live_budget.py"), timeout=600, timing=()),
         Gate("golden master", "golden master",
              [py, os.path.join("tests", "golden", "golden_master.py")], env={}, fast=True),
+        Gate("events master (the Events cells of Laplace+, byte-exact)", "events master",
+             [py, os.path.join("tests", "golden", "events_master.py")], env={}, fast=True),
         Gate("ui clicks (the prototype's event loop)", "ui click probe",
              _t("ui_click_probe.py"), timeout=300, fast=True),
         Gate("it makes a sound (Random + Play on every engine)", "sound probe",
