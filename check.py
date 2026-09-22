@@ -199,6 +199,8 @@ def gates():
              "live budget", _t("test_live_budget.py"), timeout=600, timing=()),
         Gate("a spectrum knob does not decompose the field again (counted, not timed)",
              "knob drag work", _t("test_knob_drag_work.py"), timeout=300, fast=True),
+        Gate("the tail pool is not walked slot by slot in Python (counted, not timed)",
+             "slot pool work", _t("test_slot_pool_work.py"), timeout=300, fast=True),
         Gate("golden master", "golden master",
              [py, os.path.join("tests", "golden", "golden_master.py")], env={}, fast=True),
         Gate("events master (the Events cells of Laplace+, byte-exact)", "events master",

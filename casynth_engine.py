@@ -490,6 +490,10 @@ class SlotPool:
         # hand-off if the flag is later turned on.
         self._amp_smooth = np.zeros(sz)
 
+        # The free-tail mask of the update in progress (None = not yet asked);
+        # see the note above _acquire_tail.
+        self._free_tails = None
+
         # Diagnostics: count tail-pool steals (pool exhausted -> a still-ringing
         # tail had to be overwritten = a residual click) and the loudest stolen
         # amplitude.  Read by the probe; zero in normal (non-exhausted) operation.
@@ -501,39 +505,64 @@ class SlotPool:
         """Slot index of the active (currently sounding) slot for voice v, mode m."""
         return 1 + v * MAX_MODES_PER_OBJ + m
 
+    # THE POOL IS NOT WALKED IN PYTHON (2026-09-22).  The three passes below used
+    # to visit the 1920 tail slots one numpy scalar at a time -- the budget and
+    # the countdown on every block, _acquire_tail once per mode whose frequency
+    # moved, which on a frame of a spectrum-knob drag is all 480 of them.  At the
+    # player's tempo a release lasts six blocks, the pool holds 500-800 ringing
+    # tails, and each acquisition scanned hundreds of them: 4 ms of Python per
+    # block under the GIL (memory/log/2026-09-22-perf-audit.md; the gate is
+    # tests/test_slot_pool_work.py).  Every pass now asks numpy the same question
+    # it used to ask slot by slot, and picks the same slot:
+    #   free slot   = the LOWEST index that is not releasing and silent (the loop
+    #                 returned the first one it met);
+    #   the steal   = the lowest index holding the minimum amp_cur (the loop kept
+    #                 the first strict minimum; np.argmin keeps the first too);
+    #   the budget  = the quietest excess in ascending amp_cur, ties by index
+    #                 (list.sort is stable; argsort(kind='stable') is the same order).
+    # Within one update() the acquisitions are incremental: a slot handed out is
+    # struck from the free mask (its counter and amplitude are set right after),
+    # and nothing else in Phase 1 touches a tail slot -- so the mask stays what a
+    # fresh scan would have found.  The bytes are held by the golden masters.
+
     def _acquire_tail(self, amp_cur):
         """Return a tail slot for a new ringing-out mode: a free (silent, not
         releasing) one if available, else the quietest currently-ringing one
         (stealing it -> the smallest possible click)."""
         lo, hi = N_ACTIVE + 1, TOTAL_SLOTS + 1
-        quietest, quiet_amp = lo, np.inf
-        for s in range(lo, hi):
-            if self._release_cnt[s] == 0 and amp_cur[s] < 1e-4:
-                return s
-            if amp_cur[s] < quiet_amp:
-                quiet_amp, quietest = amp_cur[s], s
+        free = self._free_tails
+        if free is None:
+            free = self._free_tails = (self._release_cnt[lo:hi] == 0) & (amp_cur[lo:hi] < 1e-4)
+        if free.any():
+            k = int(np.argmax(free))              # the first free slot by index
+            free[k] = False                       # taken: its counter / amp change now
+            return lo + k
         # No free slot: stealing the quietest still-ringing tail.  Eviction below
         # keeps the quietest near zero, so this steal is normally near-silent.
+        tail_amp = amp_cur[lo:hi]
+        k = int(np.argmin(tail_amp))              # the first minimum by index
         self.steals += 1
-        self.steal_amp_max = max(self.steal_amp_max, float(quiet_amp))
-        return quietest
+        self.steal_amp_max = max(self.steal_amp_max, float(tail_amp[k]))
+        return lo + k
 
     def _enforce_tail_budget(self, amp_cur):
         """When ringing tails exceed the pool minus a reserve, fast-fade the
         QUIETEST excess to zero over FAST_EVICT_CHUNKS (a quick, smooth release --
         not a cut) so slots free up before a loud tail must be stolen."""
         lo, hi = N_ACTIVE + 1, TOTAL_SLOTS + 1
-        ring = [s for s in range(lo, hi)
-                if self._release_cnt[s] > 0 or amp_cur[s] >= 1e-4]
+        cnt = self._release_cnt[lo:hi]
+        amp = amp_cur[lo:hi]
+        ring = np.flatnonzero((cnt > 0) | (amp >= 1e-4))
         over = len(ring) - (N_TAIL - TAIL_RESERVE)
         if over <= 0:
             return
-        ring.sort(key=lambda s: amp_cur[s])      # quietest first
-        for s in ring[:over]:
-            if self._release_cnt[s] == 0 or self._release_cnt[s] > FAST_EVICT_CHUNKS:
-                self._release_cnt[s]  = FAST_EVICT_CHUNKS
-                self._release_len[s]  = FAST_EVICT_CHUNKS
-                self._release_amp0[s] = float(amp_cur[s])
+        quiet = ring[np.argsort(amp[ring], kind='stable')[:over]]   # quietest first
+        c = cnt[quiet]
+        pick = quiet[(c == 0) | (c > FAST_EVICT_CHUNKS)]
+        if len(pick):
+            self._release_cnt[lo + pick] = FAST_EVICT_CHUNKS
+            self._release_len[lo + pick] = FAST_EVICT_CHUNKS
+            self._release_amp0[lo + pick] = amp[pick]
 
     def _advance_env(self, a, attack_chunks, decay_chunks, sustain):
         """Advance the ADSR envelope of active slot `a` by one audio chunk.
@@ -592,6 +621,7 @@ class SlotPool:
         # of stealing loud ones.  Run every update (incl. no-spawn ones) to keep
         # headroom ready for the next GOL-step burst.
         self._enforce_tail_budget(amp_cur)
+        self._free_tails = None               # the free mask of THIS update (lazy)
 
         # ── Phase 1: assign active slots, spawn tails for replaced modes ──────
         for v in range(MAX_VOICES):
@@ -680,14 +710,17 @@ class SlotPool:
         # Done AFTER assignment so a tail spawned this cycle gets its first decay
         # step immediately (countdown release_chunks -> release_chunks-1 here).
         # The divisor is the per-slot length captured at spawn, so changing the
-        # knob mid-tail does not jump an in-flight fade.
-        for s in range(N_ACTIVE + 1, TOTAL_SLOTS + 1):
-            cnt = self._release_cnt[s]
-            if cnt <= 0:
-                continue
-            new_cnt = cnt - 1
+        # knob mid-tail does not jump an in-flight fade.  Vectorised (see the
+        # note above _acquire_tail): the same expression per slot, so the same
+        # numbers -- amp0 * new_cnt / len, in that order.
+        self._free_tails = None
+        lo = N_ACTIVE + 1
+        s = np.flatnonzero(self._release_cnt[lo:] > 0) + lo
+        if len(s):
+            new_cnt = self._release_cnt[s] - 1
             self._release_cnt[s] = new_cnt
             self.amp_tgt[s] = self._release_amp0[s] * new_cnt / self._release_len[s]
             # When done and silent, free the slot (render glides amp_cur to 0).
-            if new_cnt == 0 and amp_cur[s] < 0.01:
-                self.freq_slots[s] = 0.0
+            done = s[(new_cnt == 0) & (amp_cur[s] < 0.01)]
+            if len(done):
+                self.freq_slots[done] = 0.0
