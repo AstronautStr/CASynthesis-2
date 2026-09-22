@@ -103,7 +103,17 @@ TABLE_N = 8192                    # wavetable length (power of two); error << -6
 # time, and the bank ran at 24 ms of the 8 ms block on the prototype's own field).
 # 512 tables are 32 MB; far more is worse than a miss, because the rebuilt table is
 # cheap next to the cache misses a pool that size costs (measured).
-TABLE_CACHE_MAX = 512
+#
+# 1024 since 2026-09-22.  The pool has to hold what a STANDING field sounds, or it
+# thrashes on every generation: with `harm` below 1 every mode of every figure and
+# of every ringing tail has a frequency of its own, and the user's untouched
+# Events + Saw field of 22:46 sounded 630-1000 distinct waves -- 512 rows rebuilt
+# hundreds of tables a block and sent 50-600 modes a block to the sine line, 276
+# underruns in 36 s with nothing moving.  Replayed: 6.3 ms a block (p90 19.8) at
+# 512, 4.8 (p90 5.9) at 1024 with nothing declined; 2048 adds nothing (measured).
+# The buffer grows by doubling on demand, so a host that plays sines pays nothing.
+# Gate: tests/test_wave_pool_holds_the_field.py.
+TABLE_CACHE_MAX = 1024
 MASK_FLOOR = 1e-12                # max P at or below this -> the figure is silent
 AMP_EPS = 1e-4                    # a source below this on both ends of the block is skipped
 N_FILTER_TAILS = MAX_VOICES * 4   # frozen Filter carriers ringing out
