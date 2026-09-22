@@ -110,10 +110,14 @@ TABLE_N = 8192                    # wavetable length (power of two); error << -6
 # Events + Saw field of 22:46 sounded 630-1000 distinct waves -- 512 rows rebuilt
 # hundreds of tables a block and sent 50-600 modes a block to the sine line, 276
 # underruns in 36 s with nothing moving.  Replayed: 6.3 ms a block (p90 19.8) at
-# 512, 4.8 (p90 5.9) at 1024 with nothing declined; 2048 adds nothing (measured).
+# 512, 4.8 (p90 5.9) at 1024 with nothing declined.  His denser field of 22:56
+# (364 cells, up to 1434 distinct waves) overflowed 1024 rows again -- 444 modes
+# a block declined at a boundary, p90 8.7 -- and holds in 2048 (p90 7.4, nothing
+# declined, no measurable cost over 1024).  The ceiling of the law itself is
+# N_SLOTS x N_BANK = 2880 waves; 2048 covers every field played so far.
 # The buffer grows by doubling on demand, so a host that plays sines pays nothing.
 # Gate: tests/test_wave_pool_holds_the_field.py.
-TABLE_CACHE_MAX = 1024
+TABLE_CACHE_MAX = 2048
 MASK_FLOOR = 1e-12                # max P at or below this -> the figure is silent
 AMP_EPS = 1e-4                    # a source below this on both ends of the block is skipped
 N_FILTER_TAILS = MAX_VOICES * 4   # frozen Filter carriers ringing out
