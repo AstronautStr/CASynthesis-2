@@ -59,6 +59,7 @@ import os
 import numpy as np
 
 from casynth_config import TWO_PI, _RAMP
+import casynth_config as _config
 from . import object_resonators as orz
 from . import figures as fg
 from . import laplace_carriers as lc
@@ -94,13 +95,14 @@ TAIL_FLOOR = orz.TAIL_FLOOR
 # and 26 dB under the int16 output's own floor.  It is NOT bit for bit: a
 # double differs in its eighth digit, and where an output sample sits on a
 # rounding edge the int16 lands on the neighbour.  tests/golden/events_master
-# pins the table; CASYNTH_FM_SINE=libm restores the exact sine for an A/B.
-# The Env + FM cell (laplace_fm, numpy's sin) and every catalog record are
-# untouched.
+# pins the table.  The choice is casynth_config.FM_SINE (a diagnostic setting,
+# not a knob); CASYNTH_FM_SINE=libm overrides it for one run and restores the
+# exact sine for an A/B.  The Env + FM cell (laplace_fm, numpy's sin) and
+# every catalog record are untouched.
 SINE_TABLE_N = 4096
 _SINE_LUT = np.sin(np.arange(SINE_TABLE_N + 1) * (TWO_PI / SINE_TABLE_N))   # + a guard at 2 pi
 _SINE_SCALE = SINE_TABLE_N / TWO_PI
-FM_SINE = os.environ.get('CASYNTH_FM_SINE', 'table').strip().lower()
+FM_SINE = os.environ.get('CASYNTH_FM_SINE', _config.FM_SINE).strip().lower()
 if FM_SINE not in ('table', 'libm'):                # pragma: no cover
     FM_SINE = 'table'
 

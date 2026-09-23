@@ -106,6 +106,13 @@ AUDIO_LOOKAHEAD_MAX_CHUNKS = max(3, round(AUDIO_LOOKAHEAD_MAX_MS / 1000.0 / CHUN
 # and what is heard that equals the ring's own depth plus this margin, on top
 # of the device's latency.  Gate: tests/test_generation_clock.py.
 GEN_LEAD_BLOCKS = 4
+# The sine of the Events + FM readout (2026-09-23): 'table' = 4096 points a
+# period with linear interpolation (~3e-7 peak error, -122 dB, at most one
+# unit of the 16-bit output on a fraction of a percent of the samples; what the
+# Events reference is taken with), 'libm' = the exact sine (twice the cost on
+# the live field -- the block no longer fits).  A diagnostic switch, not a knob:
+# set it here, or for one run with CASYNTH_FM_SINE=libm.
+FM_SINE = 'table'
 # Headroom: up to MAX_VOICES objects, each up to MAX_MODES_PER_OBJ partials, plus
 # front+back overlap during cross-fades -> the summed signal can peak well above
 # 1.0 and hard-clip (audible distortion).  Measured raw peak on a dense field is
@@ -324,7 +331,7 @@ __all__ = [
     'BPM_DEFAULT', 'BPM_MIN', 'BPM_MAX', 'NOTE_DIVS', 'DIV_DEFAULT', 'MAX_VOICES',
     'CHUNK_S', 'AUDIO_LOOKAHEAD_MS', 'AUDIO_LOOKAHEAD_CHUNKS', 'ENGINE_XFADE_MS', 'BUDGET_SMOOTH',
     'BUDGET_RAISE_FRAC', 'BUDGET_THIN_BLOCKS',
-    'AUDIO_LOOKAHEAD_MAX_MS', 'AUDIO_LOOKAHEAD_MAX_CHUNKS', 'GEN_LEAD_BLOCKS',
+    'AUDIO_LOOKAHEAD_MAX_MS', 'AUDIO_LOOKAHEAD_MAX_CHUNKS', 'GEN_LEAD_BLOCKS', 'FM_SINE',
     'MASTER_GAIN', 'VOL_DEFAULT', 'VOL_W', 'METER_DECAY',
     'MAX_MODES_PER_OBJ', 'PATCH_SIZE',
     'SPREAD_DEFAULT', 'ALPHA_DEFAULT', 'ALPHA_MIN', 'ALPHA_MAX',
