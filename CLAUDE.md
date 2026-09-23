@@ -23,13 +23,16 @@ Consult on demand, NOT at session start:
 - `docs/01-problem.md`, `docs/02-design-space.md`, `docs/03-prototype.md` — read-only reference; read when a decision touches design rationale (do not append)
 
 ## Gates & environment canon (Windows)
-- **All regression gates in one command: `python check.py`** (59 unit tests +
-  golden-master audio byte-exact + UI frame pixel-exact + import/init smoke).
+- **Gates (2026-09-23): `python check.py` after EVERY change, `python check.py --all`
+  before EVERY commit.** The default run picks the gates by the files changed since HEAD
+  (a map in check.py plus a search for the changed file's name in the gates' scripts) on
+  top of the fast set (~0.5-2 min). `--all` runs every gate (~4 min): the gates that
+  MEASURE time first and alone, the rest six at a time, longest first, OpenBLAS on two
+  threads in that wave. `--dry-run` shows the pick, `--files=a,b` / `--since=REV`
+  redefine "changed", `--fast` is the fast set alone (~30 s), `--jobs=1` runs one at a
+  time, `-v` prints every gate's output. The map over-selects on purpose and an unknown
+  file runs everything; what it still misses, `--all` catches before the commit.
   Legitimate UI change → re-bless in the SAME change: `python check.py --bless-ui`.
-  ~231 s since 2026-09-22: the gates that MEASURE time run first and alone (with a
-  cooldown), the rest run six at a time; every gate is timed and the slowest printed.
-  `python check.py --fast` (~13 s) is the inner loop while working on a change;
-  `--jobs=1` restores the one-at-a-time run, `-v` prints every gate's output.
   A test that asserts milliseconds must carry `@timing_test` (tests/timing_gate.py),
   or the parallel wave measures the scheduler instead of the engine.
   Gates run the instrument at `CASYNTH_VOLUME=0.01` -- a check run must not play
