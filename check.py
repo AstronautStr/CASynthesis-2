@@ -70,7 +70,8 @@ Gates (any FAIL -> exit 1):
                        drawing frames throughout the render, which it did not
                        until 2026-09-22)
   3d. articulation     python tests/ui_articulation_probe.py      (letting a key go
-                       releases the note; HOLD lit keeps it sounding; and a played
+                       releases the note; HOLD lit keeps it sounding; opened
+                       with HOLD dark and untouched, it is silent; and a played
                        MIDI line re-articulates note by note although its gate
                        never comes up)
 

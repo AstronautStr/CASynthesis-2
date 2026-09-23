@@ -119,8 +119,10 @@ DEFAULT_ENGINE = 'laplace_unified'
 # Whether HOLD is lit when the instrument opens.  It also decides whether the
 # instrument opens SOUNDING: the opening note has nobody holding it (no key, no
 # mouse, no MIDI note), so only HOLD may keep it up -- with HOLD dark the gate
-# starts down and the first key is the first note.
-VOICE_HOLD_DEFAULT = False
+# starts down and the first key is the first note.  Lit (user, 2026-09-23): the
+# instrument opens sounding and a note is replaced, not released, until the
+# player darkens it.
+VOICE_HOLD_DEFAULT = True
 
 # What a PLAYER starts from on every Laplace law (user's decision 2026-09-22):
 # all the modes of a figure, spread and harm fully open, the shape law on and its
