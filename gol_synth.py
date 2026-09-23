@@ -116,6 +116,12 @@ def _start_volume():
 # The tab the instrument opens on; any playable engine id (see `playable`).
 DEFAULT_ENGINE = 'laplace_unified'
 
+# Whether HOLD is lit when the instrument opens.  It also decides whether the
+# instrument opens SOUNDING: the opening note has nobody holding it (no key, no
+# mouse, no MIDI note), so only HOLD may keep it up -- with HOLD dark the gate
+# starts down and the first key is the first note.
+VOICE_HOLD_DEFAULT = False
+
 # What a PLAYER starts from on every Laplace law (user's decision 2026-09-22):
 # all the modes of a figure, spread and harm fully open, the shape law on and its
 # dynamics with it.  Deliberately NOT the registry defaults: those are the neutral
@@ -457,9 +463,11 @@ def main(autoplay_midi=None):
         # release).  The oscillator (KA field) is free-running -- gate does NOT empty
         # the voice pool; it only articulates the master VCA (see _render_loop).
         # It goes down when the LAST thing holding a note lets go: a computer key,
-        # the mouse on the piano, a MIDI note-off, the file player.  It starts up,
-        # so a field sounds the moment the synth opens.
-        gate=True,
+        # the mouse on the piano, a MIDI note-off, the file player.  It starts
+        # where HOLD starts: nothing holds the opening note, so with HOLD dark an
+        # open gate could never come down (until 2026-09-23 it started up
+        # regardless, and the first note of a session latched with HOLD dark).
+        gate=VOICE_HOLD_DEFAULT,
         # ONSET counter (2026-09-21): every note-on bumps it, whoever struck the
         # note -- keyboard, mouse, MIDI device, file player.  The render thread
         # watches it and re-starts the VOICE attack, because a melody is legato:
@@ -470,7 +478,7 @@ def main(autoplay_midi=None):
         # -- the latch the prototype has always had.  Off, the VOICE release runs
         # when the key comes up, which is the only way to hear that block at all
         # from the keyboard or the mouse.
-        voice_hold=False,
+        voice_hold=VOICE_HOLD_DEFAULT,
         midi_held=[],   # stack of currently held MIDI notes (last-note priority)
         midi_port=None, # name of currently open MIDI port
     )

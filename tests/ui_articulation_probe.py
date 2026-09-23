@@ -18,6 +18,10 @@ device the host paces itself at real time):
     HOLD dark -> I let the key go, does the sound go?
     HOLD lit  -> I let the key go, does the sound STAY? (a note may only be
                  replaced, never released -- what the toggle promises)
+    opening   -> the synth opens with HOLD dark and I touch nothing: is it
+                 SILENT?  Nobody holds the opening note, so with HOLD dark
+                 nothing may keep it up (until 2026-09-23 it started up and
+                 stayed up -- the first note of a session latched, HOLD or not)
     a file    -> with a slow attack and a low sustain, does the level MOVE from
                  note to note, although the gate never comes up?
 
@@ -53,6 +57,9 @@ import gol_synth
 from casynth_config import GRID_H, CELL
 BY = GRID_H * CELL + 8
 HOLD = %(hold)d
+KEY = %(key)d
+if not KEY:
+    gol_synth.VOICE_HOLD_DEFAULT = bool(HOLD)   # open on it: nothing clicks HOLD
 
 def click(x, y):
     pygame.event.post(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(x, y), button=1))
@@ -65,9 +72,12 @@ def drive():
     click(52, BY + 20)                  # Play
     time.sleep(0.3)
     click(1176, BY + 20 + 3 * 22 + 4)   # VOICE R to its maximum
-    if HOLD:
+    if bool(HOLD) != gol_synth.VOICE_HOLD_DEFAULT:
         click(1100, BY + 8)             # the HOLD toggle in the VOICE header
     time.sleep(0.4)
+    if not KEY:
+        print("[probe] no key at all (hold=%%d)" %% HOLD, flush=True)
+        return
     pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_a, mod=0,
                                          unicode='a', scancode=4))
     print("[probe] key down (hold=%%d)" %% HOLD, flush=True)
@@ -80,13 +90,14 @@ gol_synth.main()
 '''
 
 
-def _run(hold):
-    """-> (rms while the key is held, rms two seconds after it came up)."""
+def _run(hold, key=1):
+    """-> (rms while the key is held, rms two seconds after it came up); with
+    key=0 nothing is played and both windows are of the untouched opening."""
     for stale in glob.glob(os.path.join(ROOT, '_session_*.wav')) + \
             glob.glob(os.path.join(ROOT, '_session_*.npz')):
         os.remove(stale)
     env = dict(os.environ, PYTHONUTF8='1', CASYNTH_ENGINE='laplacian')
-    out = subprocess.run([sys.executable, '-c', DRIVER % dict(root=ROOT, hold=hold)],
+    out = subprocess.run([sys.executable, '-c', DRIVER % dict(root=ROOT, hold=hold, key=key)],
                          cwd=ROOT, env=env, capture_output=True, text=True,
                          encoding='utf-8', timeout=300)
     if out.returncode != 0:
@@ -164,16 +175,27 @@ def _run_midi(slow):
 
 
 def main():
-    bad = []
+    bad, ref = [], 0.0
     for hold, limit, want in ((0, RELEASED_MAX, 'released'),
                               (1, LATCHED_MIN, 'still sounding')):
         held, after = _run(hold)
+        if not hold:
+            ref = held                     # a played note's level, for the opening
         ratio = (after / held) if held else float('nan')
         ok = (held > 0.0) and (ratio <= limit if hold == 0 else ratio >= limit)
         print("hold=%d  rms held %8.1f -> after key up %8.1f   ratio %.3f   %s"
               % (hold, held, after, ratio, 'ok' if ok else 'WRONG'))
         if not ok:
             bad.append((hold, want, ratio))
+    # the OPENING: HOLD dark from the first frame and no key -- nothing holds a
+    # note, so there must be no note (the level is judged against a played one)
+    opening = None
+    idle, _ = _run(0, key=0)
+    ok = ref > 0.0 and idle <= RELEASED_MAX * ref
+    print("opening, HOLD dark, no key   rms %8.1f  (a played note %8.1f)   %s"
+          % (idle, ref, 'ok' if ok else 'WRONG'))
+    if not ok:
+        opening = (idle, ref)
     # a MELODY: the gate stays open the whole time, and the envelope must still
     # be restarted note by note (the default knobs are a flat 1.0 by design)
     midi = []
@@ -195,6 +217,10 @@ def main():
         for hold, want, ratio in bad:
             print(f"  HOLD {'on' if hold else 'off'}: the note should be {want} "
                   f"two seconds after the key came up (ratio {ratio:.3f})")
+    if opening is not None:
+        print(f"  opened with HOLD dark and nothing played, the synth sounds "
+              f"(rms {opening[0]:.1f} against a played note's {opening[1]:.1f}): "
+              f"the opening note latched although nobody holds it")
     for slow, swing in midi:
         if slow:
             print(f"  a played line never re-articulated: the VCA moved {swing:.3f} "
@@ -202,10 +228,10 @@ def main():
                   f"between notes, so the onset must restart the envelope")
         else:
             print(f"  the DEFAULT envelope moved by {swing:.3f}; it must be a flat 1.0")
-    if bad or midi:
+    if bad or midi or opening is not None:
         return 1
-    print("a key releases its note, HOLD latches it, and a played line "
-          "re-articulates note by note")
+    print("a key releases its note, HOLD latches it, an untouched synth with HOLD "
+          "dark is silent, and a played line re-articulates note by note")
     return 0
 
 
