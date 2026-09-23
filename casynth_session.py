@@ -410,16 +410,45 @@ def scene_from_session(ts, prefix="_session", title=None, listen=''):
         script.append(dict(at=at, kind='note', args=dict(note=n)))
         script.append(dict(at=at, kind='gate', args=dict(on=g)))
 
-    # the volume and the edits of the field: logged per frame, placed on the
-    # sample that frame recorded
+    # The render thread logs where every field started to SOUND (field_applied,
+    # 2026-09-22: serial, rendered sample, device silence, generation, steps
+    # taken by then) -- for a manual edit as well as for a step: a row whose
+    # step count did not move is an edit.  The frame log only says WHICH frame
+    # changed the field; the sample it holds is where the render thread was
+    # when the frame was logged, and the two threads race by up to a block
+    # either way -- so an edit placed from the frame log lands a block off
+    # often enough (2026-09-23: the fidelity probe), and a mode that starts one
+    # block late keeps its phase offset for good.  An edit is therefore put on
+    # the nearest applied-edit row, taken in order; an older session without
+    # the log keeps the frame's sample.
+    applied = d['field_applied'] if 'field_applied' in d.files else np.zeros((0, 6))
+    edit_rows, prev_steps = [], 0
+    for row in (applied[np.argsort(applied[:, 1], kind='stable')] if len(applied) else ()):
+        if int(row[4]) == prev_steps:
+            edit_rows.append(int(row[1]))
+        prev_steps = int(row[4])
+    block = int(CHUNK_S * SR)
+    next_row = [0]
+
+    def _edit_at(logged):
+        """The sample the render thread applied the edit logged at `logged`."""
+        k = next_row[0]
+        while k < len(edit_rows) and edit_rows[k] < logged - 2 * block:
+            k += 1                            # an applied change no frame edit claims
+        if k < len(edit_rows) and abs(edit_rows[k] - logged) <= 2 * block:
+            next_row[0] = k + 1
+            return edit_rows[k]
+        next_row[0] = k
+        return logged
+
+    # the volume and the edits of the field: logged per frame; the volume is
+    # placed on the sample that frame recorded, an edit where it was applied
     vol0 = float(first['vol'])
     vol, edits = vol0, 0
     for i in range(1, len(controls)):
         at = int(at_sample[i]) - offset
-        if at <= 0:
-            continue
         v = float(dict(controls[i])['vol'])
-        if v != vol:
+        if v != vol and at > 0:
             script.append(dict(at=at, kind='vol', args=dict(value=v)))
             vol = v
         if i < len(grids) and frames[i, 1] == frames[i - 1, 1]:
@@ -427,7 +456,10 @@ def scene_from_session(ts, prefix="_session", title=None, listen=''):
             # (painting, a dropped pattern, Random / Clear), not an automaton step
             cells = _cell_diff(grids[i - 1], grids[i])
             if cells:
-                script.append(dict(at=at, kind='set_cells', args=dict(cells=cells)))
+                at_edit = _edit_at(int(at_sample[i])) - offset
+                if at_edit <= 0:
+                    continue
+                script.append(dict(at=at_edit, kind='set_cells', args=dict(cells=cells)))
                 edits += 1
     # the automaton steps: the prototype takes them on a WALL clock, so a scene
     # that re-renders the session must take them where they were RECORDED, not on

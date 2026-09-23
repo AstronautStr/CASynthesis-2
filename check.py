@@ -73,6 +73,12 @@ Gates (any FAIL -> exit 1):
                        byte-exact and continue from -- while the instrument keeps
                        drawing frames throughout the render, which it did not
                        until 2026-09-22)
+  3g. fidelity         python tests/ui_fidelity_probe.py          (what the instrument
+                       PLAYED is what its session renders offline, byte for byte:
+                       a Random + Play + note session recorded from the real
+                       prototype, turned into a scene as Save does, rendered
+                       through the bench runner -- the live loop's generation
+                       clock, VCA, gain glide and hosting, held at once)
   3d. articulation     python tests/ui_articulation_probe.py      (letting a key go
                        releases the note; HOLD lit keeps it sounding; opened
                        with HOLD dark and untouched, it is silent; and a played
@@ -234,6 +240,8 @@ def gates():
              _t("ui_save_probe.py"), timeout=600),
         Gate("the VOICE envelope is audible (note off, HOLD, a played line)",
              "articulation probe", _t("ui_articulation_probe.py"), timeout=900),
+        Gate("what the instrument played is what its session renders (byte-exact)",
+             "fidelity probe", _t("ui_fidelity_probe.py"), timeout=600),
     ]
 
 
