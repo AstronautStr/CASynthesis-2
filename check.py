@@ -52,6 +52,10 @@ Gates (any FAIL -> exit 1):
                        and his knobs, and the paths that were fine must stay fine;
                        MEASURES TIME)
   2. golden master     python tests/golden/golden_master.py       (audio, byte-exact)
+  2b. tail pool master python tests/golden/tail_pool_master.py    (the SlotPool under
+                       OVERLOAD: the budget's eviction and the steal of a ringing
+                       tail, byte-exact against a reference blessed on the code
+                       BEFORE the vectorised pool -- golden_master never fills it)
   3. ui frame + smoke  CASYNTH_DUMPFRAME render of gol_synth.py   (pixel-exact vs
                        tests/golden/ui_frame.png; doubles as the import/init smoke)
   3b. ui clicks        python tests/ui_click_probe.py             (every branch of the
@@ -217,6 +221,9 @@ def gates():
              [py, os.path.join("tests", "golden", "golden_master.py")], env={}, fast=True),
         Gate("events master (the Events cells of Laplace+, byte-exact)", "events master",
              [py, os.path.join("tests", "golden", "events_master.py")], env={}, fast=True),
+        Gate("tail pool master (SlotPool under overload: eviction and steal, byte-exact)",
+             "tail pool master",
+             [py, os.path.join("tests", "golden", "tail_pool_master.py")], env={}, fast=True),
         Gate("ui clicks (the prototype's event loop)", "ui click probe",
              _t("ui_click_probe.py"), timeout=300, fast=True),
         Gate("it makes a sound (Random + Play on every engine)", "sound probe",
