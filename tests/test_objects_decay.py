@@ -90,7 +90,12 @@ FIXED, COMMON, MODAL = orz.LAW_FIXED, orz.LAW_COMMON, orz.LAW_MODAL
 OBJECT_SCENES = ('n4_spectrum', 'n4_neighbor', 'ol_glider', 'ol_galaxy', 'ol_neighbor',
                  'ora_r1', 'ora_r2', 'ora_a1', 'ora_user034', 'oes_e1', 'oes_m1', 'obs_m2',
                  'od_d1', 'od_d2', 'od_d3', 'od_d4_control', 'od_d4_anchor')
-PINNED = (('objects_event_source_modal_2026_09_17', 2), ('objects_birth_strength_2026_09_18', 1))
+# The delivered records this gate replays, BY ID: a catalog folder is also where a
+# listener's Continue / Save lands, and a record saved there is not a reference
+# (2026-09-23; before, the test counted the folder and failed on a third record).
+PINNED = (('objects_event_source_modal_2026_09_17',
+           ('20260917-233512-1edfef', '20260917-233513-cab7d1')),        # M1, E1
+          ('objects_birth_strength_2026_09_18', ('20260918-013020-88dc88',)))   # M2
 
 
 def ctx(rate=2.0):
@@ -915,14 +920,17 @@ class StateTests(unittest.TestCase):
 
     def test_pinned_records_replay_bit_for_bit_and_a_v5_snapshot_imports_as_fixed(self):
         from casynth_lab.catalog import Catalog
-        for name, n_records in PINNED:
+        from casynth_lab.catalog import CatalogError
+        for name, ids in PINNED:
             root = os.path.join(ROOT, 'lab_catalog', name)
             if not os.path.isdir(root):
                 continue
             cat = Catalog(root)
-            recs = [rec for rec, err in cat.list() if err is None]
-            self.assertEqual(len(recs), n_records)
-            for rec in recs:
+            for rid in ids:
+                try:
+                    rec = cat.load(rid)              # a delivered record that is gone is a failure
+                except CatalogError as e:
+                    self.fail(f"delivered record {rid} of {name} cannot be loaded: {e}")
                 self.assertEqual(rendered_like(rec), dict(A=True, B=True, monitor=True), rec.title)
         # a v5 snapshot (no new keys / arrays) of a Fixed run continues with the same sound
         cells = case_cells('D3')

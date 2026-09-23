@@ -946,15 +946,13 @@ class LevelsTimingAndContractTests(unittest.TestCase):
         """Item 1 of the acceptance: saved N3 / Laplace records replay exactly with the
         current code (the catalogs are in git; skipped when they are absent)."""
         from casynth_lab.catalog import Catalog
-        roots = [os.path.join(ROOT, 'lab_catalog', 'network_n3_combined_2026_09_16'),
-                 os.path.join(ROOT, 'tests', 's7_demo_catalog.py')]
-        n3 = roots[0]
+        n3 = os.path.join(ROOT, 'lab_catalog', 'network_n3_combined_2026_09_16')
         if not os.path.isdir(n3):
             self.skipTest('N3 catalog not present')
         cat = Catalog(n3, repo_root=None)
-        entries = [r for r, err in cat.list() if err is None]
-        self.assertTrue(entries)
-        rec = entries[-1]
+        # the delivered N3.3 record BY ID (it was "the last of the listing"; a Continue a
+        # listener saves into that folder must not change what this gate replays, 2026-09-23)
+        rec = cat.load('20260916-163011-25bd05')
         if not os.path.isfile(os.path.join(n3, rec.id, 'monitor.wav')):
             self.skipTest('N3 audio not present (audio is not in git)')
         result = cat.replay(rec.id, yield_cpu=False)

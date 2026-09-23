@@ -64,6 +64,9 @@ ROWS = COLS = 32
 BIRTHS, DEATHS = orz.EV_BIRTHS, orz.EV_DEATHS
 UNIFORM, POSITION = orz.EXC_UNIFORM, orz.EXC_POSITION
 OES_CATALOG = os.path.join(ROOT, 'lab_catalog', 'objects_event_source_modal_2026_09_17')
+# the two delivered records (M1, E1) BY ID: a Continue / Save a listener makes into
+# that folder is not a reference and must not touch this gate (2026-09-23)
+OES_RECORDS = ('20260917-233512-1edfef', '20260917-233513-cab7d1')
 OBJECT_SCENES = ('n4_spectrum', 'n4_neighbor', 'ol_glider', 'ol_galaxy', 'ol_neighbor',
                  'ora_r1', 'ora_r2', 'ora_a1', 'ora_user034', 'oes_e1', 'oes_m1', 'obs_m2')
 
@@ -323,9 +326,8 @@ class PathTests(unittest.TestCase):
         if not os.path.isdir(OES_CATALOG):
             self.skipTest('the 2026-09-17 catalog is not present')
         cat = Catalog(OES_CATALOG)
-        recs = [rec for rec, err in cat.list() if err is None]
-        self.assertEqual(len(recs), 2)
-        for rec in recs:
+        for rid in OES_RECORDS:
+            rec = cat.load(rid)                  # a delivered record that is gone is a failure
             self.assertEqual(rendered_like(rec), dict(A=True, B=True, monitor=True), rec.title)
 
     def test_s_changed_on_a_still_field_makes_no_packet_and_a_sequence_keeps_both_histories(self):

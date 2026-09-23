@@ -797,9 +797,10 @@ class ScenesAndCatalogTests(unittest.TestCase):
         if not os.path.isdir(root):
             self.skipTest('N4 catalog not present')
         cat = Catalog(root)
-        entries = [r for r, err in cat.list() if err is None]
-        self.assertEqual(len(entries), 2)
-        for rec in entries:
+        # the two delivered N4 records (N4.2, N4.1) BY ID: a Continue a listener makes
+        # into that folder is not a v1 record and must not touch this gate (2026-09-23)
+        for rid in ('20260916-213632-002902', '20260916-213633-a52e8c'):
+            rec = cat.load(rid)                  # a delivered record that is gone is a failure
             doc = rec.meta['scene']
             for side in ('A', 'B'):
                 if doc['variants'][side]['engine_id'] == orz.ENGINE_ID:
